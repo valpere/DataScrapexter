@@ -1,0 +1,152 @@
+# News Website Scraper Configuration
+# This example demonstrates scraping news articles with metadata extraction
+
+name: "news_article_scraper"
+base_url: "https://example-news.com/technology"
+
+# Polite scraping settings for news sites
+rate_limit: "3s"        # Respectful delay between requests
+timeout: "30s"          # Allow time for article pages to load
+max_retries: 3          # Retry failed requests
+
+# Browser-like headers
+headers:
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+  Accept-Language: "en-US,en;q=0.9"
+  Accept-Encoding: "gzip, deflate, br"
+  Cache-Control: "no-cache"
+  DNT: "1"
+
+# Rotate user agents to appear more natural
+user_agents:
+  - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+  - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Safari/605.1.15"
+  - "Mozilla/5.0 (X11; Linux x86_64; rv:123.0) Gecko/20100101 Firefox/123.0"
+
+# Data extraction fields for news articles
+fields:
+  # Article listing fields (for index pages)
+  - name: "article_titles"
+    selector: "article h2, .article-title, .headline"
+    type: "list"
+    required: true
+    transform:
+      - type: "trim"
+      - type: "normalize_spaces"
+  
+  - name: "article_urls"
+    selector: "article a, .article-link, h2 a"
+    type: "list"
+    attribute: "href"
+    required: true
+  
+  - name: "article_summaries"
+    selector: ".article-summary, .excerpt, .description"
+    type: "list"
+    transform:
+      - type: "trim"
+      - type: "normalize_spaces"
+  
+  - name: "publish_dates"
+    selector: "time, .publish-date, .article-date"
+    type: "list"
+    attribute: "datetime"  # Try to get ISO format from datetime attribute
+    transform:
+      - type: "trim"
+  
+  - name: "authors"
+    selector: ".author, .by-line, .article-author"
+    type: "list"
+    transform:
+      - type: "trim"
+      - type: "regex"
+        pattern: "^By\\s+"
+        replacement: ""
+  
+  - name: "categories"
+    selector: ".category, .tag, .article-category"
+    type: "list"
+    transform:
+      - type: "trim"
+      - type: "lowercase"
+  
+  # For individual article pages (when following links)
+  - name: "full_text"
+    selector: ".article-content, .story-body, main article"
+    type: "text"
+    transform:
+      - type: "trim"
+      - type: "normalize_spaces"
+  
+  - name: "image_url"
+    selector: ".article-image img, .featured-image, article img"
+    type: "attr"
+    attribute: "src"
+  
+  - name: "image_caption"
+    selector: ".image-caption, figcaption, .wp-caption-text"
+    type: "text"
+    transform:
+      - type: "trim"
+  
+  # Metadata extraction
+  - name: "meta_description"
+    selector: "meta[name='description'], meta[property='og:description']"
+    type: "attr"
+    attribute: "content"
+  
+  - name: "meta_keywords"
+    selector: "meta[name='keywords']"
+    type: "attr"
+    attribute: "content"
+  
+  - name: "read_time"
+    selector: ".reading-time, .read-time"
+    type: "text"
+    transform:
+      - type: "regex"
+        pattern: "(\\d+)\\s*min"
+        replacement: "$1"
+      - type: "parse_int"
+  
+  # Engagement metrics
+  - name: "comment_count"
+    selector: ".comment-count, .comments-number"
+    type: "text"
+    transform:
+      - type: "regex"
+        pattern: "(\\d+)"
+        replacement: "$1"
+      - type: "parse_int"
+  
+  - name: "share_count"
+    selector: ".share-count, .social-shares"
+    type: "text"
+    transform:
+      - type: "regex"
+        pattern: "(\\d+)"
+        replacement: "$1"
+      - type: "parse_int"
+
+# Pagination for news archives
+pagination:
+  type: "next_button"
+  selector: ".pagination a.next, .load-more, nav .next-page"
+  max_pages: 20  # Limit to prevent infinite crawling
+
+# Alternative pagination using page numbers
+# pagination:
+#   type: "url_pattern"
+#   url_pattern: "https://example-news.com/technology?page={page}"
+#   start_page: 1
+#   max_pages: 20
+
+# Output configuration
+output:
+  format: "json"  # JSON preserves article structure better than CSV
+  file: "outputs/news-articles.json"
+
+# Alternative CSV output for data analysis
+# output:
+#   format: "csv"
+#   file: "outputs/news-articles.csv"

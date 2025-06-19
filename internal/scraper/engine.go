@@ -1,3 +1,6 @@
+// Package scraper provides the core web scraping functionality for DataScrapexter.
+// It includes an HTTP client with advanced features such as retry logic, rate limiting,
+// user agent rotation, and session management.
 package scraper
 
 import (
