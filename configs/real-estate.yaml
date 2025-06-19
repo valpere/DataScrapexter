@@ -1,0 +1,258 @@
+# Real Estate Listings Scraper Configuration
+# This example demonstrates extracting property listings with detailed information
+
+name: "property_listings_scraper"
+base_url: "https://example-realestate.com/homes-for-sale/san-francisco-ca"
+
+# Respectful scraping for real estate sites
+rate_limit: "4s"        # Real estate sites often have large pages
+timeout: "60s"          # Allow time for image-heavy pages
+max_retries: 3
+
+# Residential browser appearance
+headers:
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8"
+  Accept-Language: "en-US,en;q=0.9"
+  Accept-Encoding: "gzip, deflate, br"
+  Connection: "keep-alive"
+  Upgrade-Insecure-Requests: "1"
+
+# Residential user agents
+user_agents:
+  - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+  - "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+  - "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+
+# Property data extraction
+fields:
+  # Basic property information
+  - name: "address"
+    selector: ".property-address, .listing-address, address"
+    type: "list"
+    required: true
+    transform:
+      - type: "trim"
+      - type: "normalize_spaces"
+  
+  - name: "price"
+    selector: ".listing-price, .property-price, .price"
+    type: "list"
+    required: true
+    transform:
+      - type: "clean_price"
+      - type: "parse_int"  # Real estate prices are usually whole numbers
+  
+  - name: "price_per_sqft"
+    selector: ".price-per-sqft, .sqft-price"
+    type: "list"
+    transform:
+      - type: "regex"
+        pattern: ","
+        replacement: ""
+      - type: "parse_int"
+  
+  - name: "property_type"
+    selector: ".property-type, .home-type"
+    type: "list"
+    transform:
+      - type: "trim"
+      - type: "lowercase"
+  
+  - name: "listing_url"
+    selector: ".property-card a, .listing-link"
+    type: "list"
+    attribute: "href"
+    required: true
+  
+  # Property details
+  - name: "bedrooms"
+    selector: ".beds, .bedrooms, .bed-count"
+    type: "list"
+    transform:
+      - type: "regex"
+        pattern: "(\\d+)\\s*(?:bed|bd)"
+        replacement: "$1"
+      - type: "parse_int"
+  
+  - name: "bathrooms"
+    selector: ".baths, .bathrooms, .bath-count"
+    type: "list"
+    transform:
+      - type: "regex"
+        pattern: "(\\d+(?:\\.\\d+)?)\\s*(?:bath|ba)"
+        replacement: "$1"
+      - type: "parse_float"
+  
+  - name: "square_feet"
+    selector: ".sqft, .square-feet, .area"
+    type: "list"
+    transform:
+      - type: "regex"
+        pattern: "([0-9,]+)\\s*(?:sqft|sq\\.?\\s*ft\\.?)"
+        replacement: "$1"
+      - type: "regex"
+        pattern: ","
+        replacement: ""
+      - type: "parse_int"
+  
+  - name: "lot_size"
+    selector: ".lot-size, .land-area"
+    type: "list"
+    transform:
+      - type: "regex"
+        pattern: "([0-9,]+)\\s*(?:sqft|acres?)"
+        replacement: "$1"
+      - type: "regex"
+        pattern: ","
+        replacement: ""
+      - type: "parse_float"
+  
+  - name: "year_built"
+    selector: ".year-built, .built-year"
+    type: "list"
+    transform:
+      - type: "regex"
+        pattern: "(\\d{4})"
+        replacement: "$1"
+      - type: "parse_int"
+  
+  # Listing information
+  - name: "mls_number"
+    selector: ".mls-number, .listing-id"
+    type: "list"
+    transform:
+      - type: "regex"
+        pattern: "MLS\\s*#?\\s*([A-Z0-9]+)"
+        replacement: "$1"
+  
+  - name: "listing_status"
+    selector: ".status, .listing-status"
+    type: "list"
+    transform:
+      - type: "trim"
+      - type: "lowercase"
+  
+  - name: "days_on_market"
+    selector: ".days-on-market, .dom"
+    type: "list"
+    transform:
+      - type: "regex"
+        pattern: "(\\d+)\\s*days?"
+        replacement: "$1"
+      - type: "parse_int"
+  
+  - name: "listing_date"
+    selector: ".listing-date, time.listed"
+    type: "list"
+    attribute: "datetime"
+    transform:
+      - type: "trim"
+  
+  # Property features
+  - name: "property_description"
+    selector: ".property-description, .listing-remarks"
+    type: "list"
+    transform:
+      - type: "trim"
+      - type: "normalize_spaces"
+  
+  - name: "features"
+    selector: ".property-features li, .amenities li"
+    type: "list"
+    transform:
+      - type: "trim"
+  
+  - name: "garage_spaces"
+    selector: ".garage, .parking"
+    type: "list"
+    transform:
+      - type: "regex"
+        pattern: "(\\d+)\\s*(?:car|space)"
+        replacement: "$1"
+      - type: "parse_int"
+  
+  - name: "hoa_fee"
+    selector: ".hoa-fee, .monthly-hoa"
+    type: "list"
+    transform:
+      - type: "clean_price"
+      - type: "parse_int"
+  
+  # Location details
+  - name: "neighborhood"
+    selector: ".neighborhood, .area-name"
+    type: "list"
+    transform:
+      - type: "trim"
+  
+  - name: "school_district"
+    selector: ".school-district, .schools"
+    type: "list"
+    transform:
+      - type: "trim"
+  
+  - name: "walk_score"
+    selector: ".walk-score, .walkability"
+    type: "list"
+    transform:
+      - type: "regex"
+        pattern: "(\\d+)"
+        replacement: "$1"
+      - type: "parse_int"
+  
+  # Images
+  - name: "main_image"
+    selector: ".property-photo img, .listing-image"
+    type: "list"
+    attribute: "src"
+  
+  - name: "image_count"
+    selector: ".photo-count, .image-count"
+    type: "list"
+    transform:
+      - type: "regex"
+        pattern: "(\\d+)"
+        replacement: "$1"
+      - type: "parse_int"
+  
+  # Agent information
+  - name: "agent_name"
+    selector: ".agent-name, .listing-agent"
+    type: "list"
+    transform:
+      - type: "trim"
+  
+  - name: "agent_phone"
+    selector: ".agent-phone, .contact-phone"
+    type: "list"
+    transform:
+      - type: "trim"
+  
+  - name: "brokerage"
+    selector: ".brokerage-name, .agency"
+    type: "list"
+    transform:
+      - type: "trim"
+
+# Pagination for property listings
+pagination:
+  type: "next_button"
+  selector: ".pagination .next, .next-page"
+  max_pages: 25  # Adjust based on market size
+
+# Alternative pagination using page numbers
+# pagination:
+#   type: "url_pattern"
+#   url_pattern: "https://example-realestate.com/homes-for-sale/san-francisco-ca/page-{page}"
+#   start_page: 1
+#   max_pages: 25
+
+# Output configuration
+output:
+  format: "csv"
+  file: "outputs/property-listings.csv"
+
+# For detailed property data including descriptions
+# output:
+#   format: "json"
+#   file: "outputs/property-listings.json"

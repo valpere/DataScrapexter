@@ -97,12 +97,32 @@ cat output.json
 
 ## 📖 Documentation
 
+### Getting Started
+
 - [**Installation Guide**](docs/installation.md) - Detailed installation instructions
+- [**User Guide**](docs/user-guide.md) - Comprehensive guide for using DataScrapexter
+- [**Quick Start Tutorial**](docs/quick-start.md) - Get scraping in under 5 minutes
+
+### Configuration & Examples
+
 - [**Configuration Reference**](docs/configuration.md) - Complete configuration options
-- [**CLI Reference**](docs/cli.md) - Command-line interface documentation
+- [**Example: E-commerce Scraper**](docs/tutorial-ecommerce.md) - Build a price monitoring system
+- [**Example: News Scraper**](examples/news-scraper.yaml) - Extract articles and metadata
+- [**Example: Job Board Scraper**](examples/job-board.yaml) - Collect job listings
+- [**Example: Real Estate Scraper**](examples/real-estate.yaml) - Property listing extraction
+
+### Developer Resources
+
 - [**API Documentation**](docs/api.md) - Go package API reference
-- [**Examples**](examples/) - Ready-to-use configuration examples
-- [**Troubleshooting**](docs/troubleshooting.md) - Common issues and solutions
+- [**Code Documentation**](docs/code-documentation.md) - Internal architecture and design
+- [**CLI Reference**](docs/cli.md) - Command-line interface documentation
+- [**Contributing Guide**](CONTRIBUTING.md) - How to contribute to the project
+
+### Support
+
+- [**Troubleshooting Guide**](docs/troubleshooting.md) - Common issues and solutions
+- [**FAQ**](docs/faq.md) - Frequently asked questions
+- [**GitHub Discussions**](https://github.com/valpere/DataScrapexter/discussions) - Community support
 
 ## 🔧 Configuration
 
