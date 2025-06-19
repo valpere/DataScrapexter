@@ -1,0 +1,46 @@
+# Example scraper configuration for DataScrapexter
+name: "example_quotes_scraper"
+base_url: "http://quotes.toscrape.com/"
+
+# User agents for rotation (optional - will use defaults if not specified)
+user_agents:
+  - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+  - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+
+# Rate limiting configuration
+rate_limit: "1s"      # Wait 1 second between requests
+timeout: "30s"        # Request timeout
+max_retries: 3        # Number of retries on failure
+
+# Custom headers (optional)
+headers:
+  Accept-Language: "en-US,en;q=0.9"
+  Referer: "https://www.google.com/"
+
+# Data extraction fields
+fields:
+  - name: "quotes"
+    selector: ".quote"
+    type: "list"
+    required: true
+  - name: "quote_text"
+    selector: ".quote .text"
+    type: "list"
+    required: true
+  - name: "authors"
+    selector: ".quote .author"
+    type: "list"
+  - name: "tags"
+    selector: ".quote .tags"
+    type: "list"
+
+# Pagination configuration (optional)
+pagination:
+  type: "next_button"
+  selector: ".pager .next a"
+  max_pages: 3
+
+# Output configuration
+output:
+  format: "json"
+  file: "quotes_output.json"
