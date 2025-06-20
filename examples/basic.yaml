@@ -1,0 +1,51 @@
+# Basic Web Scraper Example
+# This is a simple example to get you started with DataScrapexter
+
+name: "basic_scraper"
+base_url: "https://example.com"
+
+# Rate limiting - be respectful to the server
+rate_limit: "2s"      # Wait 2 seconds between requests
+timeout: "30s"        # Maximum time to wait for a response
+max_retries: 3        # Number of times to retry failed requests
+
+# Extract basic information from the page
+fields:
+  # Page title
+  - name: "title"
+    selector: "h1"
+    type: "text"
+    required: true
+    transform:
+      - type: "trim"
+      - type: "normalize_spaces"
+  
+  # Meta description
+  - name: "description"
+    selector: "meta[name='description']"
+    type: "attr"
+    attribute: "content"
+  
+  # All paragraph text
+  - name: "paragraphs"
+    selector: "p"
+    type: "list"
+    transform:
+      - type: "trim"
+  
+  # All links on the page
+  - name: "links"
+    selector: "a"
+    type: "list"
+    attribute: "href"
+  
+  # All images
+  - name: "images"
+    selector: "img"
+    type: "list"
+    attribute: "src"
+
+# Output configuration
+output:
+  format: "json"
+  file: "output.json"
