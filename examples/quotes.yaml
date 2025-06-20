@@ -1,0 +1,62 @@
+# Quotes Scraper Example
+# This example demonstrates scraping quotes from quotes.toscrape.com
+# A great site for testing web scrapers!
+
+name: "quotes_scraper"
+base_url: "http://quotes.toscrape.com/"
+
+# Polite scraping settings
+rate_limit: "1s"      # 1 second between requests
+timeout: "30s"        # 30 second timeout
+max_retries: 3        # Retry failed requests 3 times
+
+# Custom headers to identify our scraper
+headers:
+  User-Agent: "DataScrapexter Example Bot"
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+  Accept-Language: "en-US,en;q=0.9"
+
+# Extract quotes and related information
+fields:
+  # Extract all quotes text
+  - name: "quote_text"
+    selector: ".quote .text"
+    type: "list"
+    required: true
+    transform:
+      - type: "trim"
+  
+  # Extract authors
+  - name: "authors"
+    selector: ".quote .author"
+    type: "list"
+    transform:
+      - type: "trim"
+  
+  # Extract tags for each quote
+  - name: "tags"
+    selector: ".quote .tags .tag"
+    type: "list"
+    transform:
+      - type: "trim"
+      - type: "lowercase"
+  
+  # Get author about links
+  - name: "author_links"
+    selector: ".quote a[href^='/author/']"
+    type: "list"
+    attribute: "href"
+  
+  # For individual quote cards (demonstrating nested extraction)
+  - name: "full_quotes"
+    selector: ".quote"
+    type: "list"
+    transform:
+      - type: "trim"
+      - type: "normalize_spaces"
+
+# Pagination configuration - follow the "Next" button
+pagination:
+  type: "next_button"
+  selector: ".pager .next a"
+  max_pages: 5

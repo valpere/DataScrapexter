@@ -1,5 +1,7 @@
-# Example scraper configuration for DataScrapexter
-name: "example_quotes_scraper"
+# Quotes Scraper Example with Multiple Outputs
+# This configuration demonstrates various DataScrapexter features
+
+name: "quotes_scraper_advanced"
 base_url: "http://quotes.toscrape.com/"
 
 # User agents for rotation (optional - will use defaults if not specified)
@@ -23,13 +25,16 @@ fields:
     selector: ".quote"
     type: "list"
     required: true
+    
   - name: "quote_text"
     selector: ".quote .text"
     type: "list"
     required: true
+    
   - name: "authors"
     selector: ".quote .author"
     type: "list"
+    
   - name: "tags"
     selector: ".quote .tags"
     type: "list"
