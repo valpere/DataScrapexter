@@ -8,6 +8,9 @@
 
 **DataScrapexter** is a universal web scraper built with Go that combines high performance, intelligent anti-detection mechanisms, and configuration-driven operation to enable seamless data extraction from any website structure.
 
+
+![IN PROGRESS](./images/IN_PROGRESS.png)
+
 ## 🚀 Features
 
 - **Universal Compatibility**: Scrape any website type - e-commerce, news, directories, social media
