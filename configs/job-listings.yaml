@@ -1,0 +1,461 @@
+# Job Listings and Recruitment Monitoring Template
+# Configuration for tracking job postings, salary trends, and employment market data
+
+name: "job-market-monitor"
+version: "1.0"
+description: "Comprehensive job market monitoring for recruitment intelligence and talent acquisition"
+
+# Target job board configuration
+target:
+  url: "${JOB_SEARCH_URL}"
+  method: "GET"
+  headers:
+    User-Agent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    Accept-Language: "en-US,en;q=0.9"
+    DNT: "1"
+
+# Search parameters
+search:
+  parameters:
+    keywords: "${SEARCH_KEYWORDS}"
+    location: "${SEARCH_LOCATION}"
+    radius: "${SEARCH_RADIUS}"
+    job_type: "${JOB_TYPE}"
+    experience_level: "${EXPERIENCE_LEVEL}"
+    posted_date: "${DATE_RANGE}"
+    salary_range: "${SALARY_RANGE}"
+
+# Request optimization for job sites
+request:
+  timeout: 30
+  retry:
+    attempts: 3
+    delay: 5
+    backoff: "linear"
+  rate_limit:
+    requests_per_second: 1.5
+    burst: 3
+    respect_robots_txt: true
+
+# Browser automation for dynamic job boards
+browser:
+  enabled: false
+  type: "chromium"
+  options:
+    headless: true
+    viewport:
+      width: 1920
+      height: 1080
+    wait_until: "networkidle"
+    timeout: 30000
+
+# Authentication for premium job boards
+auth:
+  type: "none"  # Options: none, login_form, api_key, oauth2
+  # login_form:
+  #   url: "${LOGIN_URL}"
+  #   username_field: "email"
+  #   password_field: "password"
+  #   credentials:
+  #     username: "${JOB_BOARD_USERNAME}"
+  #     password: "${JOB_BOARD_PASSWORD}"
+
+# Job listing extraction
+extraction:
+  - name: "job_listings"
+    type: "listing"
+    container:
+      selector: ".job-card, article.job-listing, div[data-job-id]"
+      multiple: true
+    fields:
+      - name: "job_id"
+        selector: "[data-job-id], .job-id, [id^='job-']"
+        attribute: "data-job-id"
+        required: true
+        transform:
+          - type: "extract_pattern"
+            pattern: "job-([0-9]+)"
+      
+      - name: "title"
+        selector: "h2.job-title, .position-title, a.job-link"
+        type: "text"
+        required: true
+        transform:
+          - type: "trim"
+          - type: "normalize_job_title"
+      
+      - name: "company"
+        selector: ".company-name, .employer, [data-company]"
+        type: "text"
+        required: true
+        transform:
+          - type: "trim"
+          - type: "remove_suffix"
+            suffix: ", Inc."
+      
+      - name: "location"
+        selector: ".job-location, .location, [data-location]"
+        type: "complex"
+        parse_mode: "intelligent"
+        components:
+          - name: "city"
+            extract: "city"
+          - name: "state"
+            extract: "state"
+          - name: "country"
+            extract: "country"
+          - name: "remote_type"
+            patterns:
+              - "Remote"
+              - "Hybrid"
+              - "On-site"
+              - "Work from home"
+      
+      - name: "salary"
+        selector: ".salary-range, .compensation, .pay-range"
+        type: "complex"
+        components:
+          - name: "min_salary"
+            transform:
+              - type: "extract_salary_range"
+                position: "min"
+          - name: "max_salary"
+            transform:
+              - type: "extract_salary_range"
+                position: "max"
+          - name: "salary_currency"
+            default: "USD"
+          - name: "salary_period"
+            patterns:
+              hourly: ["hour", "hourly", "/hr"]
+              annual: ["year", "annual", "per annum", "/yr"]
+              monthly: ["month", "monthly", "/mo"]
+      
+      - name: "job_type"
+        selector: ".job-type, .employment-type"
+        type: "text"
+        mapping:
+          "Full-time": "full_time"
+          "Part-time": "part_time"
+          "Contract": "contract"
+          "Temporary": "temporary"
+          "Internship": "internship"
+          "Freelance": "freelance"
+      
+      - name: "experience_level"
+        selector: ".experience-level, .seniority"
+        type: "text"
+        mapping:
+          "Entry level": "entry"
+          "Mid level": "mid"
+          "Senior level": "senior"
+          "Executive": "executive"
+          "Internship": "intern"
+      
+      - name: "posted_date"
+        selector: ".posted-date, time[datetime], .job-date"
+        attribute: "datetime"
+        transform:
+          - type: "parse_relative_date"
+            patterns:
+              - "Posted {n} days ago"
+              - "Posted {n} hours ago"
+              - "Posted today"
+              - "Posted yesterday"
+      
+      - name: "application_deadline"
+        selector: ".deadline, .apply-by"
+        type: "text"
+        transform:
+          - type: "parse_date"
+            format: "auto"
+      
+      - name: "description"
+        selector: ".job-description, .job-summary"
+        type: "text"
+        transform:
+          - type: "trim"
+          - type: "limit_length"
+            max: 1000
+      
+      - name: "requirements"
+        selector: ".requirements li, .qualifications li"
+        type: "list"
+        transform:
+          - type: "trim"
+          - type: "extract_skills"
+      
+      - name: "benefits"
+        selector: ".benefits li, .perks li"
+        type: "list"
+        transform:
+          - type: "trim"
+          - type: "categorize_benefits"
+            categories:
+              health: ["health", "medical", "dental", "vision"]
+              retirement: ["401k", "pension", "retirement"]
+              time_off: ["PTO", "vacation", "holiday"]
+              remote: ["remote", "WFH", "flexible"]
+      
+      - name: "skills"
+        selector: ".skills span, .required-skills li, .tags"
+        type: "list"
+        transform:
+          - type: "trim"
+          - type: "lowercase"
+          - type: "normalize_skills"
+      
+      - name: "education_requirement"
+        selector: ".education, .degree-requirement"
+        type: "text"
+        transform:
+          - type: "extract_education_level"
+      
+      - name: "industry"
+        selector: ".industry, .sector, .category"
+        type: "text"
+        transform:
+          - type: "map_to_standard_industry"
+      
+      - name: "apply_url"
+        selector: "a.apply-button, .application-link"
+        attribute: "href"
+        required: true
+        transform:
+          - type: "absolute_url"
+          - type: "track_redirect"
+      
+      - name: "company_logo"
+        selector: ".company-logo img, .employer-logo"
+        attribute: "src"
+        transform:
+          - type: "absolute_url"
+      
+      - name: "is_featured"
+        selector: ".featured-badge, .promoted"
+        type: "exists"
+        default: false
+      
+      - name: "applicant_count"
+        selector: ".applicant-count, .applications"
+        type: "text"
+        transform:
+          - type: "extract_number"
+      
+      - name: "job_function"
+        selector: ".job-function, .department"
+        type: "text"
+      
+      - name: "clearance_required"
+        selector: ".security-clearance"
+        type: "text"
+        patterns:
+          - "Secret"
+          - "Top Secret"
+          - "TS/SCI"
+          - "Public Trust"
+
+  # Company details extraction
+  - name: "company_details"
+    type: "detail"
+    enabled: false
+    trigger: "extract_company_info"
+    fields:
+      - name: "company_size"
+        selector: ".company-size, .employees"
+        type: "text"
+        transform:
+          - type: "extract_range"
+      
+      - name: "company_rating"
+        selector: ".company-rating, .employer-rating"
+        type: "text"
+        transform:
+          - type: "parse_float"
+          - type: "validate_range"
+            min: 0
+            max: 5
+      
+      - name: "company_website"
+        selector: ".company-website a"
+        attribute: "href"
+      
+      - name: "company_description"
+        selector: ".company-about, .employer-description"
+        type: "text"
+
+  # Pagination strategies
+  - name: "pagination"
+    type: "pagination"
+    strategies:
+      - type: "next_button"
+        selector: "a[aria-label='Next'], .next-page"
+        max_pages: 50
+      - type: "infinite_scroll"
+        trigger: ".load-more"
+        wait_for: ".job-card"
+      - type: "offset_parameter"
+        parameter: "start"
+        increment: 25
+        max_offset: 1000
+
+# Skills extraction and normalization
+skills_processing:
+  extract_from:
+    - "description"
+    - "requirements"
+    - "title"
+  
+  skill_database: "configs/skills-taxonomy.json"
+  
+  categories:
+    programming: ["python", "java", "javascript", "go", "rust"]
+    databases: ["sql", "mongodb", "postgresql", "redis"]
+    cloud: ["aws", "azure", "gcp", "kubernetes", "docker"]
+    soft_skills: ["communication", "leadership", "teamwork"]
+
+# Salary data processing
+salary_processing:
+  normalize: true
+  convert_to_annual: true
+  include_benefits_value: false
+  
+  estimation:
+    enabled: true
+    use_market_data: true
+    factors:
+      - "location"
+      - "experience_level"
+      - "skills"
+      - "company_size"
+
+# Output configuration
+output:
+  format: "json"
+  path: "outputs/jobs/${DATE}/${SEARCH_KEYWORDS}_${LOCATION}_${TIMESTAMP}.json"
+  
+  # Structured data for analysis
+  additional_formats:
+    - type: "csv"
+      path: "outputs/jobs/${DATE}/jobs_summary.csv"
+      fields: ["job_id", "title", "company", "location", "salary_min", "salary_max", "posted_date"]
+    
+    - type: "analytics"
+      path: "outputs/jobs/${DATE}/market_analysis.json"
+      include:
+        - "salary_distribution"
+        - "skills_demand"
+        - "location_trends"
+        - "company_rankings"
+
+# Job market analytics
+analytics:
+  enabled: true
+  metrics:
+    - name: "salary_trends"
+      groupBy: ["job_function", "experience_level", "location"]
+      calculate: ["median", "p25", "p75", "count"]
+    
+    - name: "skills_demand"
+      track: "skills"
+      top_n: 50
+      trend_period: "weekly"
+    
+    - name: "posting_velocity"
+      measure: "new_postings_per_day"
+      by_company: true
+      by_location: true
+    
+    - name: "remote_work_trends"
+      track: "location.remote_type"
+      over_time: true
+
+# Alerts and monitoring
+monitoring:
+  alerts:
+    - type: "new_job"
+      criteria:
+        title_contains: ["Senior", "Lead", "Principal"]
+        salary_min: "> 100000"
+        location: ["San Francisco", "New York", "Remote"]
+      notification:
+        immediate: true
+    
+    - type: "hot_skills"
+      track: "skills"
+      threshold: "appearance > 20%"
+    
+    - type: "salary_spike"
+      threshold: "20% above average"
+      for_role: "${TARGET_ROLE}"
+    
+    - type: "company_hiring_surge"
+      threshold: "> 10 postings/week"
+
+# Duplicate detection
+deduplication:
+  enabled: true
+  strategy: "smart"
+  match_fields:
+    - field: "title"
+      similarity: 0.9
+    - field: "company"
+      exact: true
+    - field: "location"
+      exact: true
+  
+  action: "merge"  # Options: skip, merge, keep_latest
+
+# Data quality rules
+quality:
+  rules:
+    - field: "title"
+      min_length: 5
+      max_length: 200
+      reject_patterns: ["[URGENT]", "!!!!", "ASAP"]
+    
+    - field: "salary"
+      validate: "realistic_range"
+      min: 15000
+      max: 1000000
+    
+    - field: "posted_date"
+      max_age_days: 60
+    
+    - field: "description"
+      min_length: 50
+      language: "english"
+
+# Compliance and ethics
+compliance:
+  equal_opportunity: true
+  remove_discriminatory: true
+  gdpr_compliant: true
+  
+  filters:
+    age_discrimination: true
+    gender_bias: true
+    illegal_requirements: true
+
+# Integration options
+integrations:
+  ats_systems:
+    enabled: false
+    # type: "greenhouse"
+    # api_key: "${ATS_API_KEY}"
+    # sync_frequency: "hourly"
+  
+  slack:
+    enabled: false
+    # webhook_url: "${SLACK_WEBHOOK}"
+    # channel: "#job-alerts"
+    # notify_on:
+    #   - "high_value_jobs"
+    #   - "trending_skills"
+  
+  spreadsheet:
+    enabled: false
+    # type: "google_sheets"
+    # credentials_file: "credentials/google-sheets.json"
+    # spreadsheet_id: "${SPREADSHEET_ID}"
