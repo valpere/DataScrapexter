@@ -1,0 +1,422 @@
+# News and Media Monitoring Template
+# Configuration for tracking news articles, press releases, and media coverage
+
+name: "news-media-monitor"
+version: "1.0"
+description: "Comprehensive news monitoring for brand tracking, competitor analysis, and trend detection"
+
+# Multi-source news configuration
+targets:
+  - name: "primary_news_source"
+    url: "${NEWS_SITE_URL}"
+    weight: 1.0
+    type: "news_site"
+  
+  - name: "rss_feeds"
+    urls:
+      - "${RSS_FEED_1}"
+      - "${RSS_FEED_2}"
+    type: "rss"
+    
+  - name: "news_api"
+    endpoint: "${NEWS_API_ENDPOINT}"
+    api_key: "${NEWS_API_KEY}"
+    type: "api"
+
+# Request configuration for news sites
+request:
+  timeout: 20
+  retry:
+    attempts: 2
+    delay: 3
+  headers:
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    Cache-Control: "no-cache"
+  rate_limit:
+    requests_per_second: 2
+    per_domain: true
+
+# News article extraction
+extraction:
+  - name: "article_listing"
+    type: "listing"
+    container:
+      selector: "article, .news-item, .story-wrapper, [role='article']"
+      multiple: true
+    fields:
+      - name: "article_id"
+        selector: "[data-article-id], [id^='story-']"
+        attribute: "data-article-id"
+        transform:
+          - type: "generate_if_missing"
+            method: "hash"
+            fields: ["url", "title"]
+      
+      - name: "headline"
+        selector: "h1, h2.headline, .article-title, [itemprop='headline']"
+        type: "text"
+        required: true
+        transform:
+          - type: "trim"
+          - type: "decode_html"
+      
+      - name: "subheadline"
+        selector: ".subheadline, .deck, .article-subtitle"
+        type: "text"
+        transform:
+          - type: "trim"
+      
+      - name: "url"
+        selector: "a.article-link, h2 a, .headline a"
+        attribute: "href"
+        required: true
+        transform:
+          - type: "absolute_url"
+          - type: "canonical_url"
+      
+      - name: "published_date"
+        selector: "time[datetime], .publish-date, [itemprop='datePublished']"
+        attribute: "datetime"
+        transform:
+          - type: "parse_date"
+            format: "ISO8601"
+          - type: "timezone"
+            to: "UTC"
+      
+      - name: "updated_date"
+        selector: "[itemprop='dateModified'], .last-updated"
+        attribute: "datetime"
+        transform:
+          - type: "parse_date"
+      
+      - name: "author"
+        selector: ".byline, .author-name, [rel='author'], [itemprop='author']"
+        type: "text"
+        transform:
+          - type: "extract_author_name"
+      
+      - name: "section"
+        selector: ".section-name, .category, nav.breadcrumb li:last-child"
+        type: "text"
+        transform:
+          - type: "trim"
+          - type: "lowercase"
+      
+      - name: "tags"
+        selector: ".tags a, .topics a, [rel='tag']"
+        type: "list"
+        transform:
+          - type: "trim"
+          - type: "lowercase"
+          - type: "deduplicate"
+      
+      - name: "summary"
+        selector: ".summary, .excerpt, [itemprop='description']"
+        type: "text"
+        transform:
+          - type: "trim"
+          - type: "limit_length"
+            max: 500
+      
+      - name: "image_url"
+        selector: "img.featured-image, .article-image, [itemprop='image']"
+        attribute: "src"
+        transform:
+          - type: "absolute_url"
+          - type: "extract_high_res"
+      
+      - name: "image_caption"
+        selector: "figcaption, .image-caption"
+        type: "text"
+      
+      - name: "video_url"
+        selector: "video source, iframe[src*='youtube'], iframe[src*='vimeo']"
+        attribute: "src"
+        transform:
+          - type: "absolute_url"
+      
+      - name: "article_type"
+        selector: "[data-content-type], .article-type"
+        type: "text"
+        mapping:
+          "news": "news"
+          "opinion": "opinion"
+          "analysis": "analysis"
+          "feature": "feature"
+          "breaking": "breaking_news"
+      
+      - name: "paywall"
+        selector: ".paywall-prompt, .subscription-required"
+        type: "exists"
+        default: false
+      
+      - name: "comment_count"
+        selector: ".comment-count, .discussion-count"
+        type: "text"
+        transform:
+          - type: "extract_number"
+      
+      - name: "social_shares"
+        selector: ".share-count, .social-count"
+        type: "text"
+        transform:
+          - type: "extract_number"
+
+  # Full article extraction
+  - name: "article_content"
+    type: "detail"
+    follow_field: "url"
+    fields:
+      - name: "full_text"
+        selector: ".article-body, .story-content, [itemprop='articleBody']"
+        type: "text"
+        transform:
+          - type: "clean_html"
+          - type: "remove_ads"
+          - type: "normalize_whitespace"
+      
+      - name: "word_count"
+        source: "full_text"
+        transform:
+          - type: "count_words"
+      
+      - name: "reading_time"
+        source: "word_count"
+        transform:
+          - type: "calculate_reading_time"
+            wpm: 200
+      
+      - name: "quotes"
+        selector: "blockquote, .pullquote, q"
+        type: "list"
+        transform:
+          - type: "extract_quotes"
+      
+      - name: "entities"
+        source: "full_text"
+        transform:
+          - type: "extract_entities"
+            types: ["person", "organization", "location", "date"]
+      
+      - name: "related_articles"
+        selector: ".related-articles a, .see-also a"
+        type: "list"
+        structure:
+          - name: "title"
+            selector: "."
+            type: "text"
+          - name: "url"
+            selector: "."
+            attribute: "href"
+            transform:
+              - type: "absolute_url"
+      
+      - name: "sources"
+        selector: ".source, .citation, a[rel='external']"
+        type: "list"
+        transform:
+          - type: "extract_source_info"
+      
+      - name: "corrections"
+        selector: ".correction, .update-note"
+        type: "list"
+        structure:
+          - name: "date"
+            selector: "time"
+            attribute: "datetime"
+          - name: "text"
+            selector: "."
+            type: "text"
+
+  # Pagination for news archives
+  - name: "pagination"
+    type: "pagination"
+    strategies:
+      - type: "date_based"
+        pattern: "/archive/{year}/{month}/{day}"
+        max_days_back: 30
+      - type: "next_button"
+        selector: ".pagination-next, a[rel='next']"
+      - type: "infinite_scroll"
+        trigger: ".load-more-articles"
+
+# Content analysis
+analysis:
+  sentiment:
+    enabled: true
+    service: "local"  # Options: local, aws, azure, google
+    languages: ["en", "es", "fr"]
+  
+  keywords:
+    extract: true
+    min_frequency: 2
+    max_keywords: 20
+  
+  topics:
+    enabled: true
+    taxonomy: "iab"  # Options: iab, google, custom
+    confidence_threshold: 0.7
+  
+  readability:
+    calculate: true
+    metrics: ["flesch_kincaid", "gunning_fog", "smog"]
+
+# Monitoring configuration
+monitoring:
+  keywords:
+    - term: "${BRAND_NAME}"
+      alert: true
+      sentiment_threshold: -0.5
+    - term: "${COMPETITOR_1}"
+      alert: false
+    - term: "${INDUSTRY_TERM}"
+      alert: true
+  
+  alerts:
+    - type: "breaking_news"
+      keywords: ["breaking", "urgent", "just in"]
+      notification:
+        immediate: true
+    
+    - type: "mention"
+      terms: ["${BRAND_NAME}", "${PRODUCT_NAME}"]
+      sentiment: "negative"
+      reach_threshold: 10000
+    
+    - type: "trending_topic"
+      velocity_threshold: 5  # 5x normal volume
+      time_window: 3600  # 1 hour
+    
+    - type: "competitor_news"
+      companies: ["${COMPETITOR_1}", "${COMPETITOR_2}"]
+      categories: ["product launch", "acquisition", "partnership"]
+
+# Deduplication for news
+deduplication:
+  enabled: true
+  strategy: "content_similarity"
+  similarity_threshold: 0.85
+  check_fields:
+    - "headline"
+    - "full_text"
+  time_window: 86400  # 24 hours
+
+# Output configuration
+output:
+  format: "json"
+  path: "outputs/news/${DATE}/articles_${TIMESTAMP}.json"
+  
+  # Real-time streaming
+  streaming:
+    enabled: false
+    # kafka:
+    #   brokers: ["localhost:9092"]
+    #   topic: "news-articles"
+    # webhook:
+    #   url: "${WEBHOOK_URL}"
+    #   batch_size: 10
+  
+  # Archive configuration
+  archive:
+    enabled: true
+    format: "parquet"
+    compression: "snappy"
+    partition_by: ["published_date", "section"]
+    path: "archive/news/${YEAR}/${MONTH}/"
+
+# RSS feed handling
+rss:
+  parse_full_content: true
+  follow_links: true
+  deduplicate: true
+  
+  field_mapping:
+    title: "headline"
+    link: "url"
+    pubDate: "published_date"
+    description: "summary"
+    "dc:creator": "author"
+    category: "tags"
+
+# Social media integration
+social_tracking:
+  enabled: true
+  platforms:
+    twitter:
+      track_shares: true
+      track_engagement: true
+    facebook:
+      track_shares: true
+      track_reactions: true
+    linkedin:
+      track_shares: true
+    reddit:
+      track_discussions: true
+      subreddits: ["${SUBREDDIT_1}", "${SUBREDDIT_2}"]
+
+# Media type handling
+media:
+  images:
+    download: false
+    extract_text: true  # OCR for text in images
+    analyze: true  # Object detection, face recognition
+  
+  videos:
+    download: false
+    extract_transcript: true
+    extract_metadata: true
+  
+  pdfs:
+    download: true
+    extract_text: true
+    path: "outputs/news/pdfs/"
+
+# Compliance and ethics
+compliance:
+  copyright:
+    respect_robots_txt: true
+    attribution_required: true
+    fair_use_excerpt_length: 200
+  
+  gdpr:
+    anonymize_pii: true
+    data_retention_days: 90
+  
+  content_filtering:
+    adult_content: true
+    violent_content: true
+    hate_speech: true
+
+# Performance optimization
+optimization:
+  parallel_requests: 5
+  cache_ttl: 3600
+  
+  content_detection:
+    - selector: "script"
+      action: "remove"
+    - selector: ".advertisement"
+      action: "remove"
+    - selector: ".comments-section"
+      action: "skip"
+
+# Export formats
+export:
+  formats:
+    - type: "newsletter"
+      format: "html"
+      template: "templates/daily-briefing.html"
+      schedule: "daily"
+      time: "08:00"
+    
+    - type: "dashboard"
+      format: "json"
+      real_time: true
+      websocket: true
+    
+    - type: "report"
+      format: "pdf"
+      template: "templates/weekly-analysis.html"
+      schedule: "weekly"
+      day: "monday"
+      time: "09:00"

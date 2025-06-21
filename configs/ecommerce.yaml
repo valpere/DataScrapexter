@@ -1,0 +1,427 @@
+# E-commerce Product Monitoring Template
+# This template provides comprehensive configuration for monitoring product listings,
+# prices, availability, and reviews across e-commerce platforms
+
+name: "ecommerce-product-monitor"
+version: "1.0"
+description: "Advanced e-commerce product monitoring with price tracking and inventory alerts"
+
+# Target website configuration
+target:
+  url: "${PRODUCT_LISTING_URL}"
+  method: "GET"
+  headers:
+    User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    Accept-Language: "en-US,en;q=0.5"
+    Accept-Encoding: "gzip, deflate, br"
+    Cache-Control: "no-cache"
+
+# Authentication for protected sites
+auth:
+  type: "none"  # Options: none, basic, bearer, cookie, oauth2
+  # credentials:
+  #   username: "${AUTH_USERNAME}"
+  #   password: "${AUTH_PASSWORD}"
+
+# Request configuration
+request:
+  timeout: 30
+  retry:
+    attempts: 3
+    delay: 5
+    backoff: "exponential"
+  rate_limit:
+    requests_per_second: 2
+    burst: 5
+
+# Anti-detection measures
+antidetect:
+  enabled: true
+  strategies:
+    - randomize_headers: true
+    - rotate_user_agents: true
+    - simulate_human_behavior: true
+    - use_browser: false  # Enable for JavaScript-heavy sites
+  browser_options:
+    headless: true
+    window_size: "1920x1080"
+    disable_images: false
+    block_ads: true
+
+# Proxy configuration for distributed scraping
+proxy:
+  enabled: false
+  type: "rotating"  # Options: static, rotating, residential
+  # urls:
+  #   - "${PROXY_URL_1}"
+  #   - "${PROXY_URL_2}"
+  # auth:
+  #   username: "${PROXY_USERNAME}"
+  #   password: "${PROXY_PASSWORD}"
+
+# Cookie management
+cookies:
+  enabled: true
+  persist: true
+  file: "cookies/ecommerce-${DOMAIN}.json"
+
+# Cache configuration
+cache:
+  enabled: true
+  ttl: 3600  # 1 hour
+  storage: "file"  # Options: file, redis, memory
+  path: "cache/ecommerce"
+
+# Main extraction configuration
+extraction:
+  # Product listing extraction
+  - name: "product_listings"
+    type: "listing"
+    container:
+      selector: "div.product-grid, ul.product-list, div[data-testid='product-list']"
+      multiple: true
+    fields:
+      - name: "product_id"
+        selector: "[data-product-id], [data-sku], .product-item"
+        attribute: "data-product-id"
+        required: true
+        transform:
+          - type: "trim"
+          - type: "validate_pattern"
+            pattern: "^[A-Z0-9-]+$"
+      
+      - name: "title"
+        selector: "h2.product-title, h3.product-name, .title a, [itemprop='name']"
+        type: "text"
+        required: true
+        transform:
+          - type: "trim"
+          - type: "decode_html"
+          - type: "limit_length"
+            max: 200
+      
+      - name: "url"
+        selector: "a.product-link, h2 a, .product-item > a"
+        attribute: "href"
+        required: true
+        transform:
+          - type: "absolute_url"
+          - type: "clean_tracking_params"
+      
+      - name: "price"
+        selector: ".price-now, .sale-price, span[itemprop='price'], .product-price"
+        type: "text"
+        required: true
+        transform:
+          - type: "extract_number"
+          - type: "parse_currency"
+        validation:
+          min: 0
+          max: 999999
+      
+      - name: "original_price"
+        selector: ".price-was, .regular-price, .strikethrough-price"
+        type: "text"
+        transform:
+          - type: "extract_number"
+          - type: "parse_currency"
+      
+      - name: "discount_percentage"
+        selector: ".discount-badge, .sale-percentage, .savings"
+        type: "text"
+        transform:
+          - type: "extract_number"
+        compute: |
+          if (!discount_percentage && original_price && price) {
+            discount_percentage = Math.round(((original_price - price) / original_price) * 100);
+          }
+      
+      - name: "currency"
+        selector: "meta[itemprop='priceCurrency']"
+        attribute: "content"
+        default: "USD"
+      
+      - name: "availability"
+        selector: ".availability, .stock-status, [itemprop='availability']"
+        type: "text"
+        transform:
+          - type: "normalize_availability"
+        mapping:
+          "in stock": "available"
+          "out of stock": "unavailable"
+          "limited": "limited"
+          "pre-order": "preorder"
+      
+      - name: "stock_count"
+        selector: ".stock-count, .inventory-count, .items-left"
+        type: "text"
+        transform:
+          - type: "extract_number"
+      
+      - name: "rating"
+        selector: ".rating, .stars, [itemprop='ratingValue']"
+        attribute: "data-rating"
+        transform:
+          - type: "parse_float"
+        validation:
+          min: 0
+          max: 5
+      
+      - name: "review_count"
+        selector: ".review-count, .ratings-count, [itemprop='reviewCount']"
+        type: "text"
+        transform:
+          - type: "extract_number"
+      
+      - name: "image_url"
+        selector: "img.product-image, .thumbnail img, picture img"
+        attribute: "src"
+        transform:
+          - type: "absolute_url"
+          - type: "extract_high_res"
+      
+      - name: "brand"
+        selector: ".brand-name, .manufacturer, [itemprop='brand']"
+        type: "text"
+        transform:
+          - type: "trim"
+      
+      - name: "category"
+        selector: ".category-badge, .product-category"
+        type: "text"
+        transform:
+          - type: "trim"
+      
+      - name: "tags"
+        selector: ".product-tags span, .badges .badge"
+        type: "list"
+        transform:
+          - type: "trim"
+          - type: "lowercase"
+      
+      - name: "seller"
+        selector: ".seller-name, .sold-by, .merchant-name"
+        type: "text"
+        transform:
+          - type: "trim"
+      
+      - name: "shipping_info"
+        selector: ".shipping-info, .delivery-info"
+        type: "text"
+        transform:
+          - type: "normalize_shipping"
+      
+      - name: "promotion"
+        selector: ".promo-badge, .special-offer"
+        type: "text"
+        transform:
+          - type: "trim"
+
+  # Pagination configuration
+  - name: "pagination"
+    type: "pagination"
+    strategies:
+      - type: "next_button"
+        selector: "a.next-page, button[aria-label='Next'], .pagination-next"
+        max_pages: 50
+      - type: "page_numbers"
+        selector: ".pagination a, .page-numbers a"
+        pattern: "?page={page}"
+      - type: "infinite_scroll"
+        trigger: ".load-more-button"
+        wait_time: 2
+      - type: "offset"
+        parameter: "offset"
+        increment: 20
+        max_offset: 1000
+
+  # Product detail extraction (for following product URLs)
+  - name: "product_details"
+    type: "detail"
+    enabled: false  # Enable for two-stage scraping
+    fields:
+      - name: "description"
+        selector: ".product-description, [itemprop='description'], .details-content"
+        type: "html"
+        transform:
+          - type: "clean_html"
+          - type: "limit_length"
+            max: 5000
+      
+      - name: "specifications"
+        selector: ".spec-table tr, .product-specs li"
+        type: "table"
+        format: "key_value"
+      
+      - name: "images"
+        selector: ".product-gallery img, .image-thumbnails img"
+        attribute: "src"
+        type: "list"
+        transform:
+          - type: "absolute_url"
+          - type: "deduplicate"
+      
+      - name: "variants"
+        selector: ".variant-options, .product-options"
+        type: "complex"
+        structure:
+          - name: "size"
+            selector: ".size-option"
+            type: "list"
+          - name: "color"
+            selector: ".color-option"
+            type: "list"
+          - name: "variant_prices"
+            selector: "[data-variant-price]"
+            attribute: "data-variant-price"
+            type: "list"
+
+# Output configuration
+output:
+  format: "json"  # Options: json, csv, xlsx, parquet
+  path: "outputs/ecommerce/${DATE}/products_${TIMESTAMP}.json"
+  compression: "gzip"
+  encoding: "utf-8"
+  
+  # CSV-specific options
+  csv_options:
+    delimiter: ","
+    quote_char: '"'
+    include_headers: true
+  
+  # Data transformation
+  transform:
+    flatten_nested: true
+    null_value: ""
+    boolean_values:
+      true: "Yes"
+      false: "No"
+
+# Monitoring and alerts
+monitoring:
+  enabled: true
+  alerts:
+    - type: "price_change"
+      threshold: 10  # percentage
+      direction: "both"  # Options: increase, decrease, both
+    - type: "stock_alert"
+      condition: "stock_count < 5"
+    - type: "new_product"
+      check_interval: 3600  # 1 hour
+    - type: "availability_change"
+      from: "available"
+      to: "unavailable"
+  
+  notifications:
+    email:
+      enabled: false
+      # smtp:
+      #   host: "${SMTP_HOST}"
+      #   port: 587
+      #   username: "${SMTP_USERNAME}"
+      #   password: "${SMTP_PASSWORD}"
+      # recipients:
+      #   - "alerts@example.com"
+    
+    webhook:
+      enabled: false
+      # url: "${WEBHOOK_URL}"
+      # method: "POST"
+      # headers:
+      #   Authorization: "Bearer ${WEBHOOK_TOKEN}"
+
+# Data quality rules
+quality:
+  rules:
+    - field: "price"
+      type: "required"
+      message: "Price is required for all products"
+    - field: "price"
+      type: "range"
+      min: 0.01
+      max: 999999
+      message: "Price must be between $0.01 and $999,999"
+    - field: "url"
+      type: "unique"
+      message: "Duplicate product URL detected"
+    - field: "title"
+      type: "min_length"
+      value: 3
+      message: "Product title too short"
+  
+  actions:
+    on_violation: "warn"  # Options: warn, skip, fail
+    report: true
+
+# Post-processing
+post_processing:
+  enabled: true
+  steps:
+    - type: "deduplicate"
+      key: "product_id"
+    - type: "sort"
+      field: "price"
+      order: "asc"
+    - type: "filter"
+      condition: "price > 0"
+    - type: "enrich"
+      add_fields:
+        scraped_at: "${TIMESTAMP}"
+        source: "${DOMAIN}"
+        category_normalized: "lowercase(category)"
+
+# Scheduling
+schedule:
+  enabled: false
+  cron: "0 6 * * *"  # Daily at 6 AM
+  timezone: "UTC"
+  retry_failed: true
+  
+# Storage
+storage:
+  type: "file"  # Options: file, s3, gcs, azure, database
+  # s3:
+  #   bucket: "${S3_BUCKET}"
+  #   region: "${AWS_REGION}"
+  #   access_key: "${AWS_ACCESS_KEY}"
+  #   secret_key: "${AWS_SECRET_KEY}"
+  #   prefix: "scraping/ecommerce/"
+  
+  # database:
+  #   type: "postgresql"
+  #   connection_string: "${DATABASE_URL}"
+  #   table: "product_listings"
+  #   upsert: true
+  #   key_columns: ["product_id", "seller"]
+
+# Compliance
+compliance:
+  robots_txt: true
+  respect_crawl_delay: true
+  max_crawl_delay: 10
+  terms_check: true
+  gdpr_compliant: true
+
+# Logging
+logging:
+  level: "info"  # Options: debug, info, warn, error
+  file: "logs/ecommerce-scraper.log"
+  rotate: true
+  max_size: "100MB"
+  max_files: 10
+  format: "json"
+
+# Metrics
+metrics:
+  enabled: true
+  export:
+    prometheus:
+      enabled: false
+      # port: 9090
+      # path: "/metrics"
+    statsd:
+      enabled: false
+      # host: "localhost"
+      # port: 8125
+      # prefix: "datascrapexter.ecommerce"

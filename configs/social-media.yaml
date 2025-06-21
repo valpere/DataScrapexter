@@ -1,0 +1,670 @@
+# Social Media Monitoring Template
+# Configuration for tracking social media posts, engagement metrics, and influencer content
+
+name: "social-media-monitor"
+version: "1.0"
+description: "Comprehensive social media monitoring for brand tracking, sentiment analysis, and influencer identification"
+
+# Multi-platform configuration
+platforms:
+  twitter:
+    enabled: true
+    api_version: "v2"
+    auth:
+      type: "bearer"
+      token: "${TWITTER_BEARER_TOKEN}"
+    endpoints:
+      search: "https://api.twitter.com/2/tweets/search/recent"
+      timeline: "https://api.twitter.com/2/users/{user_id}/tweets"
+  
+  instagram:
+    enabled: true
+    scraping_method: "web"  # API requires approval
+    base_url: "https://www.instagram.com"
+  
+  linkedin:
+    enabled: true
+    scraping_method: "web"
+    requires_login: true
+  
+  reddit:
+    enabled: true
+    base_url: "https://www.reddit.com"
+    format: ".json"  # Reddit provides JSON endpoints
+  
+  youtube:
+    enabled: true
+    api_key: "${YOUTUBE_API_KEY}"
+    api_version: "v3"
+
+# Search configuration
+search:
+  keywords:
+    - "${BRAND_NAME}"
+    - "${PRODUCT_NAME}"
+    - "#${BRAND_HASHTAG}"
+  
+  exclude_keywords:
+    - "spam"
+    - "bot"
+    - "fake"
+  
+  languages: ["en", "es", "fr"]
+  
+  location:
+    radius: "50km"
+    coordinates:
+      lat: "${LOCATION_LAT}"
+      lng: "${LOCATION_LNG}"
+  
+  user_filters:
+    min_followers: 100
+    verified_only: false
+    exclude_bots: true
+
+# Platform-specific extraction rules
+extraction:
+  # Twitter/X extraction
+  - name: "twitter_posts"
+    platform: "twitter"
+    type: "api"
+    fields:
+      - name: "tweet_id"
+        path: "id"
+        required: true
+      
+      - name: "text"
+        path: "text"
+        required: true
+        transform:
+          - type: "clean_text"
+          - type: "expand_urls"
+      
+      - name: "author"
+        path: "author_id"
+        enrich:
+          endpoint: "/users/{author_id}"
+          fields:
+            - name: "username"
+              path: "username"
+            - name: "display_name"
+              path: "name"
+            - name: "followers_count"
+              path: "public_metrics.followers_count"
+            - name: "verified"
+              path: "verified"
+      
+      - name: "created_at"
+        path: "created_at"
+        transform:
+          - type: "parse_date"
+            format: "RFC3339"
+      
+      - name: "metrics"
+        path: "public_metrics"
+        structure:
+          - name: "retweet_count"
+            path: "retweet_count"
+          - name: "like_count"
+            path: "like_count"
+          - name: "reply_count"
+            path: "reply_count"
+          - name: "quote_count"
+            path: "quote_count"
+      
+      - name: "hashtags"
+        path: "entities.hashtags"
+        transform:
+          - type: "extract_field"
+            field: "tag"
+      
+      - name: "mentions"
+        path: "entities.mentions"
+        transform:
+          - type: "extract_field"
+            field: "username"
+      
+      - name: "urls"
+        path: "entities.urls"
+        transform:
+          - type: "extract_field"
+            field: "expanded_url"
+      
+      - name: "media"
+        path: "attachments.media_keys"
+        enrich:
+          endpoint: "/media"
+          fields:
+            - name: "type"
+            - name: "url"
+            - name: "preview_image_url"
+      
+      - name: "language"
+        path: "lang"
+      
+      - name: "is_retweet"
+        path: "referenced_tweets"
+        transform:
+          - type: "check_exists"
+            condition: "type == 'retweeted'"
+      
+      - name: "sentiment"
+        source: "text"
+        transform:
+          - type: "sentiment_analysis"
+      
+      - name: "context_annotations"
+        path: "context_annotations"
+        transform:
+          - type: "flatten_contexts"
+
+  # Instagram extraction
+  - name: "instagram_posts"
+    platform: "instagram"
+    type: "web"
+    container:
+      selector: "article, div[role='article']"
+      multiple: true
+    fields:
+      - name: "post_id"
+        selector: "[data-media-id]"
+        attribute: "data-media-id"
+        required: true
+      
+      - name: "username"
+        selector: "a.username, header a"
+        type: "text"
+        required: true
+      
+      - name: "caption"
+        selector: ".caption, span[data-testid='post-caption']"
+        type: "text"
+        transform:
+          - type: "clean_text"
+          - type: "extract_hashtags"
+      
+      - name: "post_type"
+        selector: "[data-media-type]"
+        attribute: "data-media-type"
+        mapping:
+          "1": "image"
+          "2": "video"
+          "8": "carousel"
+      
+      - name: "likes"
+        selector: "button[aria-label*='likes'] span"
+        type: "text"
+        transform:
+          - type: "parse_short_number"  # Handles "1.2K", "3.4M"
+      
+      - name: "comments"
+        selector: "a[href*='/comments/'] span"
+        type: "text"
+        transform:
+          - type: "parse_short_number"
+      
+      - name: "timestamp"
+        selector: "time"
+        attribute: "datetime"
+        transform:
+          - type: "parse_date"
+      
+      - name: "location"
+        selector: "a[href*='/explore/locations/']"
+        type: "text"
+      
+      - name: "image_urls"
+        selector: "img[srcset]"
+        attribute: "src"
+        type: "list"
+        transform:
+          - type: "extract_high_res"
+      
+      - name: "video_url"
+        selector: "video source"
+        attribute: "src"
+      
+      - name: "is_sponsored"
+        selector: "span:contains('Sponsored')"
+        type: "exists"
+        default: false
+      
+      - name: "hashtags"
+        source: "caption"
+        transform:
+          - type: "extract_pattern"
+            pattern: "#(\\w+)"
+      
+      - name: "mentions"
+        source: "caption"
+        transform:
+          - type: "extract_pattern"
+            pattern: "@(\\w+)"
+
+  # LinkedIn extraction
+  - name: "linkedin_posts"
+    platform: "linkedin"
+    type: "web"
+    requires_auth: true
+    container:
+      selector: ".feed-shared-update-v2"
+      multiple: true
+    fields:
+      - name: "post_id"
+        selector: "[data-urn]"
+        attribute: "data-urn"
+        transform:
+          - type: "extract_pattern"
+            pattern: "activity:(\\d+)"
+      
+      - name: "author_name"
+        selector: ".feed-shared-actor__name"
+        type: "text"
+      
+      - name: "author_title"
+        selector: ".feed-shared-actor__description"
+        type: "text"
+      
+      - name: "content"
+        selector: ".feed-shared-text"
+        type: "text"
+        transform:
+          - type: "clean_text"
+      
+      - name: "reactions"
+        selector: ".social-counts-reactions__count"
+        type: "text"
+        transform:
+          - type: "parse_short_number"
+      
+      - name: "comments"
+        selector: ".social-counts-comments"
+        type: "text"
+        transform:
+          - type: "extract_number"
+      
+      - name: "shares"
+        selector: ".social-reshares__count"
+        type: "text"
+        transform:
+          - type: "extract_number"
+      
+      - name: "post_type"
+        selector: ".feed-shared-update-v2__content"
+        type: "classify"
+        patterns:
+          article: ".feed-shared-article"
+          video: ".feed-shared-video"
+          image: ".feed-shared-image"
+          poll: ".feed-shared-poll"
+          document: ".feed-shared-document"
+      
+      - name: "hashtags"
+        selector: ".feed-shared-hashtag"
+        type: "list"
+        transform:
+          - type: "clean_text"
+
+  # Reddit extraction
+  - name: "reddit_posts"
+    platform: "reddit"
+    type: "json_api"
+    endpoint: "/r/{subreddit}/{sort}.json"
+    fields:
+      - name: "post_id"
+        path: "data.id"
+        required: true
+      
+      - name: "title"
+        path: "data.title"
+        required: true
+      
+      - name: "author"
+        path: "data.author"
+      
+      - name: "subreddit"
+        path: "data.subreddit"
+      
+      - name: "score"
+        path: "data.score"
+      
+      - name: "upvote_ratio"
+        path: "data.upvote_ratio"
+      
+      - name: "num_comments"
+        path: "data.num_comments"
+      
+      - name: "created_utc"
+        path: "data.created_utc"
+        transform:
+          - type: "unix_timestamp_to_date"
+      
+      - name: "selftext"
+        path: "data.selftext"
+        transform:
+          - type: "decode_html"
+      
+      - name: "url"
+        path: "data.url"
+      
+      - name: "permalink"
+        path: "data.permalink"
+        transform:
+          - type: "prepend"
+            value: "https://reddit.com"
+      
+      - name: "flair"
+        path: "data.link_flair_text"
+      
+      - name: "is_video"
+        path: "data.is_video"
+      
+      - name: "awards"
+        path: "data.all_awardings"
+        transform:
+          - type: "count"
+
+  # YouTube extraction
+  - name: "youtube_videos"
+    platform: "youtube"
+    type: "api"
+    endpoint: "/search"
+    fields:
+      - name: "video_id"
+        path: "id.videoId"
+        required: true
+      
+      - name: "title"
+        path: "snippet.title"
+      
+      - name: "description"
+        path: "snippet.description"
+      
+      - name: "channel_id"
+        path: "snippet.channelId"
+      
+      - name: "channel_title"
+        path: "snippet.channelTitle"
+      
+      - name: "published_at"
+        path: "snippet.publishedAt"
+      
+      - name: "thumbnail_url"
+        path: "snippet.thumbnails.high.url"
+      
+      - name: "tags"
+        path: "snippet.tags"
+        type: "list"
+      
+      # Additional API call for video statistics
+      - name: "statistics"
+        enrich:
+          endpoint: "/videos"
+          params:
+            id: "{video_id}"
+            part: "statistics"
+          fields:
+            - name: "view_count"
+              path: "statistics.viewCount"
+            - name: "like_count"
+              path: "statistics.likeCount"
+            - name: "comment_count"
+              path: "statistics.commentCount"
+
+# Engagement tracking
+engagement:
+  metrics:
+    - name: "engagement_rate"
+      formula: "(likes + comments + shares) / followers * 100"
+    
+    - name: "virality_score"
+      formula: "shares / impressions * 1000"
+    
+    - name: "sentiment_score"
+      aggregate: "average"
+      field: "sentiment"
+    
+    - name: "reach_estimate"
+      formula: "sum(author.followers_count)"
+  
+  trending:
+    window: 3600  # 1 hour
+    min_mentions: 10
+    growth_rate: 2.0  # 2x increase
+
+# Influencer identification
+influencers:
+  criteria:
+    min_followers: 10000
+    min_engagement_rate: 2.0
+    verified_priority: true
+  
+  scoring:
+    factors:
+      - name: "reach"
+        weight: 0.3
+        field: "followers_count"
+      - name: "engagement"
+        weight: 0.4
+        field: "engagement_rate"
+      - name: "relevance"
+        weight: 0.3
+        field: "topic_match_score"
+  
+  categories:
+    nano: [1000, 10000]
+    micro: [10000, 50000]
+    mid: [50000, 500000]
+    macro: [500000, 1000000]
+    mega: [1000000, null]
+
+# Content analysis
+analysis:
+  sentiment:
+    enabled: true
+    granularity: "aspect"  # Options: document, sentence, aspect
+    aspects:
+      - "product"
+      - "service"
+      - "price"
+      - "quality"
+      - "support"
+  
+  emotion:
+    enabled: true
+    categories: ["joy", "sadness", "anger", "fear", "surprise", "disgust"]
+  
+  topics:
+    enabled: true
+    method: "lda"  # Options: lda, nmf, bert
+    num_topics: 20
+  
+  language:
+    detect: true
+    translate: false
+    target_language: "en"
+  
+  toxicity:
+    enabled: true
+    threshold: 0.7
+    action: "flag"  # Options: flag, filter, report
+
+# Real-time monitoring
+realtime:
+  enabled: false
+  platforms: ["twitter", "reddit"]
+  
+  streaming:
+    twitter:
+      endpoint: "https://api.twitter.com/2/tweets/search/stream"
+      rules:
+        - value: "${BRAND_NAME} OR #${BRAND_HASHTAG}"
+          tag: "brand_mentions"
+    
+    reddit:
+      endpoint: "/api/stream"
+      subreddits: ["all"]
+      keywords: ["${BRAND_NAME}"]
+  
+  alerts:
+    threshold: 100  # Alert after 100 mentions
+    time_window: 3600  # Within 1 hour
+
+# Data enrichment
+enrichment:
+  user_data:
+    enabled: true
+    fields:
+      - "bio"
+      - "location"
+      - "website"
+      - "created_date"
+      - "verified_status"
+  
+  geolocation:
+    enabled: true
+    geocode_locations: true
+    ip_lookup: false
+  
+  url_expansion:
+    enabled: true
+    follow_redirects: true
+    extract_metadata: true
+  
+  media_analysis:
+    enabled: true
+    capabilities:
+      - "object_detection"
+      - "face_detection"
+      - "text_extraction"
+      - "brand_logo_detection"
+      - "inappropriate_content"
+
+# Output configuration
+output:
+  format: "json"
+  path: "outputs/social/${DATE}/${PLATFORM}_${TIMESTAMP}.json"
+  
+  streaming:
+    enabled: false
+    destinations:
+      - type: "elasticsearch"
+        hosts: ["localhost:9200"]
+        index: "social-media-{platform}-{date}"
+      
+      - type: "kafka"
+        brokers: ["localhost:9092"]
+        topic: "social-media-posts"
+  
+  aggregations:
+    enabled: true
+    intervals: ["hourly", "daily", "weekly"]
+    metrics:
+      - "post_count"
+      - "engagement_total"
+      - "sentiment_average"
+      - "top_hashtags"
+      - "top_influencers"
+
+# Compliance and privacy
+compliance:
+  gdpr:
+    enabled: true
+    anonymize_pii: true
+    consent_required: false
+    data_retention_days: 30
+  
+  platform_tos:
+    respect_rate_limits: true
+    include_attribution: true
+    commercial_use: false
+  
+  content_filtering:
+    filter_private_accounts: true
+    filter_deleted_content: true
+    respect_user_privacy: true
+
+# Crisis detection
+crisis_detection:
+  enabled: true
+  
+  triggers:
+    - type: "negative_sentiment_spike"
+      threshold: 0.7  # 70% negative
+      volume: 50  # minimum posts
+      time_window: 3600  # 1 hour
+    
+    - type: "viral_negative_post"
+      min_engagement: 10000
+      sentiment: "negative"
+    
+    - type: "keyword_surge"
+      keywords: ["boycott", "scandal", "fail", "worst"]
+      increase_rate: 5.0  # 5x normal
+  
+  response:
+    alert_channels: ["email", "sms", "slack"]
+    priority: "critical"
+    escalation_path: ["social_team", "pr_team", "executive"]
+
+# Competitive intelligence
+competitive:
+  enabled: true
+  competitors:
+    - name: "${COMPETITOR_1}"
+      handles:
+        twitter: "@competitor1"
+        instagram: "competitor1"
+        linkedin: "company/competitor1"
+    
+    - name: "${COMPETITOR_2}"
+      handles:
+        twitter: "@competitor2"
+        instagram: "competitor2"
+  
+  tracking:
+    - "mentions"
+    - "sentiment"
+    - "share_of_voice"
+    - "engagement_rate"
+    - "follower_growth"
+    - "campaign_performance"
+
+# Reporting
+reporting:
+  scheduled_reports:
+    - name: "daily_summary"
+      frequency: "daily"
+      time: "09:00"
+      format: "pdf"
+      template: "templates/social-daily-report.html"
+      recipients: ["${REPORT_EMAIL}"]
+    
+    - name: "weekly_insights"
+      frequency: "weekly"
+      day: "monday"
+      time: "10:00"
+      format: "xlsx"
+      include:
+        - "top_posts"
+        - "influencer_activity"
+        - "sentiment_trends"
+        - "competitive_analysis"
+    
+    - name: "monthly_dashboard"
+      frequency: "monthly"
+      day: 1
+      format: "interactive_html"
+      publish_to: "s3://reports-bucket/social-media/"
+
+# Performance optimization
+optimization:
+  batch_size: 100
+  parallel_platforms: true
+  cache_user_data: true
+  cache_ttl: 3600
+  
+  rate_limiting:
+    adaptive: true
+    backoff_multiplier: 2
+    max_retries: 3

@@ -1,396 +1,537 @@
 #!/usr/bin/env perl
-# Script to identify and scrape new products not yet in the database
-# Compares current listings with historical data to find new items
+# Combine and process multiple DataScrapexter output files
+# Supports merging JSON/CSV files with deduplication and enrichment
 
 use strict;
 use warnings;
 use JSON;
-use File::Find;
+use Text::CSV;
+use File::Glob ':glob';
 use File::Basename;
 use Getopt::Long;
-use POSIX qw(strftime);
 use Digest::MD5 qw(md5_hex);
+use POSIX       qw(strftime);
+use Data::Dumper;
 
-# Configuration
-my $listings_file = '';
-my $history_dir = '';
-my $config_file = '';
-my $output_dir = 'outputs/new_products';
-my $max_products = 50;
-my $delay = 3;
-my $verbose = 0;
+# Global variables
+my @combined_data;
+my %record_hashes;
+my %file_stats;
+my $total_processed = 0;
+my $duplicates      = 0;
+
+# Command line options
+my $pattern         = '';
+my $output_file     = 'combined_data.json';
+my $output_format   = 'json';
+my $input_type      = 'auto';
+my $merge_field     = 'url';
+my $hash_fields     = '';
+my $exclude_pattern = '';
+my $no_enrich       = 0;
+my $dry_run         = 0;
+my $verbose         = 0;
+my $help            = 0;
 
 # Parse command line arguments
 GetOptions(
-    'listings=s' => \$listings_file,
-    'history=s' => \$history_dir,
-    'config=s' => \$config_file,
-    'output=s' => \$output_dir,
-    'max=i' => \$max_products,
-    'delay=i' => \$delay,
-    'verbose' => \$verbose,
-    'help' => sub { show_usage(); exit 0; }
+    'sources=s'     => \$pattern,
+    'output|o=s'    => \$output_file,
+    'format|f=s'    => \$output_format,
+    'type|t=s'      => \$input_type,
+    'merge-field=s' => \$merge_field,
+    'hash-fields=s' => \$hash_fields,
+    'exclude=s'     => \$exclude_pattern,
+    'no-enrich'     => \$no_enrich,
+    'dry-run'       => \$dry_run,
+    'verbose|v'     => \$verbose,
+    'help|h'        => \$help
 ) or die "Error in command line arguments\n";
 
-# Validate required arguments
-unless ($listings_file && $history_dir && $config_file) {
-    print STDERR "Error: Missing required arguments\n";
+# Show help if requested or no pattern provided
+if ($help || (!$pattern && @ARGV == 0)) {
     show_usage();
-    exit 1;
+    exit($help ? 0 : 1);
 }
 
-# Validate files exist
-die "Listings file not found: $listings_file\n" unless -f $listings_file;
-die "History directory not found: $history_dir\n" unless -d $history_dir;
-die "Config file not found: $config_file\n" unless -f $config_file;
+# Use positional argument if --sources not provided
+$pattern ||= $ARGV[0];
 
-# Create output directory
-unless (-d $output_dir) {
-    mkdir $output_dir or die "Cannot create output directory: $!\n";
+unless ($pattern) {
+    die "Error: No source files specified\n";
 }
 
-# Global data storage
-my %known_products;
-my @new_products;
-my $timestamp = strftime("%Y%m%d_%H%M%S", localtime);
+# Validate output format
+unless ($output_format =~ /^(json|csv)$/) {
+    die "Error: Invalid output format. Must be 'json' or 'csv'\n";
+}
 
 # Main execution
 main();
 
 sub main {
-    print "=== New Product Discovery and Scraping ===\n";
-    print "Timestamp: " . strftime("%Y-%m-%d %H:%M:%S", localtime) . "\n\n";
-    
-    # Load historical product data
-    print "Loading historical product data...\n";
-    load_historical_data();
-    print "Found " . scalar(keys %known_products) . " known products\n\n";
-    
-    # Load current listings
-    print "Loading current listings...\n";
-    my @current_products = load_current_listings();
-    print "Found " . scalar(@current_products) . " current products\n\n";
-    
-    # Identify new products
-    print "Identifying new products...\n";
-    identify_new_products(\@current_products);
-    print "Found " . scalar(@new_products) . " new products\n\n";
-    
-    if (@new_products) {
-        # Limit number of products to scrape
-        if (@new_products > $max_products) {
-            @new_products = @new_products[0..$max_products-1];
-            print "Limiting to first $max_products products\n\n";
-        }
-        
-        # Create URL file for scraping
-        my $url_file = "$output_dir/new_product_urls_$timestamp.txt";
-        save_urls($url_file);
-        
-        # Run scraper on new products
-        print "Scraping new products...\n";
-        scrape_new_products($url_file);
-        
-        # Generate report
-        generate_report();
-    } else {
-        print "No new products to scrape\n";
+    print "=== DataScrapexter Data Combiner ===\n"                            if $verbose;
+    print "Starting at: " . strftime("%Y-%m-%d %H:%M:%S", localtime) . "\n\n" if $verbose;
+
+    # Process files
+    combine_files($pattern, $input_type);
+
+    # Enrich data if requested
+    if (!$no_enrich && @combined_data) {
+        print "\nEnriching data...\n" if $verbose;
+        enrich_data();
     }
-}
+
+    # Save results
+    if (@combined_data) {
+        unless ($dry_run) {
+            save_combined_data($output_file, $output_format);
+        }
+        else {
+            print "\n[DRY RUN] Would save " . scalar(@combined_data) . " records to $output_file\n";
+        }
+    }
+    else {
+        print "No data to save\n";
+    }
+
+    # Print summary
+    print_summary();
+} ## end sub main
 
 sub show_usage {
     print <<'EOF';
-Usage: scrape_new_products.pl --listings <file> --history <dir> --config <file> [options]
+Usage: combine_data.pl --sources <pattern> [options]
 
-Identify and scrape new products not in historical data
+Combine multiple DataScrapexter output files with deduplication
 
 Required:
-  --listings FILE    Current product listings file (JSON/CSV)
-  --history DIR      Directory containing historical product data
-  --config FILE      DataScrapexter configuration file for product details
+  --sources PATTERN   Source files or directories (supports wildcards)
 
 Options:
-  --output DIR       Output directory (default: outputs/new_products)
-  --max N            Maximum number of new products to scrape (default: 50)
-  --delay N          Delay between products in seconds (default: 3)
-  --verbose          Enable verbose output
-  --help             Show this help message
+  -o, --output FILE   Output file name (default: combined_data.json)
+  -f, --format TYPE   Output format: json or csv (default: json)
+  -t, --type TYPE     Input file type: json, csv, or auto (default: auto)
+  --merge-field FIELD Field to use for matching records (default: url)
+  --hash-fields LIST  Comma-separated fields for duplicate detection
+  --exclude PATTERN   Pattern to exclude files
+  --no-enrich         Skip data enrichment step
+  --dry-run           Preview without creating output
+  -v, --verbose       Enable verbose output
+  -h, --help          Show this help message
 
-Example:
-  scrape_new_products.pl \
-    --listings outputs/products-listing.csv \
-    --history outputs/products \
-    --config configs/product-details.yaml \
-    --max 20
+Examples:
+  combine_data.pl --sources "outputs/*.json" -o merged.json
+  combine_data.pl --sources "data/*.csv" -f csv -o combined.csv
+  combine_data.pl --sources "outputs/2024*" --exclude "*test*" --dry-run
 
 EOF
-}
+} ## end sub show_usage
 
-sub load_historical_data {
-    # Find all JSON files in history directory
-    find(\&process_history_file, $history_dir);
-    
-    sub process_history_file {
-        return unless /\.json$/;
-        return unless -f $_;
-        
-        my $file_path = $File::Find::name;
-        
-        eval {
-            open my $fh, '<', $file_path or die "Cannot open file: $!\n";
-            my $json_text = do { local $/; <$fh> };
-            close $fh;
-            
-            my $data = decode_json($json_text);
-            
-            # Handle different JSON structures
-            my @items = ref($data) eq 'ARRAY' ? @$data : ($data);
-            
-            foreach my $item (@items) {
-                my $product_data = $item->{data} || $item;
-                
-                # Extract product identifier
-                my $product_id = extract_product_id($product_data);
-                if ($product_id) {
-                    $known_products{$product_id} = {
-                        first_seen => $product_data->{_scraped_at} || 
-                                     $product_data->{timestamp} || 
-                                     strftime("%Y-%m-%d", localtime((stat($file_path))[9])),
-                        file => basename($file_path)
-                    };
-                }
-            }
-        };
-        
-        if ($@ && $verbose) {
-            warn "Error loading $file_path: $@\n";
-        }
+sub combine_files {
+    my ($file_pattern, $file_type) = @_;
+
+    # Get list of files matching pattern
+    my @files = glob($file_pattern);
+
+    # Apply exclusion pattern if specified
+    if ($exclude_pattern) {
+        @files = grep {!/$exclude_pattern/} @files;
     }
-}
 
-sub load_current_listings {
-    my @products;
-    
-    # Detect file type
-    my $ext = (fileparse($listings_file, qr/\.[^.]*/))[2];
-    
-    if ($ext eq '.json') {
-        # Load JSON file
-        open my $fh, '<', $listings_file or die "Cannot open listings file: $!\n";
-        my $json_text = do { local $/; <$fh> };
+    unless (@files) {
+        print "No files found matching pattern: $file_pattern\n";
+        return;
+    }
+
+    print "Found " . scalar(@files) . " files to process\n";
+
+    foreach my $filepath (sort @files) {
+        next unless -f $filepath;    # Skip directories
+
+        print "Processing: $filepath\n" if $verbose;
+
+        # Determine file type
+        my $current_type = $file_type;
+        if ($file_type eq 'auto') {
+            my ($name, $path, $ext) = fileparse($filepath, qr/\.[^.]*/);
+            $current_type = ($ext eq '.json') ? 'json' : 'csv';
+        }
+
+        # Load data
+        my @records;
+        if ($current_type eq 'json') {
+            @records = load_json_file($filepath);
+        }
+        else {
+            @records = load_csv_file($filepath);
+        }
+
+        # Add to combined dataset
+        my $added = add_data(\@records, $filepath);
+        print "  Added $added unique records (" . scalar(@records) . " total)\n" if $verbose;
+    } ## end foreach my $filepath (sort ...)
+} ## end sub combine_files
+
+sub load_json_file {
+    my ($filepath) = @_;
+    my @records;
+
+    eval {
+        open my $fh, '<:encoding(utf8)', $filepath or die "Cannot open file: $!\n";
+        my $json_text = do {local $/; <$fh>};
         close $fh;
-        
+
         my $data = decode_json($json_text);
-        @products = ref($data) eq 'ARRAY' ? @$data : ($data);
-        
-    } elsif ($ext eq '.csv') {
-        # Load CSV file
-        require Text::CSV;
-        my $csv = Text::CSV->new({ binary => 1, auto_diag => 1 });
-        
-        open my $fh, '<:encoding(utf8)', $listings_file or die "Cannot open listings file: $!\n";
-        
+
+        # Handle different JSON structures
+        if (ref($data) eq 'ARRAY') {
+            @records = @$data;
+        }
+        elsif (ref($data) eq 'HASH') {
+            # Check for common wrapper keys
+            if (exists $data->{data} && ref($data->{data}) eq 'ARRAY') {
+                @records = @{$data->{data}};
+            }
+            elsif (exists $data->{results} && ref($data->{results}) eq 'ARRAY') {
+                @records = @{$data->{results}};
+            }
+            elsif (exists $data->{items} && ref($data->{items}) eq 'ARRAY') {
+                @records = @{$data->{items}};
+            }
+            else {
+                # Single record
+                @records = ($data);
+            }
+        }
+    };
+
+    if ($@) {
+        warn "Error loading $filepath: $@\n";
+    }
+
+    return @records;
+} ## end sub load_json_file
+
+sub load_csv_file {
+    my ($filepath) = @_;
+    my @records;
+
+    eval {
+        my $csv = Text::CSV->new({
+                binary             => 1,
+                auto_diag          => 1,
+                allow_loose_quotes => 1,
+                allow_whitespace   => 1
+            }
+        );
+
+        open my $fh, '<:encoding(utf8)', $filepath or die "Cannot open file: $!\n";
+
         # Read header
         my $header = $csv->getline($fh);
-        $csv->column_names(@$header);
-        
+        unless ($header && @$header) {
+            die "Invalid CSV header\n";
+        }
+
+        # Clean header fields
+        my @clean_header = map {s/^\s+|\s+$//g; $_} @$header;
+        $csv->column_names(@clean_header);
+
         # Read data
         while (my $row = $csv->getline_hr($fh)) {
-            push @products, $row;
-        }
-        
+            # Convert numeric strings to numbers
+            foreach my $key (keys %$row) {
+                my $value = $row->{$key};
+                if (defined $value && $value ne '') {
+                    # Remove leading/trailing whitespace
+                    $value =~ s/^\s+|\s+$//g;
+
+                    # Try to convert to number
+                    if ($value =~ /^-?\d+$/) {
+                        $row->{$key} = int($value);
+                    }
+                    elsif ($value =~ /^-?\d*\.?\d+$/) {
+                        $row->{$key} = $value +0;
+                    }
+                    else {
+                        $row->{$key} = $value;
+                    }
+                }
+            }
+            push @records, $row;
+        } ## end while (my $row = $csv->getline_hr...)
+
         close $fh;
-    } else {
-        die "Unsupported file format: $ext\n";
-    }
-    
-    return @products;
-}
+    };
 
-sub extract_product_id {
-    my ($product) = @_;
-    
-    # Try different field names for product ID
-    foreach my $field (qw(product_url url product_id id sku)) {
-        if (exists $product->{$field} && defined $product->{$field} && $product->{$field} ne '') {
-            return $product->{$field};
+    if ($@) {
+        warn "Error loading $filepath: $@\n";
+    }
+
+    return @records;
+} ## end sub load_csv_file
+
+sub generate_record_hash {
+    my ($record) = @_;
+
+    my @key_fields;
+
+    # Use specified hash fields if provided
+    if ($hash_fields) {
+        @key_fields = split(/,/, $hash_fields);
+    }
+    else {
+        # Default key fields for deduplication
+        @key_fields = qw(url product_url link product_id id sku title name);
+    }
+
+    my %hash_data;
+
+    foreach my $field (@key_fields) {
+        $field =~ s/^\s+|\s+$//g;    # Trim whitespace
+        if (exists $record->{$field} && defined $record->{$field} && $record->{$field} ne '') {
+            $hash_data{$field} = $record->{$field};
         }
     }
-    
-    # Generate ID from title if available
-    if ($product->{title} || $product->{product_name} || $product->{name}) {
-        my $title = $product->{title} || $product->{product_name} || $product->{name};
-        return generate_id_from_title($title);
-    }
-    
-    return undef;
-}
 
-sub generate_id_from_title {
-    my ($title) = @_;
-    
-    # Create a normalized ID from title
-    my $id = lc($title);
-    $id =~ s/[^a-z0-9]+/_/g;
-    $id =~ s/^_|_$//g;
-    
-    # Add hash for uniqueness
-    my $hash = substr(md5_hex($title), 0, 8);
-    
-    return "${id}_${hash}";
-}
-
-sub identify_new_products {
-    my ($current_products) = @_;
-    
-    foreach my $product (@$current_products) {
-        # Handle nested data
-        my $product_data = $product->{data} || $product;
-        
-        # Extract product ID
-        my $product_id = extract_product_id($product_data);
-        
-        if ($product_id && !exists $known_products{$product_id}) {
-            # This is a new product
-            push @new_products, {
-                id => $product_id,
-                url => $product_data->{product_url} || $product_data->{url},
-                name => $product_data->{product_name} || 
-                        $product_data->{title} || 
-                        $product_data->{name} || 
-                        'Unknown',
-                price => $product_data->{price} || $product_data->{current_price},
-                data => $product_data
-            };
-            
-            print "  New: $new_products[-1]->{name}\n" if $verbose;
+    # If no key fields found, use all non-empty fields
+    unless (%hash_data) {
+        foreach my $key (keys %$record) {
+            if (defined $record->{$key} && $record->{$key} ne '') {
+                $hash_data{$key} = $record->{$key};
+            }
         }
     }
+
+    # Create hash
+    my $json = JSON->new->canonical->encode(\%hash_data);
+    return md5_hex($json);
+} ## end sub generate_record_hash
+
+sub merge_records {
+    my ($existing, $new) = @_;
+
+    my %merged = %$existing;
+
+    foreach my $key (keys %$new) {
+        my $value = $new->{$key};
+
+        if (defined $value && $value ne '') {
+            # Prefer non-empty values
+            if (!exists $merged{$key} || !defined $merged{$key} || $merged{$key} eq '') {
+                $merged{$key} = $value;
+            }
+            # For timestamps, keep the most recent
+            elsif ($key =~ /^(timestamp|scraped_at|date|updated_at|created_at)$/i) {
+                # Simple string comparison for ISO dates
+                if ($value gt($merged{$key} // '')) {
+                    $merged{$key} = $value;
+                }
+            }
+            # For prices, keep the most recent (assuming newer data)
+            elsif ($key =~ /price/i && $value =~ /^[\d.]+$/) {
+                $merged{$key} = $value;
+            }
+        }
+    } ## end foreach my $key (keys %$new)
+
+    # Update merge metadata
+    $merged{_merge_count} = ($merged{_merge_count} // 1) + 1;
+    $merged{_last_merged} = strftime("%Y-%m-%dT%H:%M:%S", localtime);
+
+    return \%merged;
+} ## end sub merge_records
+
+sub add_data {
+    my ($records, $source_file) = @_;
+
+    my $source_name = basename($source_file);
+    my $added       = 0;
+
+    foreach my $record (@$records) {
+        next unless ref($record) eq 'HASH';    # Skip invalid records
+
+        $total_processed++;
+
+        # Add source file information
+        $record->{_source_file} = $source_name;
+
+        # Generate hash for duplicate detection
+        my $hash_val = generate_record_hash($record);
+
+        if (exists $record_hashes{$hash_val}) {
+            # Merge with existing record
+            my $idx = $record_hashes{$hash_val};
+            $combined_data[$idx] = merge_records($combined_data[$idx], $record);
+            $duplicates++;
+        }
+        else {
+            # Add new record
+            push @combined_data, $record;
+            $record_hashes{$hash_val} = $#combined_data;
+            $added++;
+        }
+    } ## end foreach my $record (@$records)
+
+    $file_stats{$source_name} = $added;
+    return $added;
+} ## end sub add_data
+
+sub enrich_data {
+    foreach my $record (@combined_data) {
+        # Add processing timestamp if not exists
+        unless (exists $record->{_processed_at}) {
+            $record->{_processed_at} = strftime("%Y-%m-%dT%H:%M:%S", localtime);
+        }
+
+        # Calculate price changes if historical data exists
+        if (exists $record->{original_price} && exists $record->{current_price}) {
+            my $original = $record->{original_price} || 0;
+            my $current  = $record->{current_price}  || 0;
+
+            # Clean price values
+            $original =~ s/[^\d.]//g if $original;
+            $current  =~ s/[^\d.]//g if $current;
+
+            if ($original > 0 && $current > 0) {
+                $record->{_price_change}         = sprintf("%.2f", $current - $original);
+                $record->{_price_change_percent} = sprintf("%.2f", (($current - $original) / $original) * 100);
+            }
+        }
+
+        # Standardize boolean fields
+        foreach my $bool_field (qw(in_stock available is_active on_sale)) {
+            if (exists $record->{$bool_field}) {
+                my $value = lc($record->{$bool_field} // '');
+                $record->{$bool_field} = ($value =~ /^(true|yes|1|available|in stock|active|on)$/) ? 1 : 0;
+            }
+        }
+
+        # Clean and standardize URLs
+        foreach my $url_field (qw(url product_url link href)) {
+            if (exists $record->{$url_field} && $record->{$url_field}) {
+                # Remove trailing slashes and fragments
+                $record->{$url_field} =~ s/\#.*$//;
+                $record->{$url_field} =~ s/\/+$//;
+            }
+        }
+    } ## end foreach my $record (@combined_data)
+} ## end sub enrich_data
+
+sub save_combined_data {
+    my ($output_file, $format) = @_;
+
+    print "\nSaving combined data to $output_file\n" if $verbose;
+
+    if ($format eq 'json') {
+        save_as_json($output_file);
+    }
+    elsif ($format eq 'csv') {
+        save_as_csv($output_file);
+    }
+
+    print "Saved " . scalar(@combined_data) . " records\n";
 }
 
-sub save_urls {
-    my ($url_file) = @_;
-    
-    open my $fh, '>', $url_file or die "Cannot create URL file: $!\n";
-    
-    foreach my $product (@new_products) {
-        if ($product->{url}) {
-            print $fh "$product->{url}\n";
+sub save_as_json {
+    my ($output_file) = @_;
+
+    open my $fh, '>:encoding(utf8)', $output_file or die "Cannot create output file: $!\n";
+
+    my $json = JSON->new->pretty->canonical;
+    print $fh $json->encode(\@combined_data);
+
+    close $fh;
+}
+
+sub save_as_csv {
+    my ($output_file) = @_;
+
+    unless (@combined_data) {
+        print "No data to save\n";
+        return;
+    }
+
+    # Get all field names
+    my %fieldnames;
+    foreach my $record (@combined_data) {
+        $fieldnames{$_} = 1 for keys %$record;
+    }
+
+    # Sort fields, putting metadata fields at the end
+    my @metadata_fields = grep {/^_/} keys %fieldnames;
+    my @data_fields     = grep {!/^_/} keys %fieldnames;
+    my @sorted_fields   = (sort @data_fields, sort @metadata_fields);
+
+    # Create CSV writer
+    my $csv = Text::CSV->new({
+            binary    => 1,
+            auto_diag => 1,
+            eol       => "\n"
+        }
+    );
+
+    open my $fh, '>:encoding(utf8)', $output_file or die "Cannot create output file: $!\n";
+
+    # Write header
+    $csv->print($fh, \@sorted_fields);
+
+    # Write data
+    foreach my $record (@combined_data) {
+        my @row;
+        foreach my $field (@sorted_fields) {
+            my $value = $record->{$field} // '';
+            # Convert references to JSON strings
+            if (ref($value)) {
+                $value = JSON->new->encode($value);
+            }
+            push @row, $value;
+        }
+        $csv->print($fh, \@row);
+    }
+
+    close $fh;
+} ## end sub save_as_csv
+
+sub print_summary {
+    print "\n" . "=" x 50 . "\n";
+    print "Processing Summary\n";
+    print "=" x 50 . "\n";
+    print "Total files processed: " . scalar(keys %file_stats) . "\n";
+    print "Total records processed: $total_processed\n";
+    print "Unique records: " . scalar(@combined_data) . "\n";
+    print "Duplicate records merged: $duplicates\n";
+
+    if ($verbose && %file_stats) {
+        print "\nRecords per file:\n";
+        foreach my $file (sort keys %file_stats) {
+            printf "  %-40s: %d records\n", $file, $file_stats{$file};
         }
     }
-    
-    close $fh;
-    
-    print "Saved " . scalar(@new_products) . " URLs to $url_file\n\n";
-}
 
-sub scrape_new_products {
-    my ($url_file) = @_;
-    
-    # Check if datascrapexter is available
-    my $datascrapexter = `which datascrapexter 2>/dev/null`;
-    chomp $datascrapexter;
-    
-    unless ($datascrapexter) {
-        die "datascrapexter not found in PATH\n";
-    }
-    
-    # Validate configuration
-    system("datascrapexter validate '$config_file' >/dev/null 2>&1");
-    if ($? != 0) {
-        die "Invalid configuration file: $config_file\n";
-    }
-    
-    my $successful = 0;
-    my $failed = 0;
-    
-    foreach my $product (@new_products) {
-        next unless $product->{url};
-        
-        print "Scraping: $product->{name}\n";
-        print "  URL: $product->{url}\n" if $verbose;
-        
-        # Generate output filename
-        my $safe_name = $product->{id};
-        $safe_name =~ s/[^a-zA-Z0-9-_]/_/g;
-        my $output_file = "$output_dir/${safe_name}_$timestamp.json";
-        
-        # Set environment variable for URL
-        $ENV{PRODUCT_URL} = $product->{url};
-        
-        # Run scraper
-        my $cmd = "datascrapexter run '$config_file' -o '$output_file' 2>&1";
-        my $output = `$cmd`;
-        my $exit_code = $? >> 8;
-        
-        if ($exit_code == 0 && -f $output_file && -s $output_file) {
-            $successful++;
-            print "  ✓ Success\n";
-            
-            # Add metadata to scraped file
-            add_metadata($output_file, $product);
-        } else {
-            $failed++;
-            print "  ✗ Failed\n";
-            print "  Error: $output\n" if $verbose && $output;
-            unlink $output_file if -f $output_file;
+    # Show field coverage statistics
+    if (@combined_data && $verbose) {
+        print "\nField Coverage:\n";
+        my %field_counts;
+
+        foreach my $record (@combined_data) {
+            foreach my $field (keys %$record) {
+                next                    if $field =~ /^_/;                                         # Skip metadata fields
+                $field_counts{$field}++ if defined $record->{$field} && $record->{$field} ne '';
+            }
         }
-        
-        # Rate limiting
-        sleep $delay if $delay > 0;
-    }
-    
-    print "\nScraping complete: $successful successful, $failed failed\n";
-}
 
-sub add_metadata {
-    my ($file, $product) = @_;
-    
-    # Read scraped data
-    open my $fh, '<', $file or return;
-    my $json_text = do { local $/; <$fh> };
-    close $fh;
-    
-    my $data = decode_json($json_text);
-    
-    # Add metadata
-    if (ref($data) eq 'ARRAY' && @$data > 0) {
-        $data->[0]->{_new_product} = JSON::true;
-        $data->[0]->{_discovered_at} = strftime("%Y-%m-%dT%H:%M:%S", localtime);
-        $data->[0]->{_listing_price} = $product->{price} if $product->{price};
-    }
-    
-    # Write back
-    open $fh, '>', $file or return;
-    print $fh encode_json($data);
-    close $fh;
-}
+        my @sorted_fields = sort {$field_counts{$b} <=> $field_counts{$a}} keys %field_counts;
+        my $max_fields    = @sorted_fields > 10 ? 10 : @sorted_fields;
 
-sub generate_report {
-    my $report_file = "$output_dir/new_products_report_$timestamp.txt";
-    
-    open my $fh, '>', $report_file or die "Cannot create report file: $!\n";
-    
-    print $fh "New Products Discovery Report\n";
-    print $fh "=" x 50 . "\n";
-    print $fh "Generated: " . strftime("%Y-%m-%d %H:%M:%S", localtime) . "\n\n";
-    
-    print $fh "Summary:\n";
-    print $fh "- Known products in database: " . scalar(keys %known_products) . "\n";
-    print $fh "- New products discovered: " . scalar(@new_products) . "\n";
-    print $fh "- Products scraped: " . ($max_products < @new_products ? $max_products : scalar(@new_products)) . "\n\n";
-    
-    print $fh "New Products List:\n";
-    print $fh "-" x 50 . "\n";
-    
-    foreach my $product (@new_products) {
-        print $fh "\nProduct: $product->{name}\n";
-        print $fh "ID: $product->{id}\n";
-        print $fh "URL: $product->{url}\n" if $product->{url};
-        print $fh "Price: $product->{price}\n" if $product->{price};
-    }
-    
-    close $fh;
-    
-    print "\nReport saved to: $report_file\n";
-}
+        for (my $i = 0; $i < $max_fields; $i++) {
+            my $field    = $sorted_fields[$i];
+            my $count    = $field_counts{$field};
+            my $coverage = ($count / @combined_data) * 100;
+            printf "  %-30s: %.1f%% (%d records)\n", $field, $coverage, $count;
+        }
+    } ## end if (@combined_data && ...)
+
+    print "=" x 50 . "\n";
+} ## end sub print_summary
