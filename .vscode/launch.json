@@ -1,0 +1,229 @@
+{
+    // .vscode/launch.json
+    // Launch configurations for debugging DataScrapexter
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug DataScrapexter CLI",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/cmd/datascrapexter",
+            "args": [
+                "run",
+                "${workspaceFolder}/examples/basic.yaml"
+            ],
+            "env": {
+                "LOG_LEVEL": "debug",
+                "GO111MODULE": "on"
+            },
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "showLog": true,
+            "trace": "verbose"
+        },
+        {
+            "name": "Debug with Custom Config",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/cmd/datascrapexter",
+            "args": [
+                "run",
+                "${input:configFile}",
+                "-o",
+                "${workspaceFolder}/outputs/debug.json",
+                "--debug"
+            ],
+            "env": {
+                "LOG_LEVEL": "debug",
+                "DEBUG": "true"
+            },
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Debug Server Mode",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/cmd/datascrapexter",
+            "args": [
+                "server",
+                "--port",
+                "8080",
+                "--host",
+                "localhost"
+            ],
+            "env": {
+                "LOG_LEVEL": "debug",
+                "SERVER_MODE": "true"
+            },
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Debug Validate Command",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/cmd/datascrapexter",
+            "args": [
+                "validate",
+                "${input:configFile}",
+                "--strict"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Debug Template Generation",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/cmd/datascrapexter",
+            "args": [
+                "template",
+                "--type",
+                "${input:templateType}"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Debug Unit Tests",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}",
+            "args": [
+                "-v",
+                "-race",
+                "-coverprofile=${workspaceFolder}/coverage.out"
+            ],
+            "env": {
+                "GO111MODULE": "on"
+            },
+            "showLog": true
+        },
+        {
+            "name": "Debug Current Test",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${file}",
+            "args": [
+                "-test.run",
+                "${selectedText}",
+                "-v"
+            ],
+            "env": {
+                "GO111MODULE": "on"
+            },
+            "showLog": true
+        },
+        {
+            "name": "Debug Integration Tests",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/test",
+            "args": [
+                "-v",
+                "-tags=integration",
+                "-timeout=5m"
+            ],
+            "env": {
+                "GO111MODULE": "on",
+                "INTEGRATION_TEST": "true"
+            },
+            "showLog": true
+        },
+        {
+            "name": "Debug Benchmark",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${file}",
+            "args": [
+                "-bench=.",
+                "-benchmem",
+                "-benchtime=10s",
+                "-run=^$"
+            ],
+            "env": {
+                "GO111MODULE": "on"
+            },
+            "showLog": true
+        },
+        {
+            "name": "Debug with Environment File",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/cmd/datascrapexter",
+            "args": [
+                "run",
+                "${input:configFile}"
+            ],
+            "envFile": "${workspaceFolder}/.env",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Attach to Process",
+            "type": "go",
+            "request": "attach",
+            "mode": "local",
+            "processId": "${command:pickProcess}"
+        },
+        {
+            "name": "Debug Script (Bash)",
+            "type": "bashdb",
+            "request": "launch",
+            "program": "${file}",
+            "cwd": "${workspaceFolder}",
+            "terminalKind": "integrated"
+        },
+        {
+            "name": "Debug Script (Perl)",
+            "type": "perl",
+            "request": "launch",
+            "program": "${file}",
+            "stopOnEntry": true,
+            "cwd": "${workspaceFolder}"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "configFile",
+            "type": "promptString",
+            "description": "Path to configuration file",
+            "default": "configs/example.yaml"
+        },
+        {
+            "id": "templateType",
+            "type": "pickString",
+            "description": "Select template type",
+            "options": [
+                "basic",
+                "ecommerce",
+                "real-estate",
+                "job-listings",
+                "news-media",
+                "social-media"
+            ],
+            "default": "basic"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Debug Full Stack",
+            "configurations": [
+                "Debug Server Mode",
+                "Debug DataScrapexter CLI"
+            ],
+            "stopAll": true
+        }
+    ]
+}

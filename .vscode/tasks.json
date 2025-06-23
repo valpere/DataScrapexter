@@ -1,0 +1,339 @@
+{
+    // .vscode/tasks.json
+    // Task configurations for DataScrapexter development
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build DataScrapexter",
+            "type": "shell",
+            "command": "make",
+            "args": ["build"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": "$go"
+        },
+        {
+            "label": "Build All Platforms",
+            "type": "shell",
+            "command": "make",
+            "args": ["build-all"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": "$go"
+        },
+        {
+            "label": "Run Tests",
+            "type": "shell",
+            "command": "make",
+            "args": ["test"],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": "$go"
+        },
+        {
+            "label": "Run Tests with Coverage",
+            "type": "shell",
+            "command": "make",
+            "args": ["test-coverage"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": "$go"
+        },
+        {
+            "label": "Run Integration Tests",
+            "type": "shell",
+            "command": "make",
+            "args": ["test-integration"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": "$go"
+        },
+        {
+            "label": "Run Linter",
+            "type": "shell",
+            "command": "make",
+            "args": ["lint"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": {
+                "owner": "golangci-lint",
+                "source": "golangci-lint",
+                "pattern": {
+                    "regexp": "^(.+):(\\d+):(\\d+):\\s+(.+)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "message": 4
+                }
+            }
+        },
+        {
+            "label": "Format Code",
+            "type": "shell",
+            "command": "make",
+            "args": ["fmt"],
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Run go mod tidy",
+            "type": "shell",
+            "command": "go",
+            "args": ["mod", "tidy"],
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": "$go"
+        },
+        {
+            "label": "Generate Mocks",
+            "type": "shell",
+            "command": "make",
+            "args": ["generate"],
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Docker Build",
+            "type": "shell",
+            "command": "make",
+            "args": ["docker-build"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Docker Run",
+            "type": "shell",
+            "command": "make",
+            "args": ["docker-run"],
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "new"
+            }
+        },
+        {
+            "label": "Start Server",
+            "type": "shell",
+            "command": "${workspaceFolder}/bin/datascrapexter",
+            "args": ["server", "--port", "8080"],
+            "isBackground": true,
+            "problemMatcher": {
+                "pattern": {
+                    "regexp": "^$"
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "Starting server",
+                    "endsPattern": "Server started"
+                }
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated"
+            }
+        },
+        {
+            "label": "Run Example",
+            "type": "shell",
+            "command": "${workspaceFolder}/bin/datascrapexter",
+            "args": [
+                "run",
+                "${input:exampleFile}"
+            ],
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "new"
+            },
+            "dependsOn": ["Build DataScrapexter"]
+        },
+        {
+            "label": "Validate Config",
+            "type": "shell",
+            "command": "${workspaceFolder}/bin/datascrapexter",
+            "args": [
+                "validate",
+                "${file}",
+                "--strict"
+            ],
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "dependsOn": ["Build DataScrapexter"]
+        },
+        {
+            "label": "Clean Build Artifacts",
+            "type": "shell",
+            "command": "make",
+            "args": ["clean"],
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Install Dependencies",
+            "type": "shell",
+            "command": "go",
+            "args": ["mod", "download"],
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Install Dev Tools",
+            "type": "shell",
+            "command": "make",
+            "args": ["install-tools"],
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Run Benchmarks",
+            "type": "shell",
+            "command": "make",
+            "args": ["benchmark"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Security Scan",
+            "type": "shell",
+            "command": "make",
+            "args": ["security"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Check Outdated Modules",
+            "type": "shell",
+            "command": "make",
+            "args": ["check-mod"],
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Watch Mode",
+            "type": "shell",
+            "command": "make",
+            "args": ["watch"],
+            "isBackground": true,
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated"
+            }
+        }
+    ],
+    "inputs": [
+        {
+            "id": "exampleFile",
+            "type": "pickString",
+            "description": "Select an example configuration",
+            "options": [
+                "examples/basic.yaml",
+                "examples/ecommerce.yaml",
+                "examples/real-estate.yaml",
+                "examples/job-board.yaml",
+                "examples/news-scraper.yaml",
+                "examples/quotes.yaml"
+            ],
+            "default": "examples/basic.yaml"
+        }
+    ]
+}

@@ -1,0 +1,250 @@
+# .gitattributes
+# Git attributes for DataScrapexter project
+
+# Auto detect text files and perform LF normalization
+* text=auto eol=lf
+
+# Go source files
+*.go text diff=golang
+*.mod text diff=golang
+*.sum text diff=golang
+
+# Scripts
+*.sh text eol=lf
+*.bash text eol=lf
+*.pl text eol=lf
+*.py text eol=lf
+
+# Configuration files
+*.yaml text
+*.yml text
+*.json text
+*.toml text
+*.ini text
+*.conf text
+*.config text
+
+# Documentation
+*.md text diff=markdown
+*.txt text
+*.rst text
+*.adoc text
+README* text
+LICENSE text
+CONTRIBUTING* text
+CHANGELOG* text
+AUTHORS text
+NOTICE text
+
+# Web files
+*.html text diff=html
+*.htm text diff=html
+*.css text diff=css
+*.scss text diff=css
+*.sass text diff=css
+*.js text diff=javascript
+*.jsx text diff=javascript
+*.ts text diff=javascript
+*.tsx text diff=javascript
+*.vue text
+*.xml text
+
+# Docker
+Dockerfile text
+Dockerfile.* text
+docker-compose.yml text
+docker-compose.yaml text
+.dockerignore text
+
+# Data files
+*.csv text
+*.tsv text
+*.sql text
+
+# Templates
+*.tmpl text
+*.tpl text
+*.template text
+
+# Git files
+.gitignore text
+.gitattributes text
+.gitmodules text
+.gitconfig text
+.mailmap text
+
+# CI/CD
+.travis.yml text
+.gitlab-ci.yml text
+.circleci/config.yml text
+.github/*.yml text
+.github/workflows/*.yml text
+.github/workflows/*.yaml text
+Jenkinsfile text
+azure-pipelines.yml text
+
+# Makefiles
+Makefile text
+makefile text
+GNUmakefile text
+*.mk text
+
+# Protocol Buffers
+*.proto text
+
+# Certificates and keys (marked as binary to prevent modification)
+*.pem binary
+*.key binary
+*.crt binary
+*.cer binary
+*.der binary
+*.p7b binary
+*.p12 binary
+*.pfx binary
+*.jks binary
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.bmp binary
+*.ico binary
+*.icns binary
+*.tiff binary
+*.tif binary
+*.webp binary
+*.svg text
+
+# Audio files
+*.mp3 binary
+*.ogg binary
+*.wav binary
+*.flac binary
+*.aac binary
+
+# Video files
+*.mp4 binary
+*.avi binary
+*.mov binary
+*.wmv binary
+*.flv binary
+*.webm binary
+*.mkv binary
+*.m4v binary
+
+# Archives
+*.zip binary
+*.tar binary
+*.gz binary
+*.bz2 binary
+*.xz binary
+*.7z binary
+*.rar binary
+*.jar binary
+*.war binary
+*.ear binary
+
+# Fonts
+*.ttf binary
+*.otf binary
+*.eot binary
+*.woff binary
+*.woff2 binary
+
+# Documents
+*.pdf binary
+*.doc binary
+*.docx binary
+*.xls binary
+*.xlsx binary
+*.ppt binary
+*.pptx binary
+*.odt binary
+*.ods binary
+*.odp binary
+
+# Executables
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.a binary
+*.lib binary
+*.ko binary
+*.elf binary
+*.app binary
+
+# Database files
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+
+# Go specific
+vendor/** -text -diff
+*.pb.go -diff
+*.gen.go -diff
+*_string.go -diff
+
+# Generated files
+*.min.js -diff
+*.min.css -diff
+*.map -diff
+
+# Build outputs
+bin/* binary
+dist/* binary
+build/* binary
+release/* binary
+
+# Test data
+testdata/** -text -diff
+test/fixtures/** -text -diff
+
+# Linguist overrides for accurate language statistics
+*.pl linguist-language=Perl
+*.sh linguist-language=Shell
+*.bash linguist-language=Shell
+examples/*.yaml linguist-documentation
+docs/* linguist-documentation
+vendor/* linguist-vendored
+*.pb.go linguist-generated
+*.gen.go linguist-generated
+*_test.go linguist-language=Go
+
+# Export ignore (files to exclude from archive exports)
+.github export-ignore
+.vscode export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore
+.editorconfig export-ignore
+.golangci.yml export-ignore
+.dockerignore export-ignore
+test/ export-ignore
+docs/ export-ignore
+examples/ export-ignore
+scripts/pre-commit export-ignore
+Makefile export-ignore
+*.md export-ignore
+
+# Diff settings
+*.go diff=golang
+*.md diff=markdown
+*.py diff=python
+*.rb diff=ruby
+*.pl diff=perl
+*.php diff=php
+
+# Merge strategies
+go.mod merge=ours
+go.sum merge=ours
+package-lock.json merge=ours
+yarn.lock merge=ours
+
+# Whitespace handling
+*.go whitespace=trailing-space,space-before-tab,indent-with-non-tab
+*.yaml whitespace=trailing-space,space-before-tab
+*.yml whitespace=trailing-space,space-before-tab
+*.md whitespace=trailing-space,space-before-tab
+*.sh whitespace=trailing-space,space-before-tab
+*.pl whitespace=trailing-space,space-before-tab
