@@ -1,4 +1,4 @@
-// internal/scraper/pagination.go - Basic template to fix build errors
+// internal/scraper/pagination.go
 package scraper
 
 import (
@@ -12,10 +12,9 @@ import (
 
 // PaginationConfig defines pagination configuration
 type PaginationConfig struct {
-	Type        string                 `yaml:"type" json:"type"`
-	Selector    string                 `yaml:"selector,omitempty" json:"selector,omitempty"`
-	MaxPages    int                    `yaml:"max_pages,omitempty" json:"max_pages,omitempty"`
-	Strategy    map[string]interface{} `yaml:"strategy,omitempty" json:"strategy,omitempty"`
+	Type        string `yaml:"type" json:"type"`
+	Selector    string `yaml:"selector,omitempty" json:"selector,omitempty"`
+	MaxPages    int    `yaml:"max_pages,omitempty" json:"max_pages,omitempty"`
 	
 	// For offset pagination
 	OffsetParam string `yaml:"offset_param,omitempty" json:"offset_param,omitempty"`
@@ -31,6 +30,15 @@ type PaginationConfig struct {
 type PaginationManager struct {
 	config   PaginationConfig
 	strategy PaginationStrategy
+}
+
+// PaginationResult holds the result of a pagination operation
+type PaginationResult struct {
+	NextURL     string `json:"next_url"`
+	CurrentPage int    `json:"current_page"`
+	IsComplete  bool   `json:"is_complete"`
+	Strategy    string `json:"strategy"`
+	Error       string `json:"error,omitempty"`
 }
 
 // NewPaginationManager creates a new pagination manager
@@ -115,6 +123,42 @@ func (pm *PaginationManager) GetStrategyName() string {
 	return pm.strategy.GetName()
 }
 
+// ValidatePaginationConfig validates pagination configuration
+func ValidatePaginationConfig(config PaginationConfig) error {
+	if config.Type == "" {
+		return fmt.Errorf("pagination type is required")
+	}
+	
+	switch config.Type {
+	case "offset":
+		if config.Limit <= 0 {
+			return fmt.Errorf("limit must be greater than 0 for offset pagination")
+		}
+		
+	case "cursor":
+		if config.CursorSelector == "" {
+			return fmt.Errorf("cursor_selector is required for cursor pagination")
+		}
+		
+	case "next_button":
+		if config.Selector == "" {
+			return fmt.Errorf("selector is required for next_button pagination")
+		}
+		
+	case "numbered":
+		// No additional validation needed for numbered pagination
+		
+	default:
+		return fmt.Errorf("unsupported pagination type: %s", config.Type)
+	}
+	
+	if config.MaxPages < 0 {
+		return fmt.Errorf("max_pages cannot be negative")
+	}
+	
+	return nil
+}
+
 // SimpleOffsetPagination provides a simple offset-based pagination implementation
 func SimpleOffsetPagination(baseURL string, pageNum int, limit int) (string, error) {
 	u, err := url.Parse(baseURL)
@@ -143,88 +187,4 @@ func SimplePagedPagination(baseURL string, pageNum int) (string, error) {
 	u.RawQuery = query.Encode()
 	
 	return u.String(), nil
-}
-
-// ValidatePaginationConfig validates pagination configuration
-func ValidatePaginationConfig(config PaginationConfig) error {
-	if config.Type == "" {
-		return fmt.Errorf("pagination type is required")
-	}
-	
-	switch config.Type {
-	case "offset":
-		if config.Limit <= 0 {
-			return fmt.Errorf("limit must be greater than 0 for offset pagination")
-		}
-		if config.OffsetParam == "" {
-			config.OffsetParam = "offset"
-		}
-		if config.LimitParam == "" {
-			config.LimitParam = "limit"
-		}
-		
-	case "cursor":
-		if config.CursorSelector == "" {
-			return fmt.Errorf("cursor_selector is required for cursor pagination")
-		}
-		if config.CursorParam == "" {
-			config.CursorParam = "cursor"
-		}
-		
-	case "next_button":
-		if config.Selector == "" {
-			return fmt.Errorf("selector is required for next_button pagination")
-		}
-		
-	case "numbered":
-		// No additional validation needed for numbered pagination
-		
-	default:
-		return fmt.Errorf("unsupported pagination type: %s", config.Type)
-	}
-	
-	if config.MaxPages < 0 {
-		return fmt.Errorf("max_pages cannot be negative")
-	}
-	
-	return nil
-}
-
-// PaginationResult holds the result of a pagination operation
-type PaginationResult struct {
-	NextURL     string `json:"next_url"`
-	CurrentPage int    `json:"current_page"`
-	IsComplete  bool   `json:"is_complete"`
-	Strategy    string `json:"strategy"`
-	Error       string `json:"error,omitempty"`
-}
-
-// ExecutePagination executes pagination and returns the result
-func (pm *PaginationManager) ExecutePagination(ctx context.Context, currentURL string, doc *goquery.Document, pageNum int) PaginationResult {
-	result := PaginationResult{
-		CurrentPage: pageNum,
-		Strategy:    pm.GetStrategyName(),
-	}
-	
-	// Check if pagination is complete
-	result.IsComplete = pm.IsComplete(ctx, currentURL, doc, pageNum)
-	if result.IsComplete {
-		return result
-	}
-	
-	// Get next URL
-	nextURL, err := pm.GetNextURL(ctx, currentURL, doc, pageNum)
-	if err != nil {
-		result.Error = err.Error()
-		result.IsComplete = true
-		return result
-	}
-	
-	if nextURL == "" {
-		result.IsComplete = true
-		return result
-	}
-	
-	result.NextURL = nextURL
-	return result
 }

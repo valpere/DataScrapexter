@@ -96,7 +96,7 @@ func (se *ScrapingEngine) Scrape(ctx context.Context, url string) (map[string]in
 func (se *ScrapingEngine) ProcessFields(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
 	result := make(map[string]interface{})
 	
-	// Process each configured field
+	// First, process all configured fields
 	for _, field := range se.Config.Fields {
 		value, exists := data[field.Name]
 		if !exists {
@@ -126,7 +126,19 @@ func (se *ScrapingEngine) ProcessFields(ctx context.Context, data map[string]int
 		}
 	}
 	
-	// Apply global transformations
+	// Process any remaining fields from input data that weren't configured
+	configuredFields := make(map[string]bool)
+	for _, field := range se.Config.Fields {
+		configuredFields[field.Name] = true
+	}
+	
+	for key, value := range data {
+		if !configuredFields[key] {
+			result[key] = value
+		}
+	}
+	
+	// Apply global transformations to all string fields
 	if len(se.Config.Transform) > 0 {
 		globalTransforms := pipeline.TransformList(se.Config.Transform)
 		for key, value := range result {

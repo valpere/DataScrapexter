@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -181,13 +180,8 @@ func (cs *CursorStrategy) extractCursor(doc *goquery.Document) (string, error) {
 		cursor, _ = selection.Attr(cs.CursorAttr)
 	} else {
 		// Extract from text content
-		cursor = strings.TrimSpace(selection.Text())
-	}
-
-	// Apply regex pattern if specified
-	if cs.CursorPattern != "" {
-		// TODO: Implement regex extraction
-		// This would require importing regexp package
+		cursor = selection.Text()
+		cursor = strings.TrimSpace(cursor)
 	}
 
 	return cursor, nil
@@ -278,17 +272,34 @@ func (nbs *NextButtonStrategy) IsComplete(ctx context.Context, currentURL string
 		return true // No next button
 	}
 
-	// Check if disabled
+	// Check if disabled by attribute
 	if nbs.DisabledAttr != "" {
 		if _, exists := selection.Attr(nbs.DisabledAttr); exists {
 			return true
 		}
 	}
 
+	// Check if disabled by class
 	if nbs.DisabledClass != "" {
 		if selection.HasClass(nbs.DisabledClass) {
 			return true
 		}
+	}
+
+	// Check for common disabled patterns
+	if selection.HasClass("disabled") {
+		return true
+	}
+
+	// Check if it's a span instead of a link (common pattern for disabled buttons)
+	if selection.Is("span") {
+		return true
+	}
+
+	// Check if href is missing or empty
+	href, exists := selection.Attr("href")
+	if !exists || href == "" || href == "#" {
+		return true
 	}
 
 	return false
@@ -353,12 +364,6 @@ func (nps *NumberedPagesStrategy) IsComplete(ctx context.Context, currentURL str
 // GetName returns the strategy name
 func (nps *NumberedPagesStrategy) GetName() string {
 	return "numbered"
-}
-
-// PaginationConfig holds pagination configuration
-type PaginationConfig struct {
-	Type     string                 `yaml:"type" json:"type"`
-	Strategy map[string]interface{} `yaml:"strategy,omitempty" json:"strategy,omitempty"`
 }
 
 // CreatePaginationStrategy creates a pagination strategy from config
