@@ -1,0 +1,331 @@
+# test/configs/ecommerce_test.yaml
+name: "ecommerce_test_scraper"
+base_url: "https://example-shop.com"
+
+# Test configuration for e-commerce scraping
+user_agents:
+  - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+  - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+
+rate_limit: "1s"
+max_pages: 5
+
+# Field extraction configuration
+fields:
+  - name: "product_name"
+    selector: "h1.product-title, .product-name"
+    type: "text"
+    required: true
+    transform:
+      - type: "trim"
+      - type: "normalize_spaces"
+
+  - name: "price"
+    selector: ".price, .product-price"
+    type: "text"
+    required: true
+    transform:
+      - type: "regex"
+        pattern: "\\$([0-9,]+\\.?[0-9]*)"
+        replacement: "$1"
+      - type: "parse_float"
+
+  - name: "original_price"
+    selector: ".original-price, .was-price"
+    type: "text"
+    required: false
+    transform:
+      - type: "regex"
+        pattern: "\\$([0-9,]+\\.?[0-9]*)"
+        replacement: "$1"
+      - type: "parse_float"
+
+  - name: "description"
+    selector: ".product-description, .description"
+    type: "text"
+    required: false
+    transform:
+      - type: "remove_html"
+      - type: "trim"
+      - type: "normalize_spaces"
+
+  - name: "stock_status"
+    selector: ".stock-status, .availability"
+    type: "text"
+    required: false
+    transform:
+      - type: "trim"
+      - type: "lowercase"
+
+  - name: "rating"
+    selector: ".rating, .stars"
+    type: "text"
+    required: false
+    transform:
+      - type: "extract_number"
+
+  - name: "review_count"
+    selector: ".review-count, .reviews"
+    type: "text"
+    required: false
+    transform:
+      - type: "extract_number"
+
+  - name: "brand"
+    selector: ".brand, .manufacturer"
+    type: "text"
+    required: false
+    transform:
+      - type: "trim"
+
+  - name: "sku"
+    selector: ".sku, .product-id"
+    type: "text"
+    required: false
+    transform:
+      - type: "trim"
+      - type: "uppercase"
+
+# Pagination configuration
+pagination:
+  type: "next_button"
+  selector: ".pagination .next, .next-page"
+  max_pages: 10
+
+# Output configuration for testing
+output:
+  format: "json"
+  file: "test_output.json"
+
+# Browser settings for testing
+browser:
+  enabled: false
+  headless: true
+  timeout: "30s"
+
+---
+# test/configs/news_test.yaml  
+name: "news_test_scraper"
+base_url: "https://example-news.com"
+
+# Test configuration for news scraping
+user_agents:
+  - "Mozilla/5.0 (compatible; NewsBot/1.0)"
+
+rate_limit: "2s"
+max_pages: 3
+
+# News-specific field extraction
+fields:
+  - name: "headline"
+    selector: "h1, .headline, .article-title"
+    type: "text"
+    required: true
+    transform:
+      - type: "trim"
+      - type: "normalize_spaces"
+
+  - name: "author"
+    selector: ".author, .byline .name"
+    type: "text"
+    required: false
+    transform:
+      - type: "trim"
+
+  - name: "publish_date"
+    selector: ".publish-date, .article-date, time"
+    type: "text"
+    required: false
+    transform:
+      - type: "trim"
+
+  - name: "content"
+    selector: ".article-content, .story-body"
+    type: "text"
+    required: true
+    transform:
+      - type: "remove_html"
+      - type: "trim"
+      - type: "normalize_spaces"
+
+  - name: "summary"
+    selector: ".summary, .excerpt, .lead"
+    type: "text"
+    required: false
+    transform:
+      - type: "remove_html"
+      - type: "trim"
+
+  - name: "category"
+    selector: ".category, .section"
+    type: "text"
+    required: false
+    transform:
+      - type: "trim"
+      - type: "lowercase"
+
+  - name: "tags"
+    selector: ".tags .tag, .keywords"
+    type: "text"
+    required: false
+    transform:
+      - type: "trim"
+
+# Simple numbered pagination for news
+pagination:
+  type: "numbered"
+  max_pages: 5
+
+output:
+  format: "json"
+  file: "news_test_output.json"
+
+---
+# test/configs/api_test.yaml
+name: "api_test_scraper"
+base_url: "https://api.example.com/v1/data"
+
+# Test configuration for API scraping
+rate_limit: "500ms"
+max_pages: 20
+
+# API response field extraction
+fields:
+  - name: "id"
+    selector: "id"
+    type: "text"
+    required: true
+
+  - name: "title"
+    selector: "title"
+    type: "text"
+    required: true
+    transform:
+      - type: "trim"
+
+  - name: "created_at"
+    selector: "created_at"
+    type: "text"
+    required: false
+
+  - name: "updated_at"
+    selector: "updated_at"
+    type: "text"
+    required: false
+
+  - name: "status"
+    selector: "status"
+    type: "text"
+    required: false
+    transform:
+      - type: "lowercase"
+
+# Offset-based pagination for API
+pagination:
+  type: "offset"
+  offset_param: "offset"
+  limit_param: "limit"
+  limit: 50
+  max_pages: 100
+
+output:
+  format: "json"
+  file: "api_test_output.json"
+
+---
+# test/configs/minimal_test.yaml
+name: "minimal_test_scraper"
+base_url: "https://httpbin.org/html"
+
+# Minimal configuration for basic testing
+fields:
+  - name: "title"
+    selector: "title"
+    type: "text"
+    required: true
+    transform:
+      - type: "trim"
+
+  - name: "heading"
+    selector: "h1"
+    type: "text"
+    required: false
+    transform:
+      - type: "trim"
+
+output:
+  format: "json"
+  file: "minimal_test_output.json"
+
+---
+# test/configs/transformation_test.yaml
+name: "transformation_test_scraper"
+base_url: "https://example.com"
+
+# Configuration focused on testing transformations
+fields:
+  - name: "price_test"
+    selector: ".price"
+    type: "text"
+    required: false
+    transform:
+      - type: "regex"
+        pattern: "\\$([0-9,]+\\.?[0-9]*)"
+        replacement: "$1"
+      - type: "parse_float"
+
+  - name: "text_test"
+    selector: ".text"
+    type: "text"
+    required: false
+    transform:
+      - type: "trim"
+      - type: "normalize_spaces"
+      - type: "lowercase"
+
+  - name: "html_test"
+    selector: ".content"
+    type: "text"
+    required: false
+    transform:
+      - type: "remove_html"
+      - type: "trim"
+
+  - name: "number_test"
+    selector: ".numbers"
+    type: "text"
+    required: false
+    transform:
+      - type: "extract_number"
+
+  - name: "prefix_test"
+    selector: ".url"
+    type: "text"
+    required: false
+    transform:
+      - type: "prefix"
+        params:
+          value: "https://"
+
+  - name: "suffix_test"
+    selector: ".filename"
+    type: "text"
+    required: false
+    transform:
+      - type: "suffix"
+        params:
+          value: ".html"
+
+  - name: "replace_test"
+    selector: ".replace-text"
+    type: "text"
+    required: false
+    transform:
+      - type: "replace"
+        params:
+          old: "old"
+          new: "new"
+
+output:
+  format: "json"
+  file: "transformation_test_output.json"
