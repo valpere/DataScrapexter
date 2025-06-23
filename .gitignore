@@ -1,34 +1,179 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
+# .gitignore
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-bin/
-build/
 
 # Test binary, built with `go test -c`
 *.test
 
-# Code coverage profiles and other test artifacts
+# Output of the go coverage tool
 *.out
-coverage.*
-*.coverprofile
-profile.cov
+coverage.txt
+coverage.html
+coverage/
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# Dependency directories
+vendor/
 
 # Go workspace file
 go.work
-go.work.sum
 
-# env file
-.env
+# Build directories
+bin/
+dist/
+build/
+release/
 
-# Editor/IDE
+# IDE and editor files
 .idea/
-.vscode/
+*.swp
+*.swo
+*~
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+*.iml
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# DataScrapexter specific
+outputs/
+logs/
+cache/
+cookies/
+data/
+archive/
+metrics/
+price_analysis/
+*.log
+*.csv
+*.json
+*.xlsx
+*.parquet
+!configs/*.yaml
+!examples/*.yaml
+!examples/*.json
+!configs/*.json
+!templates/*.json
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+*.pid
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Security and credentials
+*.pem
+*.key
+*.crt
+*.p12
+credentials/
+secrets/
+
+# Docker volumes
+.docker/
+docker-compose.override.yml
+
+# Test data
+test-data/
+test-outputs/
+*.test.yaml
+*.test.json
+
+# Profiling data
+*.prof
+*.pprof
+
+# Documentation build
+docs/_build/
+docs/.doctrees/
+site/
+
+# Python cache (for scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+
+# Node modules (if any frontend components)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Monitoring data
+prometheus-data/
+grafana-data/
+elasticsearch-data/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Compiled Object files
+*.o
+*.a
+
+# Architecture specific extensions/prefixes
+*.[568vq]
+[568vq].out
+
+# cgo generated
+*.cgo1.go
+*.cgo2.c
+_cgo_defun.c
+_cgo_gotypes.go
+_cgo_export.*
+_testmain.go
+
+# Kubernetes
+*.kubeconfig
+kubeconfig
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Benchmark results
+benchmarks/
+*.bench
+
+# Debug files
+debug/
+*.debug
+
+# Lint cache
+.golangci-lint-cache/
+
+# Custom ignore patterns
+ignore/
+.ignore/

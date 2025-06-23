@@ -1,0 +1,598 @@
+{
+    "// .vscode/settings.json": "VSCode workspace settings for DataScrapexter project",
+    
+    "// Go language settings": "",
+    "go.useLanguageServer": true,
+    "go.lintTool": "golangci-lint",
+    "go.lintFlags": [
+        "--config=.golangci.yml"
+    ],
+    "go.formatTool": "goimports",
+    "go.formatFlags": [
+        "-local=github.com/valpere/DataScrapexter"
+    ],
+    "go.testFlags": [
+        "-v",
+        "-race",
+        "-coverprofile=coverage.out"
+    ],
+    "go.testTimeout": "30s",
+    "go.generateTestsFlags": [
+        "-template_dir=test/templates"
+    ],
+    "go.toolsManagement.autoUpdate": true,
+    "go.coverOnSave": true,
+    "go.coverageDecorator": {
+        "type": "gutter",
+        "coveredHighlightColor": "rgba(64,128,64,0.5)",
+        "uncoveredHighlightColor": "rgba(128,64,64,0.5)",
+        "coveredGutterStyle": "blockgreen",
+        "uncoveredGutterStyle": "blockred"
+    },
+    "go.buildOnSave": "package",
+    "go.vetOnSave": "package",
+    "go.useCodeSnippetsOnFunctionSuggest": true,
+    "go.autocompleteUnimportedPackages": true,
+    "go.gotoSymbol.includeImports": true,
+    "go.enableCodeLens": {
+        "references": true,
+        "runtest": true
+    },
+    "go.survey.prompt": false,
+    "gopls": {
+        "staticcheck": true,
+        "completionDocumentation": true,
+        "deepCompletion": true,
+        "usePlaceholders": true,
+        "watchFileChanges": true,
+        "hoverKind": "FullDocumentation",
+        "linkTarget": "pkg.go.dev",
+        "importShortcut": "Both",
+        "analyses": {
+            "fieldalignment": true,
+            "nilness": true,
+            "unusedparams": true,
+            "unusedwrite": true,
+            "useany": true
+        }
+    },
+    
+    "// Editor settings": "",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit",
+        "source.fixAll": "explicit"
+    },
+    "editor.snippetSuggestions": "top",
+    "editor.suggest.snippetsPreventQuickSuggestions": false,
+    "editor.rulers": [80, 120],
+    "editor.wordWrap": "bounded",
+    "editor.wordWrapColumn": 120,
+    "editor.renderWhitespace": "boundary",
+    "editor.trimAutoWhitespace": true,
+    "editor.quickSuggestions": {
+        "other": true,
+        "comments": false,
+        "strings": true
+    },
+    "editor.acceptSuggestionOnCommitCharacter": true,
+    "editor.bracketPairColorization.enabled": true,
+    "editor.guides.bracketPairs": true,
+    "editor.stickyScroll.enabled": true,
+    "editor.fontSize": 14,
+    "editor.fontFamily": "'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace",
+    "editor.fontLigatures": true,
+    "editor.cursorBlinking": "smooth",
+    "editor.cursorSmoothCaretAnimation": "on",
+    "editor.smoothScrolling": true,
+    "editor.minimap.enabled": true,
+    "editor.minimap.maxColumn": 80,
+    "editor.linkedEditing": true,
+    "editor.folding": true,
+    "editor.foldingStrategy": "indentation",
+    "editor.showFoldingControls": "mouseover",
+    
+    "// File settings": "",
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+    "files.trimFinalNewlines": true,
+    "files.autoSave": "off",
+    "files.exclude": {
+        "**/.git": true,
+        "**/.DS_Store": true,
+        "**/node_modules": true,
+        "**/vendor": true,
+        "**/bin": true,
+        "**/dist": true,
+        "**/*.exe": true,
+        "**/coverage.out": true,
+        "**/coverage.html": true
+    },
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/**": true,
+        "**/vendor/**": true,
+        "**/bin/**": true,
+        "**/dist/**": true,
+        "**/outputs/**": true,
+        "**/logs/**": true,
+        "**/cache/**": true
+    },
+    "files.associations": {
+        "*.yaml": "yaml",
+        "*.yml": "yaml",
+        ".golangci.yml": "yaml",
+        "*.sh": "shellscript",
+        "*.bash": "shellscript",
+        "*.pl": "perl",
+        "Dockerfile*": "dockerfile",
+        ".env*": "dotenv",
+        "go.mod": "go-mod",
+        "go.sum": "go-sum"
+    },
+    
+    "// Search settings": "",
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/vendor": true,
+        "**/bin": true,
+        "**/dist": true,
+        "**/*.log": true,
+        "**/outputs": true,
+        "**/cache": true
+    },
+    
+    "// Terminal settings": "",
+    "terminal.integrated.env.linux": {
+        "GO111MODULE": "on",
+        "GOPROXY": "https://proxy.golang.org,direct",
+        "GOSUMDB": "sum.golang.org"
+    },
+    "terminal.integrated.env.osx": {
+        "GO111MODULE": "on",
+        "GOPROXY": "https://proxy.golang.org,direct",
+        "GOSUMDB": "sum.golang.org"
+    },
+    "terminal.integrated.env.windows": {
+        "GO111MODULE": "on",
+        "GOPROXY": "https://proxy.golang.org,direct",
+        "GOSUMDB": "sum.golang.org"
+    },
+    "terminal.integrated.scrollback": 10000,
+    "terminal.integrated.fontSize": 14,
+    "terminal.integrated.fontFamily": "'JetBrains Mono', 'Fira Code', monospace",
+    
+    "// Git settings": "",
+    "git.ignoreLimitWarning": true,
+    "git.confirmSync": false,
+    "git.enableSmartCommit": true,
+    "git.autofetch": true,
+    
+    "// YAML settings": "",
+    "yaml.schemas": {
+        "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml",
+        "https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json": "docker-compose*.yml"
+    },
+    "yaml.format.enable": true,
+    "yaml.validate": true,
+    "yaml.hover": true,
+    "yaml.completion": true,
+    
+    "// Docker settings": "",
+    "docker.images.label": "Tag",
+    "docker.containers.label": "ContainerName",
+    "docker.containers.description": ["Status"],
+    
+    "// Language-specific settings": "",
+    "[markdown]": {
+        "editor.wordWrap": "on",
+        "editor.quickSuggestions": {
+            "comments": false,
+            "strings": false,
+            "other": false
+        },
+        "editor.rulers": [80]
+    },
+    "[json]": {
+        "editor.defaultFormatter": "vscode.json-language-features",
+        "editor.formatOnSave": true
+    },
+    "[jsonc]": {
+        "editor.defaultFormatter": "vscode.json-language-features",
+        "editor.formatOnSave": true
+    },
+    "[go]": {
+        "editor.insertSpaces": false,
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        },
+        "editor.suggest.snippetsPreventQuickSuggestions": false
+    },
+    "[go.mod]": {
+        "editor.formatOnSave": true
+    },
+    "[shellscript]": {
+        "files.eol": "\n",
+        "editor.renderWhitespace": "all",
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true
+    },
+    "[perl]": {
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true
+    },
+    "[yaml]": {
+        "editor.insertSpaces": true,
+        "editor.tabSize": 2,
+        "editor.autoIndent": "advanced",
+        "editor.quickSuggestions": {
+            "other": true,
+            "comments": false,
+            "strings": true
+        }
+    },
+    
+    "// Testing settings": "",
+    "go.testEnvFile": "${workspaceFolder}/.env.test",
+    "go.testExplorer.enable": true,
+    "testing.automaticallyOpenPeekView": "failureInVisibleDocument",
+    
+    "// Code coverage settings": "",
+    "coverage-gutters.showGutterCoverage": true,
+    "coverage-gutters.showLineCoverage": true,
+    "coverage-gutters.showRulerCoverage": false,
+    "coverage-gutters.coverageFileNames": [
+        "coverage.out",
+        "coverage.txt",
+        "lcov.info",
+        "coverage.xml",
+        "coverage.json"
+    ],
+    "coverage-gutters.coverageReportFileName": "coverage/index.html",
+    
+    "// Task settings": "",
+    "task.autoDetect": "on",
+    "task.quickOpen.history": 10,
+    
+    "// Debug settings": "",
+    "debug.console.fontSize": 14,
+    "debug.console.wordWrap": false,
+    
+    "// Problems settings": "",
+    "problems.autoReveal": true,
+    "problems.decorations.enabled": true,
+    
+    "// Extensions settings": "",
+    "extensions.ignoreRecommendations": false,
+    
+    "// Spelling settings": "",
+    "cSpell.words": [
+        "datascrapexter",
+        "scrapexter",
+        "antidetect",
+        "chromedp",
+        "colly",
+        "goquery",
+        "logrus",
+        "sirupsen",
+        "spf13",
+        "viper",
+        "golangci",
+        "gosec",
+        "govet",
+        "gofmt",
+        "goimports",
+        "gofumpt",
+        "godot",
+        "gomnd",
+        "goconst",
+        "gocyclo",
+        "funlen",
+        "misspell",
+        "nakedret",
+        "prealloc",
+        "unconvert",
+        "unparam",
+        "whitespace",
+        "proto",
+        "protobuf",
+        "grpc",
+        "struct",
+        "structs",
+        "unmarshal",
+        "unmarshaling",
+        "middleware",
+        "webhooks",
+        "webhook",
+        "statsd",
+        "prometheus",
+        "grafana",
+        "elasticsearch",
+        "kibana",
+        "kafka",
+        "redis",
+        "postgresql",
+        "postgres",
+        "mongodb",
+        "bson",
+        "sqlite",
+        "sqlx",
+        "gorm",
+        "uuid",
+        "ulid",
+        "bcrypt",
+        "jwt",
+        "cors",
+        "csrf",
+        "oauth",
+        "saml",
+        "ldap",
+        "rbac",
+        "acl",
+        "kubernetes",
+        "k8s",
+        "helm",
+        "istio",
+        "envoy",
+        "terraform",
+        "ansible",
+        "pprof",
+        "cpu",
+        "mem",
+        "allocs",
+        "mutex",
+        "dockerfile",
+        "dockerignore",
+        "makefile",
+        "yaml",
+        "toml",
+        "ini",
+        "env",
+        "dotenv",
+        "gitignore",
+        "editorconfig",
+        "licensable",
+        "vendored",
+        "semver",
+        "prerelease",
+        "postprocess",
+        "preprocessor",
+        "nolint",
+        "exportloopref",
+        "ifshort",
+        "nestif",
+        "nlreturn",
+        "paralleltest",
+        "thelper",
+        "wrapcheck",
+        "errorlint",
+        "forcetypeassert",
+        "goerr113",
+        "godox",
+        "noctx",
+        "rowserrcheck",
+        "sqlclosecheck",
+        "tparallel",
+        "wastedassign",
+        "makezero",
+        "predeclared",
+        "nilerr",
+        "ireturn",
+        "contextcheck",
+        "errchkjson",
+        "valpere",
+        "scraped",
+        "scraping",
+        "scrapers"
+    ],
+    "cSpell.allowCompoundWords": true,
+    "cSpell.ignoreWords": [],
+    "cSpell.customDictionaries": {
+        "project-words": {
+            "name": "project-words",
+            "path": "${workspaceRoot}/.vscode/project-dictionary.txt",
+            "description": "DataScrapexter project-specific words",
+            "addWords": true
+        }
+    },
+    
+    "// Better Comments settings": "",
+    "better-comments.tags": [
+        {
+            "tag": "!",
+            "color": "#FF2D00",
+            "strikethrough": false,
+            "underline": false,
+            "backgroundColor": "transparent",
+            "bold": false,
+            "italic": false
+        },
+        {
+            "tag": "?",
+            "color": "#3498DB",
+            "strikethrough": false,
+            "underline": false,
+            "backgroundColor": "transparent",
+            "bold": false,
+            "italic": false
+        },
+        {
+            "tag": "//",
+            "color": "#474747",
+            "strikethrough": true,
+            "underline": false,
+            "backgroundColor": "transparent",
+            "bold": false,
+            "italic": false
+        },
+        {
+            "tag": "todo",
+            "color": "#FF8C00",
+            "strikethrough": false,
+            "underline": false,
+            "backgroundColor": "transparent",
+            "bold": false,
+            "italic": false
+        },
+        {
+            "tag": "*",
+            "color": "#98C379",
+            "strikethrough": false,
+            "underline": false,
+            "backgroundColor": "transparent",
+            "bold": false,
+            "italic": false
+        }
+    ],
+    
+    "// Todo Tree settings": "",
+    "todo-tree.tree.showScanModeButton": false,
+    "todo-tree.highlights.enabled": true,
+    "todo-tree.highlights.customHighlight": {
+        "TODO": {
+            "icon": "check",
+            "type": "text",
+            "foreground": "#FF8C00",
+            "iconColour": "#FF8C00"
+        },
+        "FIXME": {
+            "icon": "bug",
+            "type": "text",
+            "foreground": "#FF2D00",
+            "iconColour": "#FF2D00"
+        },
+        "HACK": {
+            "icon": "tools",
+            "type": "text",
+            "foreground": "#3498DB",
+            "iconColour": "#3498DB"
+        },
+        "NOTE": {
+            "icon": "note",
+            "type": "text",
+            "foreground": "#98C379",
+            "iconColour": "#98C379"
+        }
+    },
+    
+    "// REST Client settings": "",
+    "rest-client.environmentVariables": {
+        "$shared": {
+            "baseUrl": "http://localhost:8080",
+            "apiVersion": "v1"
+        },
+        "local": {
+            "baseUrl": "http://localhost:8080"
+        },
+        "dev": {
+            "baseUrl": "https://dev-api.datascrapexter.com"
+        },
+        "prod": {
+            "baseUrl": "https://api.datascrapexter.com"
+        }
+    },
+    
+    "// Thunder Client settings": "",
+    "thunder-client.saveToWorkspace": true,
+    "thunder-client.workspaceRelativePath": ".thunder-client",
+    
+    "// Error Lens settings": "",
+    "errorLens.enabledDiagnosticLevels": [
+        "error",
+        "warning",
+        "info"
+    ],
+    "errorLens.excludeBySource": [],
+    "errorLens.delay": 300,
+    "errorLens.followCursor": "allLines",
+    
+    "// SQL Tools settings": "",
+    "sqltools.connections": [],
+    "sqltools.useNodeRuntime": true,
+    
+    "// Makefile Tools settings": "",
+    "makefile.extensionOutputFolder": "./.vscode",
+    "makefile.launchConfigurations": [
+        {
+            "cwd": "${workspaceFolder}",
+            "binaryPath": "${workspaceFolder}/bin/datascrapexter",
+            "binaryArgs": []
+        }
+    ],
+    "makefile.makePath": "make",
+    
+    "// Shell format settings": "",
+    "shellformat.flag": "-i 4 -ci -sr",
+    "shellformat.effectLanguages": [
+        "shellscript",
+        "dockerfile",
+        "ignore",
+        "gitignore",
+        "dotenv",
+        "hosts",
+        "properties",
+        "jvmoptions"
+    ],
+    
+    "// Perl settings": "",
+    "perl.perlInc": [],
+    "perl.enableWarnings": true,
+    "perl.perltidyProfile": "",
+    "perl.perlcriticProfile": "",
+    
+    "// Live Share settings": "",
+    "liveshare.presence": true,
+    "liveshare.showInStatusBar": "whileCollaborating",
+    
+    "// GitLens settings": "",
+    "gitlens.hovers.currentLine.over": "line",
+    "gitlens.currentLine.enabled": false,
+    "gitlens.codeLens.enabled": false,
+    "gitlens.statusBar.enabled": false,
+    
+    "// Project Manager settings": "",
+    "projectManager.git.baseFolders": [
+        "${workspaceFolder}"
+    ],
+    
+    "// Remote development settings": "",
+    "remote.autoForwardPorts": true,
+    "remote.restoreForwardedPorts": true,
+    
+    "// Security settings": "",
+    "security.workspace.trust.untrustedFiles": "open",
+    "security.workspace.trust.banner": "always",
+    
+    "// Telemetry settings": "",
+    "telemetry.telemetryLevel": "off",
+    
+    "// Update settings": "",
+    "update.mode": "manual",
+    
+    "// Window settings": "",
+    "window.confirmBeforeClose": "keyboardOnly",
+    
+    "// Workbench settings": "",
+    "workbench.editor.enablePreview": true,
+    "workbench.editor.highlightModifiedTabs": true,
+    "workbench.editor.limit.enabled": true,
+    "workbench.editor.limit.value": 10,
+    "workbench.editor.tabCloseButton": "right",
+    "workbench.editor.tabSizing": "shrink",
+    
+    "// Explorer settings": "",
+    "explorer.confirmDelete": false,
+    "explorer.confirmDragAndDrop": false,
+    
+    "// Breadcrumbs settings": "",
+    "breadcrumbs.enabled": true,
+    
+    "// Outline settings": "",
+    "outline.showVariables": true,
+    "outline.showFunctions": true,
+    "outline.showConstants": true,
+    "outline.showStructs": true,
+    "outline.showInterfaces": true
+}
