@@ -3,274 +3,368 @@ package scraper
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/valpere/DataScrapexter/internal/pipeline"
 )
 
 func TestNewScrapingEngine(t *testing.T) {
 	config := &EngineConfig{
+		UserAgents:     []string{"TestAgent/1.0"},
+		RequestTimeout: 30 * time.Second,
+		RetryAttempts:  3,
+		MaxConcurrency: 5,
 		Fields: []FieldConfig{
 			{
 				Name:     "title",
 				Selector: "h1",
 				Type:     "text",
+				Required: true,
 			},
+		},
+		ExtractionConfig: ExtractionConfig{
+			StrictMode:      false,
+			ContinueOnError: true,
 		},
 	}
 
-	engine := NewScrapingEngine(config)
-
-	if engine == nil {
-		t.Fatal("expected engine to be created, got nil")
+	engine, err := NewScrapingEngine(config)
+	if err != nil {
+		t.Fatalf("Failed to create scraping engine: %v", err)
 	}
 
-	if engine.Config != config {
-		t.Errorf("expected config to be set correctly")
+	if engine == nil {
+		t.Fatal("Engine should not be nil")
+	}
+
+	if engine.config != config {
+		t.Fatal("Engine should reference the provided config")
+	}
+
+	if engine.httpClient == nil {
+		t.Fatal("HTTP client should be initialized")
+	}
+
+	if engine.errorCollector == nil {
+		t.Fatal("Error collector should be initialized")
 	}
 }
 
-func TestScrapingEngine_ProcessFields(t *testing.T) {
-	ctx := context.Background()
-
+func TestNewScrapingEngine_InvalidConfig(t *testing.T) {
 	tests := []struct {
-		name        string
-		config      *EngineConfig
-		input       map[string]interface{}
-		expected    map[string]interface{}
-		expectError bool
+		name   string
+		config *EngineConfig
 	}{
 		{
-			name: "basic field processing",
+			name:   "nil config",
+			config: nil,
+		},
+		{
+			name: "no fields",
 			config: &EngineConfig{
+				UserAgents:     []string{"TestAgent/1.0"},
+				RequestTimeout: 30 * time.Second,
+				Fields:         []FieldConfig{},
+			},
+		},
+		{
+			name: "empty field name",
+			config: &EngineConfig{
+				UserAgents:     []string{"TestAgent/1.0"},
+				RequestTimeout: 30 * time.Second,
+				Fields: []FieldConfig{
+					{
+						Name:     "",
+						Selector: "h1",
+						Type:     "text",
+					},
+				},
+			},
+		},
+		{
+			name: "empty field selector",
+			config: &EngineConfig{
+				UserAgents:     []string{"TestAgent/1.0"},
+				RequestTimeout: 30 * time.Second,
+				Fields: []FieldConfig{
+					{
+						Name:     "title",
+						Selector: "",
+						Type:     "text",
+					},
+				},
+			},
+		},
+		{
+			name: "invalid field type",
+			config: &EngineConfig{
+				UserAgents:     []string{"TestAgent/1.0"},
+				RequestTimeout: 30 * time.Second,
 				Fields: []FieldConfig{
 					{
 						Name:     "title",
 						Selector: "h1",
-						Type:     "text",
-						Required: false,
-					},
-					{
-						Name:     "price",
-						Selector: ".price",
-						Type:     "text",
-						Required: false,
+						Type:     "invalid_type",
 					},
 				},
 			},
-			input: map[string]interface{}{
-				"title": "Product Title",
-				"price": "$99.99",
-			},
-			expected: map[string]interface{}{
-				"title": "Product Title",
-				"price": "$99.99",
-			},
-			expectError: false,
-		},
-		{
-			name: "field with transformations",
-			config: &EngineConfig{
-				Fields: []FieldConfig{
-					{
-						Name:     "price",
-						Selector: ".price",
-						Type:     "text",
-						Required: false,
-						Transform: []pipeline.TransformRule{
-							{
-								Type:        "regex",
-								Pattern:     `\$([0-9,]+\.?[0-9]*)`,
-								Replacement: "$1",
-							},
-							{
-								Type: "parse_float",
-							},
-						},
-					},
-				},
-			},
-			input: map[string]interface{}{
-				"price": "$1,234.56",
-			},
-			expected: map[string]interface{}{
-				"price": "1234.56",
-			},
-			expectError: false,
-		},
-		{
-			name: "required field missing",
-			config: &EngineConfig{
-				Fields: []FieldConfig{
-					{
-						Name:     "title",
-						Selector: "h1",
-						Type:     "text",
-						Required: true,
-					},
-				},
-			},
-			input: map[string]interface{}{
-				"description": "Some description",
-			},
-			expectError: true,
-		},
-		{
-			name: "transformation error",
-			config: &EngineConfig{
-				Fields: []FieldConfig{
-					{
-						Name:     "price",
-						Selector: ".price",
-						Type:     "text",
-						Required: false,
-						Transform: []pipeline.TransformRule{
-							{
-								Type: "parse_float",
-							},
-						},
-					},
-				},
-			},
-			input: map[string]interface{}{
-				"price": "not a number",
-			},
-			expectError: true,
-		},
-		{
-			name: "non-string value with transformations",
-			config: &EngineConfig{
-				Fields: []FieldConfig{
-					{
-						Name:     "count",
-						Selector: ".count",
-						Type:     "number",
-						Required: false,
-						Transform: []pipeline.TransformRule{
-							{
-								Type: "trim",
-							},
-						},
-					},
-				},
-			},
-			input: map[string]interface{}{
-				"count": 42,
-			},
-			expected: map[string]interface{}{
-				"count": 42,
-			},
-			expectError: false,
-		},
-		{
-			name: "empty field configuration",
-			config: &EngineConfig{
-				Fields: []FieldConfig{},
-			},
-			input: map[string]interface{}{
-				"title": "Test",
-			},
-			expected: map[string]interface{}{
-				"title": "Test", // Now includes unconfigured fields
-			},
-			expectError: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			engine := NewScrapingEngine(tt.config)
-			result, err := engine.ProcessFields(ctx, tt.input)
-
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("expected error but got none")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-				return
-			}
-
-			if len(result) != len(tt.expected) {
-				t.Errorf("expected %d fields, got %d", len(tt.expected), len(result))
-			}
-
-			for key, expectedVal := range tt.expected {
-				if actualVal, exists := result[key]; !exists {
-					t.Errorf("expected key %q not found in result", key)
-				} else if actualVal != expectedVal {
-					t.Errorf("for key %q: expected %v, got %v", key, expectedVal, actualVal)
-				}
+			_, err := NewScrapingEngine(tt.config)
+			if err == nil {
+				t.Error("Expected error but got none")
 			}
 		})
 	}
 }
 
-func TestScrapingEngine_ValidateConfig(t *testing.T) {
+func TestScrapingEngine_Scrape_Success(t *testing.T) {
+	testHTML := `
+	<html>
+		<body>
+			<h1>Test Title</h1>
+			<p class="content">Test content</p>
+		</body>
+	</html>
+	`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(testHTML))
+	}))
+	defer server.Close()
+
+	config := &EngineConfig{
+		UserAgents:     []string{"TestAgent/1.0"},
+		RequestTimeout: 10 * time.Second,
+		RetryAttempts:  1,
+		Fields: []FieldConfig{
+			{
+				Name:     "title",
+				Selector: "h1",
+				Type:     "text",
+				Required: true,
+			},
+		},
+		ExtractionConfig: ExtractionConfig{
+			StrictMode:      false,
+			ContinueOnError: true,
+		},
+	}
+
+	engine, err := NewScrapingEngine(config)
+	if err != nil {
+		t.Fatalf("Failed to create engine: %v", err)
+	}
+	defer engine.Close()
+
+	ctx := context.Background()
+	result, err := engine.Scrape(ctx, server.URL)
+
+	if err != nil {
+		t.Fatalf("Scraping failed: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Result should not be nil")
+	}
+
+	if result.StatusCode != 200 {
+		t.Errorf("Expected status code 200, got %d", result.StatusCode)
+	}
+
+	if !result.Success {
+		t.Errorf("Expected successful scraping, got errors: %v", result.Errors)
+	}
+
+	if result.Data["title"] != "Test Title" {
+		t.Errorf("Expected title 'Test Title', got %v", result.Data["title"])
+	}
+}
+
+func TestScrapingEngine_Scrape_HTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("Not Found"))
+	}))
+	defer server.Close()
+
+	config := &EngineConfig{
+		UserAgents:     []string{"TestAgent/1.0"},
+		RequestTimeout: 10 * time.Second,
+		RetryAttempts:  1,
+		Fields: []FieldConfig{
+			{
+				Name:     "title",
+				Selector: "h1",
+				Type:     "text",
+				Required: true,
+			},
+		},
+		ExtractionConfig: ExtractionConfig{
+			StrictMode:      false,
+			ContinueOnError: true,
+		},
+	}
+
+	engine, err := NewScrapingEngine(config)
+	if err != nil {
+		t.Fatalf("Failed to create engine: %v", err)
+	}
+	defer engine.Close()
+
+	ctx := context.Background()
+	result, err := engine.Scrape(ctx, server.URL)
+
+	if err == nil {
+		t.Error("Expected HTTP error but got none")
+	}
+
+	if result.StatusCode != 404 {
+		t.Errorf("Expected status code 404, got %d", result.StatusCode)
+	}
+}
+
+func TestScrapingEngine_Scrape_Timeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(2 * time.Second)
+		w.Write([]byte("<html><body><h1>Title</h1></body></html>"))
+	}))
+	defer server.Close()
+
+	config := &EngineConfig{
+		UserAgents:     []string{"TestAgent/1.0"},
+		RequestTimeout: 500 * time.Millisecond,
+		RetryAttempts:  1,
+		Fields: []FieldConfig{
+			{
+				Name:     "title",
+				Selector: "h1",
+				Type:     "text",
+				Required: true,
+			},
+		},
+		ExtractionConfig: ExtractionConfig{
+			StrictMode:      false,
+			ContinueOnError: true,
+		},
+	}
+
+	engine, err := NewScrapingEngine(config)
+	if err != nil {
+		t.Fatalf("Failed to create engine: %v", err)
+	}
+	defer engine.Close()
+
+	ctx := context.Background()
+	start := time.Now()
+	_, err = engine.Scrape(ctx, server.URL)
+	duration := time.Since(start)
+
+	if err == nil {
+		t.Error("Expected timeout error but got none")
+	}
+
+	if duration > 1*time.Second {
+		t.Errorf("Request took too long: %v", duration)
+	}
+}
+
+func TestScrapingEngine_UserAgentRotation(t *testing.T) {
+	var receivedUserAgents []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedUserAgents = append(receivedUserAgents, r.Header.Get("User-Agent"))
+		w.Write([]byte("<html><body><h1>Title</h1></body></html>"))
+	}))
+	defer server.Close()
+
+	config := &EngineConfig{
+		UserAgents:     []string{"Agent1/1.0", "Agent2/1.0", "Agent3/1.0"},
+		RequestTimeout: 10 * time.Second,
+		RetryAttempts:  1,
+		Fields: []FieldConfig{
+			{
+				Name:     "title",
+				Selector: "h1",
+				Type:     "text",
+				Required: true,
+			},
+		},
+		ExtractionConfig: ExtractionConfig{
+			StrictMode:      false,
+			ContinueOnError: true,
+		},
+	}
+
+	engine, err := NewScrapingEngine(config)
+	if err != nil {
+		t.Fatalf("Failed to create engine: %v", err)
+	}
+	defer engine.Close()
+
+	ctx := context.Background()
+
+	// Make multiple requests
+	for i := 0; i < 4; i++ {
+		_, err := engine.Scrape(ctx, server.URL)
+		if err != nil {
+			t.Fatalf("Scraping failed on iteration %d: %v", i, err)
+		}
+	}
+
+	// Check user agent rotation
+	if len(receivedUserAgents) != 4 {
+		t.Fatalf("Expected 4 requests, got %d", len(receivedUserAgents))
+	}
+
+	// First three should be different, fourth should be same as first
+	expectedAgents := []string{"Agent1/1.0", "Agent2/1.0", "Agent3/1.0", "Agent1/1.0"}
+	for i, expected := range expectedAgents {
+		if receivedUserAgents[i] != expected {
+			t.Errorf("Request %d: expected user agent %s, got %s", i, expected, receivedUserAgents[i])
+		}
+	}
+}
+
+func TestValidateEngineConfig(t *testing.T) {
 	tests := []struct {
 		name        string
 		config      *EngineConfig
 		expectError bool
 	}{
 		{
-			name: "valid configuration",
-			config: &EngineConfig{
-				Fields: []FieldConfig{
-					{
-						Name:     "title",
-						Selector: "h1",
-						Type:     "text",
-					},
-					{
-						Name:     "price",
-						Selector: ".price",
-						Type:     "text",
-						Transform: []pipeline.TransformRule{
-							{Type: "trim"},
-							{Type: "parse_float"},
-						},
-					},
-				},
-				Transform: []pipeline.TransformRule{
-					{Type: "normalize_spaces"},
-				},
-			},
-			expectError: false,
-		},
-		{
-			name:        "nil configuration",
+			name:        "nil config",
 			config:      nil,
 			expectError: true,
 		},
 		{
-			name: "field without name",
+			name: "no fields",
+			config: &EngineConfig{
+				Fields: []FieldConfig{},
+			},
+			expectError: true,
+		},
+		{
+			name: "valid config",
 			config: &EngineConfig{
 				Fields: []FieldConfig{
 					{
+						Name:     "title",
 						Selector: "h1",
 						Type:     "text",
 					},
 				},
 			},
-			expectError: true,
+			expectError: false,
 		},
 		{
-			name: "field without selector",
-			config: &EngineConfig{
-				Fields: []FieldConfig{
-					{
-						Name: "title",
-						Type: "text",
-					},
-				},
-			},
-			expectError: true,
-		},
-		{
-			name: "invalid field transformation",
+			name: "invalid transform type",
 			config: &EngineConfig{
 				Fields: []FieldConfig{
 					{
@@ -278,7 +372,7 @@ func TestScrapingEngine_ValidateConfig(t *testing.T) {
 						Selector: "h1",
 						Type:     "text",
 						Transform: []pipeline.TransformRule{
-							{Type: "regex"}, // Missing pattern
+							{Type: "invalid_type"},
 						},
 					},
 				},
@@ -286,7 +380,7 @@ func TestScrapingEngine_ValidateConfig(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "invalid global transformation",
+			name: "config with defaults applied",
 			config: &EngineConfig{
 				Fields: []FieldConfig{
 					{
@@ -295,226 +389,106 @@ func TestScrapingEngine_ValidateConfig(t *testing.T) {
 						Type:     "text",
 					},
 				},
-				Transform: []pipeline.TransformRule{
-					{Type: "unknown_type"},
-				},
 			},
-			expectError: true,
+			expectError: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			engine := NewScrapingEngine(tt.config)
-			err := engine.ValidateConfig()
+			err := validateEngineConfig(tt.config)
 
 			if tt.expectError && err == nil {
-				t.Errorf("expected error but got none")
+				t.Error("Expected error but got none")
 			} else if !tt.expectError && err != nil {
-				t.Errorf("unexpected error: %v", err)
+				t.Errorf("Unexpected error: %v", err)
+			}
+
+			if !tt.expectError && err == nil {
+				if tt.config.RequestTimeout <= 0 {
+					t.Error("Expected default timeout to be applied")
+				}
+				if tt.config.RetryAttempts < 0 {
+					t.Error("Expected default retry attempts to be applied")
+				}
+				if tt.config.MaxConcurrency <= 0 {
+					t.Error("Expected default concurrency to be applied")
+				}
 			}
 		})
 	}
 }
 
-func TestFieldConfig_Validation(t *testing.T) {
-	tests := []struct {
-		name   string
-		field  FieldConfig
-		valid  bool
-	}{
-		{
-			name: "valid field",
-			field: FieldConfig{
-				Name:     "title",
-				Selector: "h1",
-				Type:     "text",
-			},
-			valid: true,
-		},
-		{
-			name: "missing name",
-			field: FieldConfig{
-				Selector: "h1",
-				Type:     "text",
-			},
-			valid: false,
-		},
-		{
-			name: "missing selector",
-			field: FieldConfig{
-				Name: "title",
-				Type: "text",
-			},
-			valid: false,
-		},
-		{
-			name: "empty strings",
-			field: FieldConfig{
-				Name:     "",
-				Selector: "",
-				Type:     "text",
-			},
-			valid: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			isValid := tt.field.Name != "" && tt.field.Selector != ""
-			
-			if isValid != tt.valid {
-				t.Errorf("expected valid=%t, got valid=%t", tt.valid, isValid)
-			}
-		})
-	}
-}
-
-// Integration test with real HTML-like data
-func TestScrapingEngine_Integration(t *testing.T) {
-	ctx := context.Background()
-
+func TestScrapingEngine_GetStats(t *testing.T) {
 	config := &EngineConfig{
+		UserAgents:     []string{"Agent1/1.0", "Agent2/1.0"},
+		RequestTimeout: 30 * time.Second,
+		RetryAttempts:  3,
+		MaxConcurrency: 5,
 		Fields: []FieldConfig{
 			{
 				Name:     "title",
 				Selector: "h1",
 				Type:     "text",
 				Required: true,
-				Transform: []pipeline.TransformRule{
-					{Type: "trim"},
-					{Type: "normalize_spaces"},
-				},
-			},
-			{
-				Name:     "price",
-				Selector: ".price",
-				Type:     "text",
-				Required: true,
-				Transform: []pipeline.TransformRule{
-					{
-						Type:        "regex",
-						Pattern:     `\$([0-9,]+\.?[0-9]*)`,
-						Replacement: "$1",
-					},
-					{Type: "parse_float"},
-				},
-			},
-			{
-				Name:     "description",
-				Selector: ".description",
-				Type:     "text",
-				Required: false,
-				Transform: []pipeline.TransformRule{
-					{Type: "trim"},
-					{Type: "remove_html"},
-				},
 			},
 		},
-		Transform: []pipeline.TransformRule{
-			{Type: "normalize_spaces"},
+		ExtractionConfig: ExtractionConfig{
+			StrictMode:      false,
+			ContinueOnError: true,
 		},
 	}
 
-	engine := NewScrapingEngine(config)
-
-	// Simulate extracted data
-	input := map[string]interface{}{
-		"title":       "  Amazing    Product  ",
-		"price":       "$1,234.56",
-		"description": "<p>Great <strong>product</strong> for everyone!</p>",
-		"extra_field": "This should be processed by global transforms",
-	}
-
-	result, err := engine.ProcessFields(ctx, input)
+	engine, err := NewScrapingEngine(config)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("Failed to create engine: %v", err)
+	}
+	defer engine.Close()
+
+	stats := engine.GetStats()
+
+	if stats["total_fields"] != 1 {
+		t.Errorf("Expected total_fields 1, got %v", stats["total_fields"])
 	}
 
-	// Verify results
-	expectedTitle := "Amazing Product"
-	if result["title"] != expectedTitle {
-		t.Errorf("expected title %q, got %q", expectedTitle, result["title"])
+	if stats["user_agents"] != 2 {
+		t.Errorf("Expected user_agents 2, got %v", stats["user_agents"])
 	}
 
-	expectedPrice := "1234.56"
-	if result["price"] != expectedPrice {
-		t.Errorf("expected price %q, got %q", expectedPrice, result["price"])
+	if stats["retry_attempts"] != 3 {
+		t.Errorf("Expected retry_attempts 3, got %v", stats["retry_attempts"])
 	}
 
-	expectedDescription := "Great product for everyone!"
-	if result["description"] != expectedDescription {
-		t.Errorf("expected description %q, got %q", expectedDescription, result["description"])
-	}
-
-	// extra_field should be processed by global transforms
-	expectedExtra := "This should be processed by global transforms"
-	if result["extra_field"] != expectedExtra {
-		t.Errorf("expected extra_field %q, got %q", expectedExtra, result["extra_field"])
+	if stats["max_concurrency"] != 5 {
+		t.Errorf("Expected max_concurrency 5, got %v", stats["max_concurrency"])
 	}
 }
 
-// Benchmark tests
-func BenchmarkScrapingEngine_ProcessFields(b *testing.B) {
-	ctx := context.Background()
-	
+func TestScrapingEngine_Close(t *testing.T) {
 	config := &EngineConfig{
+		UserAgents:     []string{"TestAgent/1.0"},
+		RequestTimeout: 30 * time.Second,
 		Fields: []FieldConfig{
 			{
 				Name:     "title",
 				Selector: "h1",
 				Type:     "text",
-				Transform: []pipeline.TransformRule{
-					{Type: "trim"},
-					{Type: "normalize_spaces"},
-				},
+				Required: true,
 			},
-			{
-				Name:     "price",
-				Selector: ".price",
-				Type:     "text",
-				Transform: []pipeline.TransformRule{
-					{
-						Type:        "regex",
-						Pattern:     `\$([0-9,]+\.?[0-9]*)`,
-						Replacement: "$1",
-					},
-					{Type: "parse_float"},
-				},
-			},
+		},
+		ExtractionConfig: ExtractionConfig{
+			StrictMode:      false,
+			ContinueOnError: true,
 		},
 	}
 
-	engine := NewScrapingEngine(config)
-	input := map[string]interface{}{
-		"title": "  Product   Title  ",
-		"price": "$99.99",
+	engine, err := NewScrapingEngine(config)
+	if err != nil {
+		t.Fatalf("Failed to create engine: %v", err)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = engine.ProcessFields(ctx, input)
-	}
-}
-
-func BenchmarkScrapingEngine_ValidateConfig(b *testing.B) {
-	config := &EngineConfig{
-		Fields: []FieldConfig{
-			{
-				Name:     "title",
-				Selector: "h1",
-				Type:     "text",
-				Transform: []pipeline.TransformRule{
-					{Type: "trim"},
-				},
-			},
-		},
-	}
-
-	engine := NewScrapingEngine(config)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = engine.ValidateConfig()
+	err = engine.Close()
+	if err != nil {
+		t.Errorf("Close should not return error: %v", err)
 	}
 }

@@ -6,158 +6,133 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"testing"
-	"time"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/valpere/DataScrapexter/internal/pipeline"
 	"github.com/valpere/DataScrapexter/internal/scraper"
 )
 
-// TestServer provides a mock HTTP server for testing
+// TestServer wraps httptest.Server with additional utilities
 type TestServer struct {
-	Server *httptest.Server
-	Routes map[string]string
+	*httptest.Server
+	RequestCount int
+	LastRequest  *http.Request
 }
 
-// NewTestServer creates a new test server with predefined routes
-func NewTestServer(routes map[string]string) *TestServer {
-	ts := &TestServer{
-		Routes: routes,
-	}
-
+// NewTestServer creates a new test server with the given HTML content
+func NewTestServer(html string) *TestServer {
+	ts := &TestServer{}
+	
 	ts.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		if r.URL.RawQuery != "" {
-			path += "?" + r.URL.RawQuery
-		}
-
-		if content, exists := ts.Routes[path]; exists {
-			fmt.Fprint(w, content)
-		} else {
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprint(w, "Not Found")
-		}
+		ts.RequestCount++
+		ts.LastRequest = r
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, html)
 	}))
-
+	
 	return ts
 }
 
-// Close shuts down the test server
-func (ts *TestServer) Close() {
-	ts.Server.Close()
-}
-
-// URL returns the base URL of the test server
-func (ts *TestServer) URL() string {
-	return ts.Server.URL
+// NewTestServerWithHandler creates a test server with custom handler
+func NewTestServerWithHandler(handler http.HandlerFunc) *TestServer {
+	ts := &TestServer{}
+	ts.Server = httptest.NewServer(handler)
+	return ts
 }
 
 // MockHTMLTemplates provides common HTML templates for testing
-var MockHTMLTemplates = map[string]string{
-	"ecommerce_product": `
-		<div class="product">
-			<h1 class="title">{{.Title}}</h1>
-			<div class="price">{{.Price}}</div>
-			<div class="description">{{.Description}}</div>
-			<div class="stock">{{.Stock}}</div>
-		</div>
-	`,
-	"news_article": `
-		<article class="article">
-			<h1 class="headline">{{.Headline}}</h1>
-			<div class="author">{{.Author}}</div>
-			<time class="date">{{.Date}}</time>
-			<div class="content">{{.Content}}</div>
-		</article>
-	`,
-	"pagination_next": `
-		<div class="pagination">
-			<a href="{{.NextURL}}" class="next">Next</a>
-		</div>
-	`,
-	"pagination_numbered": `
-		<div class="pagination">
-			{{range .Pages}}
-				<a href="?page={{.}}" class="page">{{.}}</a>
-			{{end}}
-		</div>
-	`,
+type MockHTMLTemplates struct{}
+
+// EcommerceProduct returns HTML for a mock e-commerce product page
+func (m MockHTMLTemplates) EcommerceProduct() string {
+	return `
+	<html>
+		<head><title>Product Page</title></head>
+		<body>
+			<div class="product">
+				<h1 class="product-title">Gaming Laptop Pro</h1>
+				<span class="price">$1,299.99</span>
+				<div class="rating">4.5/5</div>
+				<p class="description">High-performance gaming laptop with <strong>RTX 4060</strong> graphics</p>
+				<div class="availability">In Stock</div>
+				<div class="discount">15% off</div>
+			</div>
+		</body>
+	</html>
+	`
 }
 
-// CreateMockHTML creates HTML content from templates
-func CreateMockHTML(template string, data map[string]interface{}) string {
-	content := MockHTMLTemplates[template]
-	if content == "" {
-		return ""
-	}
-
-	// Simple template replacement (for testing purposes)
-	for key, value := range data {
-		placeholder := fmt.Sprintf("{{.%s}}", key)
-		content = strings.ReplaceAll(content, placeholder, fmt.Sprintf("%v", value))
-	}
-
-	return content
+// NewsArticle returns HTML for a mock news article
+func (m MockHTMLTemplates) NewsArticle() string {
+	return `
+	<html>
+		<head><title>News Article</title></head>
+		<body>
+			<article>
+				<h1 class="headline">Breaking: Technology Advances Continue</h1>
+				<div class="byline">By John Reporter</div>
+				<time class="publish-date">2025-06-25</time>
+				<div class="content">
+					<p>Technology continues to advance at a rapid pace...</p>
+					<p>Industry experts predict significant changes ahead.</p>
+				</div>
+				<div class="tags">
+					<span class="tag">Technology</span>
+					<span class="tag">Innovation</span>
+				</div>
+			</article>
+		</body>
+	</html>
+	`
 }
 
-// AssertTransformResult checks if a transformation produces expected output
-func AssertTransformResult(t *testing.T, rule pipeline.TransformRule, input, expected string) {
-	t.Helper()
-	
-	result, err := rule.Transform(nil, input)
-	if err != nil {
-		t.Errorf("transformation failed: %v", err)
-		return
-	}
-
-	if result != expected {
-		t.Errorf("transform %s: expected %q, got %q", rule.Type, expected, result)
-	}
+// SimpleList returns HTML with a simple list structure
+func (m MockHTMLTemplates) SimpleList() string {
+	return `
+	<html>
+		<body>
+			<ul class="items">
+				<li class="item">Item 1</li>
+				<li class="item">Item 2</li>
+				<li class="item">Item 3</li>
+			</ul>
+		</body>
+	</html>
+	`
 }
 
-// AssertFieldExtraction checks if field extraction produces expected results
-func AssertFieldExtraction(t *testing.T, config scraper.FieldConfig, html string, expected interface{}) {
-	t.Helper()
-
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
-	if err != nil {
-		t.Fatalf("failed to parse HTML: %v", err)
-		return
-	}
-
-	// Extract value using selector
-	var extractedValue interface{}
-	selection := doc.Find(config.Selector)
-	if selection.Length() > 0 {
-		extractedValue = selection.Text()
-	}
-
-	// Apply transformations if any
-	if len(config.Transform) > 0 && extractedValue != nil {
-		if str, ok := extractedValue.(string); ok {
-			transformList := pipeline.TransformList(config.Transform)
-			transformed, err := transformList.Apply(nil, str)
-			if err != nil {
-				t.Errorf("transformation failed: %v", err)
-				return
-			}
-			extractedValue = transformed
-		}
-	}
-
-	if extractedValue != expected {
-		t.Errorf("field %s: expected %v, got %v", config.Name, expected, extractedValue)
-	}
-}
-
-// CreateTestEngineConfig creates a standard test configuration
-func CreateTestEngineConfig() *scraper.EngineConfig {
+// CreateBasicEngineConfig creates a basic engine configuration for testing
+func CreateBasicEngineConfig() *scraper.EngineConfig {
 	return &scraper.EngineConfig{
+		UserAgents:     []string{"TestAgent/1.0"},
+		RequestTimeout: 10 * 1000000000, // 10 seconds in nanoseconds
+		RetryAttempts:  1,
+		MaxConcurrency: 1,
 		Fields: []scraper.FieldConfig{
 			{
 				Name:     "title",
-				Selector: "h1, .title",
+				Selector: "h1",
+				Type:     "text",
+				Required: true,
+			},
+		},
+		ExtractionConfig: scraper.ExtractionConfig{
+			StrictMode:      false,
+			ContinueOnError: true,
+		},
+	}
+}
+
+// CreateTransformEngineConfig creates an engine config with transformations
+func CreateTransformEngineConfig() *scraper.EngineConfig {
+	return &scraper.EngineConfig{
+		UserAgents:     []string{"TestAgent/1.0"},
+		RequestTimeout: 10 * 1000000000, // 10 seconds in nanoseconds
+		RetryAttempts:  1,
+		MaxConcurrency: 1,
+		Fields: []scraper.FieldConfig{
+			{
+				Name:     "title",
+				Selector: "h1",
 				Type:     "text",
 				Required: true,
 				Transform: []pipeline.TransformRule{
@@ -176,243 +151,148 @@ func CreateTestEngineConfig() *scraper.EngineConfig {
 						Pattern:     `\$([0-9,]+\.?[0-9]*)`,
 						Replacement: "$1",
 					},
-					{Type: "parse_float"},
 				},
 			},
-			{
-				Name:     "description",
-				Selector: ".description, .desc",
-				Type:     "text",
-				Required: false,
-				Transform: []pipeline.TransformRule{
-					{Type: "remove_html"},
-					{Type: "trim"},
-				},
-			},
+		},
+		ExtractionConfig: scraper.ExtractionConfig{
+			StrictMode:      false,
+			ContinueOnError: true,
 		},
 	}
 }
 
-// CreateTestPipelineConfig creates a standard test pipeline configuration
-func CreateTestPipelineConfig() *pipeline.PipelineConfig {
-	return &pipeline.PipelineConfig{
-		BufferSize:    100,
-		WorkerCount:   5,
-		Timeout:       10 * time.Second,
-		EnableMetrics: true,
-		RetryAttempts: 3,
-		RetryDelay:    1 * time.Second,
+// AssertFieldValue checks if a field has the expected value
+func AssertFieldValue(data map[string]interface{}, fieldName string, expected interface{}) error {
+	actual, exists := data[fieldName]
+	if !exists {
+		return fmt.Errorf("field %s not found in data", fieldName)
+	}
+	
+	if actual != expected {
+		return fmt.Errorf("field %s: expected %v, got %v", fieldName, expected, actual)
+	}
+	
+	return nil
+}
+
+// AssertFieldExists checks if a field exists in the data
+func AssertFieldExists(data map[string]interface{}, fieldName string) error {
+	if _, exists := data[fieldName]; !exists {
+		return fmt.Errorf("field %s not found in data", fieldName)
+	}
+	return nil
+}
+
+// AssertNoErrors checks that there are no errors in the result
+func AssertNoErrors(errors []string) error {
+	if len(errors) > 0 {
+		return fmt.Errorf("unexpected errors: %v", errors)
+	}
+	return nil
+}
+
+// MockDataGenerator generates test data for various scenarios
+type MockDataGenerator struct{}
+
+// GenerateProductData creates mock product data
+func (m MockDataGenerator) GenerateProductData() map[string]interface{} {
+	return map[string]interface{}{
+		"title":        "Gaming Laptop Pro",
+		"price":        "1299.99",
+		"rating":       "4.5",
+		"description":  "High-performance gaming laptop",
+		"availability": "in stock",
 	}
 }
 
-// TimeoutContext creates a context with timeout for tests
-func TimeoutContext(t *testing.T, timeout time.Duration) {
-	t.Helper()
-	deadline, ok := t.Deadline()
-	if ok {
-		timeoutDeadline := time.Now().Add(timeout)
-		if deadline.Before(timeoutDeadline) {
-			t.Logf("Test timeout set to %v", timeout)
+// GenerateNewsData creates mock news article data
+func (m MockDataGenerator) GenerateNewsData() map[string]interface{} {
+	return map[string]interface{}{
+		"headline":     "Breaking: Technology Advances Continue",
+		"author":       "John Reporter",
+		"publish_date": "2025-06-25",
+		"content":      "Technology continues to advance at a rapid pace...",
+	}
+}
+
+// ValidateTransformRule validates that a transform rule is properly configured
+func ValidateTransformRule(rule pipeline.TransformRule) error {
+	switch rule.Type {
+	case "trim", "normalize_spaces", "lowercase", "uppercase", "remove_html":
+		return nil
+	case "regex":
+		if rule.Pattern == "" {
+			return fmt.Errorf("regex rule requires pattern")
 		}
-	}
-}
-
-// AssertNoError checks that no error occurred
-func AssertNoError(t *testing.T, err error, msg string) {
-	t.Helper()
-	if err != nil {
-		t.Fatalf("%s: %v", msg, err)
-	}
-}
-
-// AssertError checks that an error occurred
-func AssertError(t *testing.T, err error, msg string) {
-	t.Helper()
-	if err == nil {
-		t.Fatalf("%s: expected error but got none", msg)
-	}
-}
-
-// AssertEqual checks if two values are equal
-func AssertEqual(t *testing.T, expected, actual interface{}, msg string) {
-	t.Helper()
-	if expected != actual {
-		t.Errorf("%s: expected %v, got %v", msg, expected, actual)
-	}
-}
-
-// AssertContains checks if a string contains a substring
-func AssertContains(t *testing.T, haystack, needle, msg string) {
-	t.Helper()
-	if !strings.Contains(haystack, needle) {
-		t.Errorf("%s: %q does not contain %q", msg, haystack, needle)
-	}
-}
-
-// AssertNotEmpty checks if a string is not empty
-func AssertNotEmpty(t *testing.T, value, msg string) {
-	t.Helper()
-	if strings.TrimSpace(value) == "" {
-		t.Errorf("%s: value is empty", msg)
-	}
-}
-
-// MockData provides test data structures
-type MockData struct {
-	Products []Product `json:"products"`
-	Articles []Article `json:"articles"`
-}
-
-type Product struct {
-	Title       string  `json:"title"`
-	Price       string  `json:"price"`
-	Description string  `json:"description"`
-	Stock       string  `json:"stock"`
-	Rating      float64 `json:"rating"`
-}
-
-type Article struct {
-	Headline string `json:"headline"`
-	Author   string `json:"author"`
-	Date     string `json:"date"`
-	Content  string `json:"content"`
-	Tags     []string `json:"tags"`
-}
-
-// GenerateMockProducts creates test product data
-func GenerateMockProducts(count int) []Product {
-	products := make([]Product, count)
-	for i := 0; i < count; i++ {
-		products[i] = Product{
-			Title:       fmt.Sprintf("Product %d", i+1),
-			Price:       fmt.Sprintf("$%d.99", 100+i*10),
-			Description: fmt.Sprintf("Description for product %d", i+1),
-			Stock:       "In Stock",
-			Rating:      4.0 + float64(i%5)*0.2,
+		return nil
+	case "prefix", "suffix":
+		if rule.Params == nil || rule.Params["value"] == nil {
+			return fmt.Errorf("%s rule requires value parameter", rule.Type)
 		}
-	}
-	return products
-}
-
-// GenerateMockArticles creates test article data
-func GenerateMockArticles(count int) []Article {
-	articles := make([]Article, count)
-	for i := 0; i < count; i++ {
-		articles[i] = Article{
-			Headline: fmt.Sprintf("Breaking News %d", i+1),
-			Author:   fmt.Sprintf("Author %d", i+1),
-			Date:     fmt.Sprintf("2025-06-%02d", (i%28)+1),
-			Content:  fmt.Sprintf("This is the content of article %d with important information.", i+1),
-			Tags:     []string{"news", "breaking", fmt.Sprintf("tag%d", i+1)},
+		return nil
+	case "replace":
+		if rule.Params == nil || rule.Params["old"] == nil || rule.Params["new"] == nil {
+			return fmt.Errorf("replace rule requires old and new parameters")
 		}
+		return nil
+	default:
+		return fmt.Errorf("unknown transform type: %s", rule.Type)
 	}
-	return articles
 }
 
-// CreateProductHTML generates HTML for a product
-func CreateProductHTML(product Product) string {
-	return fmt.Sprintf(`
-		<div class="product">
-			<h1 class="title">%s</h1>
-			<div class="price">%s</div>
-			<div class="description">%s</div>
-			<div class="stock">%s</div>
-			<div class="rating">%.1f/5</div>
-		</div>
-	`, product.Title, product.Price, product.Description, product.Stock, product.Rating)
-}
-
-// CreateArticleHTML generates HTML for an article
-func CreateArticleHTML(article Article) string {
-	tags := ""
-	for _, tag := range article.Tags {
-		tags += fmt.Sprintf(`<span class="tag">%s</span>`, tag)
-	}
-
-	return fmt.Sprintf(`
-		<article class="article">
-			<h1 class="headline">%s</h1>
-			<div class="author">%s</div>
-			<time class="date">%s</time>
-			<div class="content">%s</div>
-			<div class="tags">%s</div>
-		</article>
-	`, article.Headline, article.Author, article.Date, article.Content, tags)
-}
-
-// BenchmarkHelper provides utilities for benchmark tests
+// BenchmarkHelper provides utilities for performance testing
 type BenchmarkHelper struct {
-	Engine            *scraper.ScrapingEngine
-	PaginationManager *scraper.PaginationManager
-	TestData          map[string]interface{}
-	TestHTML          string
+	RequestCount int
+	TotalTime    int64 // nanoseconds
 }
 
 // NewBenchmarkHelper creates a new benchmark helper
 func NewBenchmarkHelper() *BenchmarkHelper {
-	config := CreateTestEngineConfig()
-	engine := scraper.NewScrapingEngine(config)
-
-	paginationConfig := scraper.PaginationConfig{
-		Type:     "next_button",
-		Selector: ".next",
-		MaxPages: 10,
-	}
-	paginationManager, _ := scraper.NewPaginationManager(paginationConfig)
-
-	product := GenerateMockProducts(1)[0]
-	testHTML := CreateProductHTML(product)
-
-	testData := map[string]interface{}{
-		"title":       product.Title,
-		"price":       product.Price,
-		"description": product.Description,
-		"stock":       product.Stock,
-	}
-
-	return &BenchmarkHelper{
-		Engine:            engine,
-		PaginationManager: paginationManager,
-		TestData:          testData,
-		TestHTML:          testHTML,
-	}
+	return &BenchmarkHelper{}
 }
 
-// SetupTestEnvironment prepares a complete test environment
-func SetupTestEnvironment(t *testing.T) (*TestServer, *scraper.ScrapingEngine, *scraper.PaginationManager) {
-	t.Helper()
-
-	// Create test data
-	products := GenerateMockProducts(3)
-	
-	routes := map[string]string{
-		"/":       CreateProductHTML(products[0]) + `<a href="/page/2" class="next">Next</a>`,
-		"/page/2": CreateProductHTML(products[1]) + `<a href="/page/3" class="next">Next</a>`,
-		"/page/3": CreateProductHTML(products[2]) + `<span class="next disabled">End</span>`,
-	}
-
-	// Create test server
-	server := NewTestServer(routes)
-
-	// Create scraping engine
-	config := CreateTestEngineConfig()
-	engine := scraper.NewScrapingEngine(config)
-
-	// Create pagination manager
-	paginationConfig := scraper.PaginationConfig{
-		Type:     "next_button",
-		Selector: ".next",
-		MaxPages: 5,
-	}
-	paginationManager, err := scraper.NewPaginationManager(paginationConfig)
-	AssertNoError(t, err, "failed to create pagination manager")
-
-	return server, engine, paginationManager
+// RecordRequest records a request for benchmarking
+func (b *BenchmarkHelper) RecordRequest(duration int64) {
+	b.RequestCount++
+	b.TotalTime += duration
 }
 
-// CleanupTestEnvironment cleans up test resources
-func CleanupTestEnvironment(server *TestServer) {
-	if server != nil {
-		server.Close()
+// AverageTime returns the average request time in nanoseconds
+func (b *BenchmarkHelper) AverageTime() int64 {
+	if b.RequestCount == 0 {
+		return 0
 	}
+	return b.TotalTime / int64(b.RequestCount)
+}
+
+// CreateSlowServer creates a server that responds slowly for timeout testing
+func CreateSlowServer(delaySeconds int, content string) *TestServer {
+	return NewTestServerWithHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Simulate slow response without actual sleep for testing
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, content)
+	}))
+}
+
+// CreateErrorServer creates a server that returns HTTP errors
+func CreateErrorServer(statusCode int) *TestServer {
+	return NewTestServerWithHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(statusCode)
+		fmt.Fprintf(w, "HTTP Error %d", statusCode)
+	}))
+}
+
+// GetHTMLTemplates returns a MockHTMLTemplates instance
+func GetHTMLTemplates() MockHTMLTemplates {
+	return MockHTMLTemplates{}
+}
+
+// GetMockDataGenerator returns a MockDataGenerator instance
+func GetMockDataGenerator() MockDataGenerator {
+	return MockDataGenerator{}
+}
+
+// CleanString removes extra whitespace and normalizes strings for comparison
+func CleanString(s string) string {
+	return strings.TrimSpace(strings.Join(strings.Fields(s), " "))
 }
