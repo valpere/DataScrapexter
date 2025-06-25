@@ -26,25 +26,25 @@ type HTTPClient struct {
 
 // ScraperConfig contains HTTP client configuration
 type ScraperConfig struct {
-	UserAgents        []string          `yaml:"user_agents" json:"user_agents"`
-	Headers           map[string]string `yaml:"headers" json:"headers"`
-	Cookies           map[string]string `yaml:"cookies" json:"cookies"`
-	RequestTimeout    time.Duration     `yaml:"request_timeout" json:"request_timeout"`
-	RetryAttempts     int               `yaml:"retry_attempts" json:"retry_attempts"`
-	RetryDelay        time.Duration     `yaml:"retry_delay" json:"retry_delay"`
-	RateLimit         float64           `yaml:"rate_limit" json:"rate_limit"`
-	MaxRedirects      int               `yaml:"max_redirects" json:"max_redirects"`
-	IgnoreSSLErrors   bool              `yaml:"ignore_ssl_errors" json:"ignore_ssl_errors"`
-	ProxyURL          string            `yaml:"proxy_url" json:"proxy_url"`
-	MaxConcurrency    int               `yaml:"max_concurrency" json:"max_concurrency"`
+	UserAgents      []string          `yaml:"user_agents" json:"user_agents"`
+	Headers         map[string]string `yaml:"headers" json:"headers"`
+	Cookies         map[string]string `yaml:"cookies" json:"cookies"`
+	RequestTimeout  time.Duration     `yaml:"request_timeout" json:"request_timeout"`
+	RetryAttempts   int               `yaml:"retry_attempts" json:"retry_attempts"`
+	RetryDelay      time.Duration     `yaml:"retry_delay" json:"retry_delay"`
+	RateLimit       float64           `yaml:"rate_limit" json:"rate_limit"`
+	MaxRedirects    int               `yaml:"max_redirects" json:"max_redirects"`
+	IgnoreSSLErrors bool              `yaml:"ignore_ssl_errors" json:"ignore_ssl_errors"`
+	ProxyURL        string            `yaml:"proxy_url" json:"proxy_url"`
+	MaxConcurrency  int               `yaml:"max_concurrency" json:"max_concurrency"`
 }
 
 // RetryPolicy defines the retry behavior for failed requests
 type RetryPolicy struct {
-	MaxAttempts    int
-	BaseDelay      time.Duration
-	MaxDelay       time.Duration
-	BackoffFactor  float64
+	MaxAttempts     int
+	BaseDelay       time.Duration
+	MaxDelay        time.Duration
+	BackoffFactor   float64
 	RetryableErrors []int
 }
 
@@ -72,7 +72,7 @@ func NewHTTPClient(config *ScraperConfig) (*HTTPClient, error) {
 	// CRITICAL FIX: Create HTTP client with proper timeout configuration
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{
-			Timeout:   10 * time.Second,  // Connection timeout
+			Timeout:   10 * time.Second, // Connection timeout
 			KeepAlive: 30 * time.Second,
 		}).DialContext,
 		TLSHandshakeTimeout:   10 * time.Second,
@@ -85,6 +85,7 @@ func NewHTTPClient(config *ScraperConfig) (*HTTPClient, error) {
 
 	// Handle SSL configuration
 	if config.IgnoreSSLErrors {
+		// TODO: Log a warning about ignoring SSL errors
 		transport.TLSClientConfig = &tls.Config{
 			InsecureSkipVerify: true,
 		}
@@ -172,7 +173,7 @@ func (hc *HTTPClient) Request(ctx context.Context, method, targetURL string, bod
 // performRequestWithRetry executes the request with exponential backoff retry logic
 func (hc *HTTPClient) performRequestWithRetry(ctx context.Context, req *http.Request) (*RequestResult, error) {
 	var lastErr error
-	
+
 	for attempt := 1; attempt <= hc.retryPolicy.MaxAttempts; attempt++ {
 		// CRITICAL FIX: Check context cancellation and timeout before each attempt
 		select {
@@ -186,7 +187,7 @@ func (hc *HTTPClient) performRequestWithRetry(ctx context.Context, req *http.Req
 		}
 
 		startTime := time.Now()
-		
+
 		// CRITICAL FIX: Execute request with timeout-aware context
 		resp, err := hc.client.Do(req.WithContext(ctx))
 		duration := time.Since(startTime)
@@ -200,7 +201,7 @@ func (hc *HTTPClient) performRequestWithRetry(ctx context.Context, req *http.Req
 		if err != nil {
 			lastErr = err
 			result.Error = err
-			
+
 			// Check if error is retryable
 			if !hc.isRetryableError(err) || attempt == hc.retryPolicy.MaxAttempts {
 				return result, fmt.Errorf("request failed after %d attempts: %w", attempt, err)
@@ -219,11 +220,11 @@ func (hc *HTTPClient) performRequestWithRetry(ctx context.Context, req *http.Req
 		if err != nil {
 			lastErr = fmt.Errorf("failed to read response body: %w", err)
 			result.Error = lastErr
-			
+
 			if attempt == hc.retryPolicy.MaxAttempts {
 				return result, lastErr
 			}
-			
+
 			if err := hc.waitForRetry(ctx, attempt); err != nil {
 				return result, fmt.Errorf("retry wait failed: %w", err)
 			}
@@ -237,7 +238,7 @@ func (hc *HTTPClient) performRequestWithRetry(ctx context.Context, req *http.Req
 		if hc.shouldRetryStatus(resp.StatusCode) && attempt < hc.retryPolicy.MaxAttempts {
 			lastErr = fmt.Errorf("received retryable status code: %d", resp.StatusCode)
 			result.Error = lastErr
-			
+
 			if err := hc.waitForRetry(ctx, attempt); err != nil {
 				return result, fmt.Errorf("retry wait failed: %w", err)
 			}
@@ -432,14 +433,14 @@ func (hc *HTTPClient) SetUserAgent(userAgent string) {
 // GetStats returns statistics about the HTTP client
 func (hc *HTTPClient) GetStats() map[string]interface{} {
 	stats := map[string]interface{}{
-		"user_agents_count":   len(hc.config.UserAgents),
-		"current_user_agent":  hc.userAgentIndex % len(hc.config.UserAgents),
-		"request_timeout":     hc.config.RequestTimeout.String(),
-		"retry_attempts":      hc.config.RetryAttempts,
-		"rate_limit":          hc.config.RateLimit,
-		"max_redirects":       hc.config.MaxRedirects,
-		"ignore_ssl_errors":   hc.config.IgnoreSSLErrors,
-		"proxy_configured":    hc.config.ProxyURL != "",
+		"user_agents_count":  len(hc.config.UserAgents),
+		"current_user_agent": hc.userAgentIndex % len(hc.config.UserAgents),
+		"request_timeout":    hc.config.RequestTimeout.String(),
+		"retry_attempts":     hc.config.RetryAttempts,
+		"rate_limit":         hc.config.RateLimit,
+		"max_redirects":      hc.config.MaxRedirects,
+		"ignore_ssl_errors":  hc.config.IgnoreSSLErrors,
+		"proxy_configured":   hc.config.ProxyURL != "",
 	}
 
 	if hc.rateLimiter != nil {
