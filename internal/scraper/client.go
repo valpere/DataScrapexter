@@ -3,296 +3,264 @@ package scraper
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"io"
-	"net"
+	"math"
 	"net/http"
-	"net/url"
-	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
 )
 
-// HTTPClient represents an enhanced HTTP client for web scraping
+// HTTPClientConfig configures the HTTP client behavior
+type HTTPClientConfig struct {
+	Timeout              time.Duration     `yaml:"timeout" json:"timeout"`
+	RetryAttempts        int               `yaml:"retry_attempts" json:"retry_attempts"`
+	RetryBackoffBase     time.Duration     `yaml:"retry_backoff_base" json:"retry_backoff_base"`
+	RetryBackoffMax      time.Duration     `yaml:"retry_backoff_max" json:"retry_backoff_max"`
+	UserAgents           []string          `yaml:"user_agents" json:"user_agents"`
+	Headers              map[string]string `yaml:"headers" json:"headers"`
+	Cookies              map[string]string `yaml:"cookies" json:"cookies"`
+	FollowRedirects      bool              `yaml:"follow_redirects" json:"follow_redirects"`
+	MaxRedirects         int               `yaml:"max_redirects" json:"max_redirects"`
+	RateLimit            time.Duration     `yaml:"rate_limit" json:"rate_limit"`
+	MaxIdleConns         int               `yaml:"max_idle_conns" json:"max_idle_conns"`
+	MaxIdleConnsPerHost  int               `yaml:"max_idle_conns_per_host" json:"max_idle_conns_per_host"`
+	IdleConnTimeout      time.Duration     `yaml:"idle_conn_timeout" json:"idle_conn_timeout"`
+	DisableCompression   bool              `yaml:"disable_compression" json:"disable_compression"`
+	DisableKeepAlives    bool              `yaml:"disable_keep_alives" json:"disable_keep_alives"`
+}
+
+// HTTPClient wraps http.Client with additional functionality
 type HTTPClient struct {
-	client         *http.Client
-	config         *ScraperConfig
-	rateLimiter    *rate.Limiter
-	userAgentIndex int
-	retryPolicy    *RetryPolicy
+	client        *http.Client
+	config        *HTTPClientConfig
+	userAgentIdx  int
+	userAgentMux  sync.Mutex
+	rateLimiter   *rate.Limiter
+	stats         *HTTPStats
+	statsMux      sync.RWMutex
 }
 
-// ScraperConfig contains HTTP client configuration
-type ScraperConfig struct {
-	UserAgents      []string          `yaml:"user_agents" json:"user_agents"`
-	Headers         map[string]string `yaml:"headers" json:"headers"`
-	Cookies         map[string]string `yaml:"cookies" json:"cookies"`
-	RequestTimeout  time.Duration     `yaml:"request_timeout" json:"request_timeout"`
-	RetryAttempts   int               `yaml:"retry_attempts" json:"retry_attempts"`
-	RetryDelay      time.Duration     `yaml:"retry_delay" json:"retry_delay"`
-	RateLimit       float64           `yaml:"rate_limit" json:"rate_limit"`
-	MaxRedirects    int               `yaml:"max_redirects" json:"max_redirects"`
-	IgnoreSSLErrors bool              `yaml:"ignore_ssl_errors" json:"ignore_ssl_errors"`
-	ProxyURL        string            `yaml:"proxy_url" json:"proxy_url"`
-	MaxConcurrency  int               `yaml:"max_concurrency" json:"max_concurrency"`
+// HTTPStats tracks HTTP client statistics
+type HTTPStats struct {
+	TotalRequests     int64         `json:"total_requests"`
+	SuccessfulReqs    int64         `json:"successful_requests"`
+	FailedRequests    int64         `json:"failed_requests"`
+	RetryCount        int64         `json:"retry_count"`
+	TotalBytes        int64         `json:"total_bytes"`
+	AverageLatency    time.Duration `json:"average_latency"`
+	LastRequestTime   time.Time     `json:"last_request_time"`
+	ErrorsByCode      map[int]int64 `json:"errors_by_code"`
 }
 
-// RetryPolicy defines the retry behavior for failed requests
-type RetryPolicy struct {
-	MaxAttempts     int
-	BaseDelay       time.Duration
-	MaxDelay        time.Duration
-	BackoffFactor   float64
-	RetryableErrors []int
+// HTTPResponse represents an HTTP response with additional metadata
+type HTTPResponse struct {
+	*http.Response
+	Duration    time.Duration `json:"duration"`
+	Attempts    int           `json:"attempts"`
+	BodyBytes   []byte        `json:"-"`
+	BodySize    int64         `json:"body_size"`
+	FromCache   bool          `json:"from_cache"`
 }
 
-// RequestResult contains the result of an HTTP request
-type RequestResult struct {
-	Response   *http.Response
-	Body       []byte
-	StatusCode int
-	Duration   time.Duration
-	Attempt    int
-	Error      error
-}
-
-// NewHTTPClient creates a new HTTP client with the provided configuration
-func NewHTTPClient(config *ScraperConfig) (*HTTPClient, error) {
+// NewHTTPClient creates a new HTTP client with the given configuration
+func NewHTTPClient(config *HTTPClientConfig) *HTTPClient {
 	if config == nil {
-		return nil, fmt.Errorf("scraper config cannot be nil")
+		config = &HTTPClientConfig{
+			Timeout:             30 * time.Second,
+			RetryAttempts:       3,
+			RetryBackoffBase:    1 * time.Second,
+			RetryBackoffMax:     30 * time.Second,
+			UserAgents:          []string{"DataScrapexter/1.0"},
+			FollowRedirects:     true,
+			MaxRedirects:        10,
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+		}
 	}
 
-	// Validate and set default values
-	if err := validateConfig(config); err != nil {
-		return nil, fmt.Errorf("invalid configuration: %w", err)
-	}
-
-	// CRITICAL FIX: Create HTTP client with proper timeout configuration
+	// Create HTTP transport
 	transport := &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout:   10 * time.Second, // Connection timeout
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: config.RequestTimeout, // CRITICAL: Apply timeout to response headers
-		ExpectContinueTimeout: 1 * time.Second,
-		MaxIdleConns:          100,
-		MaxIdleConnsPerHost:   10,
-		IdleConnTimeout:       90 * time.Second,
+		MaxIdleConns:        config.MaxIdleConns,
+		MaxIdleConnsPerHost: config.MaxIdleConnsPerHost,
+		IdleConnTimeout:     config.IdleConnTimeout,
+		DisableCompression:  config.DisableCompression,
+		DisableKeepAlives:   config.DisableKeepAlives,
 	}
 
-	// Handle SSL configuration
-	if config.IgnoreSSLErrors {
-		// TODO: Log a warning about ignoring SSL errors
-		transport.TLSClientConfig = &tls.Config{
-			InsecureSkipVerify: true,
-		}
-	}
-
-	// Handle proxy configuration
-	if config.ProxyURL != "" {
-		proxyURL, err := url.Parse(config.ProxyURL)
-		if err != nil {
-			return nil, fmt.Errorf("invalid proxy URL: %w", err)
-		}
-		transport.Proxy = http.ProxyURL(proxyURL)
-	}
-
-	// CRITICAL FIX: Configure client with proper timeout settings
-	httpClient := &http.Client{
+	// Create HTTP client
+	client := &http.Client{
+		Timeout:   config.Timeout,
 		Transport: transport,
-		Timeout:   config.RequestTimeout, // CRITICAL: Overall request timeout
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	}
+
+	// Configure redirect policy
+	if !config.FollowRedirects {
+		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+	} else if config.MaxRedirects > 0 {
+		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 			if len(via) >= config.MaxRedirects {
-				return fmt.Errorf("maximum redirects exceeded: %d", config.MaxRedirects)
+				return fmt.Errorf("stopped after %d redirects", config.MaxRedirects)
 			}
 			return nil
-		},
+		}
 	}
 
-	// Configure rate limiter if specified
+	// Create rate limiter if configured
 	var rateLimiter *rate.Limiter
 	if config.RateLimit > 0 {
-		rateLimiter = rate.NewLimiter(rate.Limit(config.RateLimit), 1)
-	}
-
-	// Configure retry policy
-	retryPolicy := &RetryPolicy{
-		MaxAttempts:   config.RetryAttempts,
-		BaseDelay:     config.RetryDelay,
-		MaxDelay:      30 * time.Second,
-		BackoffFactor: 2.0,
-		RetryableErrors: []int{
-			http.StatusRequestTimeout,
-			http.StatusTooManyRequests,
-			http.StatusInternalServerError,
-			http.StatusBadGateway,
-			http.StatusServiceUnavailable,
-			http.StatusGatewayTimeout,
-		},
+		rateLimiter = rate.NewLimiter(rate.Every(config.RateLimit), 1)
 	}
 
 	return &HTTPClient{
-		client:      httpClient,
+		client:      client,
 		config:      config,
 		rateLimiter: rateLimiter,
-		retryPolicy: retryPolicy,
-	}, nil
+		stats: &HTTPStats{
+			ErrorsByCode: make(map[int]int64),
+		},
+	}
 }
 
-// Get performs an HTTP GET request with proper timeout and retry handling
-func (hc *HTTPClient) Get(ctx context.Context, targetURL string) (*RequestResult, error) {
-	return hc.Request(ctx, "GET", targetURL, nil)
-}
-
-// Request performs an HTTP request with comprehensive error handling and timeout enforcement
-func (hc *HTTPClient) Request(ctx context.Context, method, targetURL string, body io.Reader) (*RequestResult, error) {
-	// CRITICAL FIX: Create request with context that includes timeout
-	req, err := http.NewRequestWithContext(ctx, method, targetURL, body)
+// Get performs an HTTP GET request with retries and rate limiting
+func (c *HTTPClient) Get(ctx context.Context, url string) (*HTTPResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Apply headers and user agent
-	hc.applyHeaders(req)
-	hc.applyCookies(req)
+	return c.Do(req)
+}
 
-	// Rate limiting
-	if hc.rateLimiter != nil {
-		if err := hc.rateLimiter.Wait(ctx); err != nil {
-			return nil, fmt.Errorf("rate limiting failed: %w", err)
+// Do performs an HTTP request with retries and rate limiting
+func (c *HTTPClient) Do(req *http.Request) (*HTTPResponse, error) {
+	// Apply rate limiting
+	if c.rateLimiter != nil {
+		if err := c.rateLimiter.Wait(req.Context()); err != nil {
+			return nil, fmt.Errorf("rate limit wait failed: %w", err)
 		}
 	}
 
-	// Perform request with retry logic
-	return hc.performRequestWithRetry(ctx, req)
-}
-
-// performRequestWithRetry executes the request with exponential backoff retry logic
-func (hc *HTTPClient) performRequestWithRetry(ctx context.Context, req *http.Request) (*RequestResult, error) {
 	var lastErr error
+	var response *HTTPResponse
 
-	for attempt := 1; attempt <= hc.retryPolicy.MaxAttempts; attempt++ {
-		// CRITICAL FIX: Check context cancellation and timeout before each attempt
-		select {
-		case <-ctx.Done():
-			return &RequestResult{
-				Error:    ctx.Err(),
-				Attempt:  attempt,
-				Duration: 0,
-			}, fmt.Errorf("request cancelled or timed out: %w", ctx.Err())
-		default:
-		}
+	for attempt := 0; attempt <= c.config.RetryAttempts; attempt++ {
+		// Clone request for retry
+		reqClone := req.Clone(req.Context())
+		
+		// Set headers
+		c.setRequestHeaders(reqClone)
 
+		// Perform request
 		startTime := time.Now()
-
-		// CRITICAL FIX: Execute request with timeout-aware context
-		resp, err := hc.client.Do(req.WithContext(ctx))
+		resp, err := c.client.Do(reqClone)
 		duration := time.Since(startTime)
 
-		result := &RequestResult{
-			Response: resp,
-			Duration: duration,
-			Attempt:  attempt,
-		}
+		// Update stats
+		c.updateStats(resp, err, duration, attempt > 0)
 
 		if err != nil {
-			lastErr = err
-			result.Error = err
-
-			// Check if error is retryable
-			if !hc.isRetryableError(err) || attempt == hc.retryPolicy.MaxAttempts {
-				return result, fmt.Errorf("request failed after %d attempts: %w", attempt, err)
-			}
-
-			// Wait before retry with exponential backoff
-			if err := hc.waitForRetry(ctx, attempt); err != nil {
-				return result, fmt.Errorf("retry wait failed: %w", err)
+			lastErr = fmt.Errorf("attempt %d failed: %w", attempt+1, err)
+			
+			if attempt < c.config.RetryAttempts {
+				backoff := c.calculateBackoff(attempt)
+				select {
+				case <-time.After(backoff):
+					continue
+				case <-req.Context().Done():
+					return nil, req.Context().Err()
+				}
 			}
 			continue
 		}
 
 		// Read response body
-		defer resp.Body.Close()
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			result.Error = lastErr
-
-			if attempt == hc.retryPolicy.MaxAttempts {
-				return result, lastErr
-			}
-
-			if err := hc.waitForRetry(ctx, attempt); err != nil {
-				return result, fmt.Errorf("retry wait failed: %w", err)
-			}
-			continue
-		}
-
-		result.Body = bodyBytes
-		result.StatusCode = resp.StatusCode
-
-		// Check if status code indicates retry is needed
-		if hc.shouldRetryStatus(resp.StatusCode) && attempt < hc.retryPolicy.MaxAttempts {
-			lastErr = fmt.Errorf("received retryable status code: %d", resp.StatusCode)
-			result.Error = lastErr
-
-			if err := hc.waitForRetry(ctx, attempt); err != nil {
-				return result, fmt.Errorf("retry wait failed: %w", err)
+		bodyBytes, bodySize, readErr := c.readResponseBody(resp)
+		if readErr != nil {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("failed to read response body: %w", readErr)
+			
+			if attempt < c.config.RetryAttempts {
+				backoff := c.calculateBackoff(attempt)
+				select {
+				case <-time.After(backoff):
+					continue
+				case <-req.Context().Done():
+					return nil, req.Context().Err()
+				}
 			}
 			continue
 		}
 
-		// Successful request
-		return result, nil
+		response = &HTTPResponse{
+			Response:  resp,
+			Duration:  duration,
+			Attempts:  attempt + 1,
+			BodyBytes: bodyBytes,
+			BodySize:  bodySize,
+		}
+
+		// Check if we should retry based on status code
+		if c.shouldRetry(resp.StatusCode) && attempt < c.config.RetryAttempts {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
+			
+			backoff := c.calculateBackoff(attempt)
+			select {
+			case <-time.After(backoff):
+				continue
+			case <-req.Context().Done():
+				return nil, req.Context().Err()
+			}
+		}
+
+		// Don't close response body here - caller will close it
+		return response, nil
 	}
 
-	// All retry attempts exhausted
-	if lastErr != nil {
-		return &RequestResult{
-			Error:    lastErr,
-			Attempt:  hc.retryPolicy.MaxAttempts,
-			Duration: 0,
-		}, fmt.Errorf("request failed after %d attempts: %w", hc.retryPolicy.MaxAttempts, lastErr)
-	}
-
-	return &RequestResult{
-		Error:    fmt.Errorf("unknown error occurred"),
-		Attempt:  hc.retryPolicy.MaxAttempts,
-		Duration: 0,
-	}, fmt.Errorf("request failed with unknown error")
+	return response, lastErr
 }
 
-// applyHeaders adds configured headers to the request
-func (hc *HTTPClient) applyHeaders(req *http.Request) {
-	// Set User-Agent
-	if len(hc.config.UserAgents) > 0 {
-		userAgent := hc.config.UserAgents[hc.userAgentIndex%len(hc.config.UserAgents)]
+// setRequestHeaders sets standard headers and user agent
+func (c *HTTPClient) setRequestHeaders(req *http.Request) {
+	// Set user agent
+	if len(c.config.UserAgents) > 0 {
+		c.userAgentMux.Lock()
+		userAgent := c.config.UserAgents[c.userAgentIdx%len(c.config.UserAgents)]
+		c.userAgentIdx++
+		c.userAgentMux.Unlock()
+		
 		req.Header.Set("User-Agent", userAgent)
-		hc.userAgentIndex++
 	}
 
 	// Set custom headers
-	for key, value := range hc.config.Headers {
+	for key, value := range c.config.Headers {
 		req.Header.Set(key, value)
+	}
+
+	// Set cookies
+	for name, value := range c.config.Cookies {
+		req.AddCookie(&http.Cookie{Name: name, Value: value})
 	}
 
 	// Set default headers if not already set
 	if req.Header.Get("Accept") == "" {
-		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	}
 	if req.Header.Get("Accept-Language") == "" {
 		req.Header.Set("Accept-Language", "en-US,en;q=0.5")
 	}
-	if req.Header.Get("Accept-Encoding") == "" {
+	if req.Header.Get("Accept-Encoding") == "" && !c.config.DisableCompression {
 		req.Header.Set("Accept-Encoding", "gzip, deflate")
 	}
 	if req.Header.Get("DNT") == "" {
 		req.Header.Set("DNT", "1")
 	}
-	if req.Header.Get("Connection") == "" {
+	if req.Header.Get("Connection") == "" && !c.config.DisableKeepAlives {
 		req.Header.Set("Connection", "keep-alive")
 	}
 	if req.Header.Get("Upgrade-Insecure-Requests") == "" {
@@ -300,163 +268,166 @@ func (hc *HTTPClient) applyHeaders(req *http.Request) {
 	}
 }
 
-// applyCookies adds configured cookies to the request
-func (hc *HTTPClient) applyCookies(req *http.Request) {
-	for name, value := range hc.config.Cookies {
-		cookie := &http.Cookie{
-			Name:  name,
-			Value: value,
+// readResponseBody reads and returns the response body
+func (c *HTTPClient) readResponseBody(resp *http.Response) ([]byte, int64, error) {
+	if resp.Body == nil {
+		return nil, 0, nil
+	}
+
+	bodyBytes := make([]byte, 0)
+	buffer := make([]byte, 4096)
+	totalSize := int64(0)
+
+	for {
+		n, err := resp.Body.Read(buffer)
+		if n > 0 {
+			bodyBytes = append(bodyBytes, buffer[:n]...)
+			totalSize += int64(n)
 		}
-		req.AddCookie(cookie)
-	}
-}
-
-// isRetryableError determines if an error warrants a retry
-func (hc *HTTPClient) isRetryableError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	// Network errors are generally retryable
-	if netErr, ok := err.(net.Error); ok {
-		return netErr.Timeout() || netErr.Temporary()
-	}
-
-	// Context timeout errors are not retryable as they indicate the overall timeout was reached
-	if err == context.DeadlineExceeded || err == context.Canceled {
-		return false
-	}
-
-	// URL errors might be retryable depending on the underlying error
-	if urlErr, ok := err.(*url.Error); ok {
-		return hc.isRetryableError(urlErr.Err)
-	}
-
-	// String-based error matching for common retryable cases
-	errStr := strings.ToLower(err.Error())
-	retryableStrings := []string{
-		"connection reset",
-		"connection refused",
-		"no such host",
-		"timeout",
-		"temporary failure",
-		"network is unreachable",
-	}
-
-	for _, retryableStr := range retryableStrings {
-		if strings.Contains(errStr, retryableStr) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// shouldRetryStatus determines if an HTTP status code warrants a retry
-func (hc *HTTPClient) shouldRetryStatus(statusCode int) bool {
-	for _, retryableStatus := range hc.retryPolicy.RetryableErrors {
-		if statusCode == retryableStatus {
-			return true
-		}
-	}
-	return false
-}
-
-// waitForRetry implements exponential backoff with jitter
-func (hc *HTTPClient) waitForRetry(ctx context.Context, attempt int) error {
-	if attempt <= 1 {
-		return nil // No wait for first attempt
-	}
-
-	// Calculate delay with exponential backoff
-	delay := hc.retryPolicy.BaseDelay
-	for i := 1; i < attempt; i++ {
-		delay = time.Duration(float64(delay) * hc.retryPolicy.BackoffFactor)
-		if delay > hc.retryPolicy.MaxDelay {
-			delay = hc.retryPolicy.MaxDelay
+		if err != nil {
 			break
 		}
 	}
 
-	// CRITICAL FIX: Respect context timeout during retry wait
-	select {
-	case <-time.After(delay):
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
+	return bodyBytes, totalSize, nil
+}
+
+// shouldRetry determines if a request should be retried based on status code
+func (c *HTTPClient) shouldRetry(statusCode int) bool {
+	// Retry on server errors and certain client errors
+	switch statusCode {
+	case 408, 429: // Request Timeout, Too Many Requests
+		return true
+	case 500, 502, 503, 504: // Server errors
+		return true
+	case 520, 521, 522, 523, 524: // Cloudflare errors
+		return true
+	default:
+		return false
 	}
 }
 
-// validateConfig validates the scraper configuration
-func validateConfig(config *ScraperConfig) error {
-	if config.RequestTimeout <= 0 {
-		config.RequestTimeout = 30 * time.Second
+// calculateBackoff calculates exponential backoff with jitter
+func (c *HTTPClient) calculateBackoff(attempt int) time.Duration {
+	backoff := time.Duration(math.Pow(2, float64(attempt))) * c.config.RetryBackoffBase
+	
+	if backoff > c.config.RetryBackoffMax {
+		backoff = c.config.RetryBackoffMax
+	}
+	
+	// Add jitter (up to 25% of backoff time)
+	jitter := time.Duration(float64(backoff) * 0.25 * (0.5 + (float64(time.Now().UnixNano()%1000) / 1000.0)))
+	
+	return backoff + jitter
+}
+
+// updateStats updates HTTP client statistics
+func (c *HTTPClient) updateStats(resp *http.Response, err error, duration time.Duration, isRetry bool) {
+	c.statsMux.Lock()
+	defer c.statsMux.Unlock()
+
+	c.stats.TotalRequests++
+	c.stats.LastRequestTime = time.Now()
+
+	if isRetry {
+		c.stats.RetryCount++
 	}
 
-	if config.RetryAttempts < 0 {
-		config.RetryAttempts = 3
+	if err != nil {
+		c.stats.FailedRequests++
+		return
 	}
 
-	if config.RetryDelay <= 0 {
-		config.RetryDelay = 1 * time.Second
-	}
+	if resp != nil {
+		if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+			c.stats.SuccessfulReqs++
+		} else {
+			c.stats.FailedRequests++
+			c.stats.ErrorsByCode[resp.StatusCode]++
+		}
 
-	if config.MaxRedirects < 0 {
-		config.MaxRedirects = 10
-	}
-
-	if len(config.UserAgents) == 0 {
-		config.UserAgents = []string{
-			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+		// Update average latency
+		if c.stats.SuccessfulReqs == 1 {
+			c.stats.AverageLatency = duration
+		} else {
+			c.stats.AverageLatency = time.Duration(
+				(int64(c.stats.AverageLatency)*c.stats.SuccessfulReqs + int64(duration)) / (c.stats.SuccessfulReqs + 1),
+			)
 		}
 	}
+}
 
-	if config.RateLimit < 0 {
-		config.RateLimit = 0 // No rate limiting
+// GetStats returns current HTTP client statistics
+func (c *HTTPClient) GetStats() *HTTPStats {
+	c.statsMux.RLock()
+	defer c.statsMux.RUnlock()
+
+	// Create a copy to avoid race conditions
+	statsCopy := &HTTPStats{
+		TotalRequests:   c.stats.TotalRequests,
+		SuccessfulReqs:  c.stats.SuccessfulReqs,
+		FailedRequests:  c.stats.FailedRequests,
+		RetryCount:      c.stats.RetryCount,
+		TotalBytes:      c.stats.TotalBytes,
+		AverageLatency:  c.stats.AverageLatency,
+		LastRequestTime: c.stats.LastRequestTime,
+		ErrorsByCode:    make(map[int]int64),
 	}
 
-	if config.MaxConcurrency <= 0 {
-		config.MaxConcurrency = 5
+	for code, count := range c.stats.ErrorsByCode {
+		statsCopy.ErrorsByCode[code] = count
 	}
 
+	return statsCopy
+}
+
+// Close closes the HTTP client and cleans up resources
+func (c *HTTPClient) Close() error {
+	if transport, ok := c.client.Transport.(*http.Transport); ok {
+		transport.CloseIdleConnections()
+	}
 	return nil
 }
 
-// SetUserAgent rotates to the next user agent in the list
-func (hc *HTTPClient) SetUserAgent(userAgent string) {
-	if hc.config.UserAgents == nil {
-		hc.config.UserAgents = []string{}
-	}
-	hc.config.UserAgents = append(hc.config.UserAgents, userAgent)
+// SetUserAgent sets a single user agent (overwrites user agent list)
+func (c *HTTPClient) SetUserAgent(userAgent string) {
+	c.userAgentMux.Lock()
+	defer c.userAgentMux.Unlock()
+	c.config.UserAgents = []string{userAgent}
+	c.userAgentIdx = 0
 }
 
-// GetStats returns statistics about the HTTP client
-func (hc *HTTPClient) GetStats() map[string]interface{} {
-	stats := map[string]interface{}{
-		"user_agents_count":  len(hc.config.UserAgents),
-		"current_user_agent": hc.userAgentIndex % len(hc.config.UserAgents),
-		"request_timeout":    hc.config.RequestTimeout.String(),
-		"retry_attempts":     hc.config.RetryAttempts,
-		"rate_limit":         hc.config.RateLimit,
-		"max_redirects":      hc.config.MaxRedirects,
-		"ignore_ssl_errors":  hc.config.IgnoreSSLErrors,
-		"proxy_configured":   hc.config.ProxyURL != "",
-	}
-
-	if hc.rateLimiter != nil {
-		stats["rate_limiter_limit"] = hc.rateLimiter.Limit()
-		stats["rate_limiter_burst"] = hc.rateLimiter.Burst()
-	}
-
-	return stats
+// AddUserAgent adds a user agent to the rotation list
+func (c *HTTPClient) AddUserAgent(userAgent string) {
+	c.userAgentMux.Lock()
+	defer c.userAgentMux.Unlock()
+	c.config.UserAgents = append(c.config.UserAgents, userAgent)
 }
 
-// Close cleans up any resources used by the HTTP client
-func (hc *HTTPClient) Close() error {
-	if hc.client != nil && hc.client.Transport != nil {
-		if transport, ok := hc.client.Transport.(*http.Transport); ok {
-			transport.CloseIdleConnections()
-		}
+// SetHeader sets a custom header
+func (c *HTTPClient) SetHeader(key, value string) {
+	if c.config.Headers == nil {
+		c.config.Headers = make(map[string]string)
 	}
-	return nil
+	c.config.Headers[key] = value
+}
+
+// SetCookie sets a cookie to be sent with requests
+func (c *HTTPClient) SetCookie(name, value string) {
+	if c.config.Cookies == nil {
+		c.config.Cookies = make(map[string]string)
+	}
+	c.config.Cookies[name] = value
+}
+
+// GetCurrentUserAgent returns the current user agent that will be used
+func (c *HTTPClient) GetCurrentUserAgent() string {
+	c.userAgentMux.Lock()
+	defer c.userAgentMux.Unlock()
+	
+	if len(c.config.UserAgents) == 0 {
+		return "DataScrapexter/1.0"
+	}
+	
+	return c.config.UserAgents[c.userAgentIdx%len(c.config.UserAgents)]
 }

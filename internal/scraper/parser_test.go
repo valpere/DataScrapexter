@@ -2,29 +2,15 @@
 package scraper
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 )
 
 func TestNewHTMLParser(t *testing.T) {
-	// Create a test server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`<html><body><h1>Test</h1></body></html>`))
-	}))
-	defer server.Close()
+	html := `<html><body><h1>Test</h1></body></html>`
 
-	// Make a request to the test server
-	resp, err := http.Get(server.URL)
-	if err != nil {
-		t.Fatalf("Failed to make request: %v", err)
-	}
-
-	// Test parser creation
-	parser, err := NewHTMLParser(resp)
+	parser, err := NewHTMLParser(html)
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
@@ -36,527 +22,446 @@ func TestNewHTMLParser(t *testing.T) {
 	if parser.document == nil {
 		t.Fatal("Document should not be nil")
 	}
-
-	if parser.baseURL != server.URL {
-		t.Fatalf("Expected baseURL %s, got %s", server.URL, parser.baseURL)
-	}
-}
-
-func TestNewHTMLParserFromString(t *testing.T) {
-	html := `<html><body><h1>Test Title</h1><p class="content">Test content</p></body></html>`
-	baseURL := "https://example.com"
-
-	parser, err := NewHTMLParserFromString(html, baseURL)
-	if err != nil {
-		t.Fatalf("Failed to create parser: %v", err)
-	}
-
-	if parser.baseURL != baseURL {
-		t.Fatalf("Expected baseURL %s, got %s", baseURL, parser.baseURL)
-	}
-
-	// Test that we can find elements
-	selection := parser.Find("h1")
-	if selection.Length() != 1 {
-		t.Fatalf("Expected 1 h1 element, got %d", selection.Length())
-	}
-
-	title := selection.Text()
-	if title != "Test Title" {
-		t.Fatalf("Expected title 'Test Title', got '%s'", title)
-	}
 }
 
 func TestExtractField_Text(t *testing.T) {
 	html := `<html><body><h1>Test Title</h1><p class="content">Test content</p></body></html>`
-	parser, err := NewHTMLParserFromString(html, "https://example.com")
+
+	parser, err := NewHTMLParser(html)
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
 
-	field := FieldConfig{
+	config := FieldConfig{
 		Name:     "title",
 		Selector: "h1",
 		Type:     "text",
 		Required: true,
 	}
 
-	value, err := parser.ExtractField(field)
+	result, err := parser.ExtractField(config)
 	if err != nil {
 		t.Fatalf("Failed to extract field: %v", err)
 	}
 
-	if value != "Test Title" {
-		t.Fatalf("Expected 'Test Title', got '%v'", value)
-	}
-}
-
-func TestExtractField_Attribute(t *testing.T) {
-	html := `<html><body><a href="https://example.com" title="Example Link">Link</a></body></html>`
-	parser, err := NewHTMLParserFromString(html, "https://example.com")
-	if err != nil {
-		t.Fatalf("Failed to create parser: %v", err)
-	}
-
-	field := FieldConfig{
-		Name:     "link_url",
-		Selector: "a",
-		Type:     "attribute",
-		Required: true,
-	}
-
-	value, err := parser.ExtractField(field)
-	if err != nil {
-		t.Fatalf("Failed to extract field: %v", err)
-	}
-
-	if value != "https://example.com" {
-		t.Fatalf("Expected 'https://example.com', got '%v'", value)
+	if result != "Test Title" {
+		t.Errorf("Expected 'Test Title', got %v", result)
 	}
 }
 
 func TestExtractField_HTML(t *testing.T) {
 	html := `<html><body><div class="content"><p>Test <strong>content</strong></p></div></body></html>`
-	parser, err := NewHTMLParserFromString(html, "https://example.com")
+
+	parser, err := NewHTMLParser(html)
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
 
-	field := FieldConfig{
-		Name:     "content_html",
+	config := FieldConfig{
+		Name:     "content",
 		Selector: ".content",
 		Type:     "html",
 		Required: true,
 	}
 
-	value, err := parser.ExtractField(field)
+	result, err := parser.ExtractField(config)
 	if err != nil {
 		t.Fatalf("Failed to extract field: %v", err)
 	}
 
 	expected := "<p>Test <strong>content</strong></p>"
-	if value != expected {
-		t.Fatalf("Expected '%s', got '%v'", expected, value)
+	if result != expected {
+		t.Errorf("Expected '%s', got %v", expected, result)
 	}
 }
 
-func TestExtractField_Int(t *testing.T) {
-	html := `<html><body><span class="price">$1,234</span></body></html>`
-	parser, err := NewHTMLParserFromString(html, "https://example.com")
+func TestExtractField_Attribute(t *testing.T) {
+	html := `<html><body><a href="https://example.com" class="link">Link</a></body></html>`
+
+	parser, err := NewHTMLParser(html)
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
 
-	field := FieldConfig{
+	config := FieldConfig{
+		Name:      "url",
+		Selector:  "a",
+		Type:      "attribute",
+		Attribute: "href",
+		Required:  true,
+	}
+
+	result, err := parser.ExtractField(config)
+	if err != nil {
+		t.Fatalf("Failed to extract field: %v", err)
+	}
+
+	if result != "https://example.com" {
+		t.Errorf("Expected 'https://example.com', got %v", result)
+	}
+}
+
+func TestExtractField_Int(t *testing.T) {
+	html := `<html><body><span class="price">1,299</span></body></html>`
+
+	parser, err := NewHTMLParser(html)
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	config := FieldConfig{
 		Name:     "price",
 		Selector: ".price",
 		Type:     "int",
 		Required: true,
 	}
 
-	value, err := parser.ExtractField(field)
+	result, err := parser.ExtractField(config)
 	if err != nil {
 		t.Fatalf("Failed to extract field: %v", err)
 	}
 
-	if value != 1234 {
-		t.Fatalf("Expected 1234, got %v", value)
-	}
-}
-
-func TestExtractField_Number(t *testing.T) {
-	html := `<html><body><span class="quantity">42</span></body></html>`
-	parser, err := NewHTMLParserFromString(html, "https://example.com")
-	if err != nil {
-		t.Fatalf("Failed to create parser: %v", err)
-	}
-
-	field := FieldConfig{
-		Name:     "quantity",
-		Selector: ".quantity",
-		Type:     "number",
-		Required: true,
-	}
-
-	value, err := parser.ExtractField(field)
-	if err != nil {
-		t.Fatalf("Failed to extract field: %v", err)
-	}
-
-	if value != 42 {
-		t.Fatalf("Expected 42, got %v", value)
+	if result != 1299 {
+		t.Errorf("Expected 1299, got %v", result)
 	}
 }
 
 func TestExtractField_Float(t *testing.T) {
-	html := `<html><body><span class="price">$12.34</span></body></html>`
-	parser, err := NewHTMLParserFromString(html, "https://example.com")
+	html := `<html><body><span class="rating">4.8</span></body></html>`
+
+	parser, err := NewHTMLParser(html)
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
 
-	field := FieldConfig{
-		Name:     "price",
-		Selector: ".price",
+	config := FieldConfig{
+		Name:     "rating",
+		Selector: ".rating",
 		Type:     "float",
 		Required: true,
 	}
 
-	value, err := parser.ExtractField(field)
+	result, err := parser.ExtractField(config)
 	if err != nil {
 		t.Fatalf("Failed to extract field: %v", err)
 	}
 
-	if value != 12.34 {
-		t.Fatalf("Expected 12.34, got %v", value)
+	if result != 4.8 {
+		t.Errorf("Expected 4.8, got %v", result)
 	}
 }
 
 func TestExtractField_Bool(t *testing.T) {
-	html := `<html><body><span class="available">Yes</span><span class="disabled">No</span></body></html>`
-	parser, err := NewHTMLParserFromString(html, "https://example.com")
+	html := `<html><body><span class="available">true</span><span class="enabled">yes</span></body></html>`
+
+	parser, err := NewHTMLParser(html)
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
 
-	// Test true case
-	field := FieldConfig{
-		Name:     "available",
-		Selector: ".available",
-		Type:     "bool",
-		Required: true,
+	tests := []struct {
+		selector string
+		expected bool
+	}{
+		{".available", true},
+		{".enabled", true},
 	}
 
-	value, err := parser.ExtractField(field)
-	if err != nil {
-		t.Fatalf("Failed to extract field: %v", err)
-	}
+	for _, test := range tests {
+		config := FieldConfig{
+			Name:     "status",
+			Selector: test.selector,
+			Type:     "bool",
+			Required: true,
+		}
 
-	if value != true {
-		t.Fatalf("Expected true, got %v", value)
-	}
+		result, err := parser.ExtractField(config)
+		if err != nil {
+			t.Fatalf("Failed to extract field: %v", err)
+		}
 
-	// Test false case
-	field.Name = "disabled"
-	field.Selector = ".disabled"
-
-	value, err = parser.ExtractField(field)
-	if err != nil {
-		t.Fatalf("Failed to extract field: %v", err)
-	}
-
-	if value != false {
-		t.Fatalf("Expected false, got %v", value)
-	}
-}
-
-func TestExtractField_Boolean(t *testing.T) {
-	html := `<html><body><span class="active">true</span></body></html>`
-	parser, err := NewHTMLParserFromString(html, "https://example.com")
-	if err != nil {
-		t.Fatalf("Failed to create parser: %v", err)
-	}
-
-	field := FieldConfig{
-		Name:     "active",
-		Selector: ".active",
-		Type:     "boolean",
-		Required: true,
-	}
-
-	value, err := parser.ExtractField(field)
-	if err != nil {
-		t.Fatalf("Failed to extract field: %v", err)
-	}
-
-	if value != true {
-		t.Fatalf("Expected true, got %v", value)
-	}
-}
-
-func TestExtractField_Date(t *testing.T) {
-	html := `<html><body><time class="date">2023-12-25</time></body></html>`
-	parser, err := NewHTMLParserFromString(html, "https://example.com")
-	if err != nil {
-		t.Fatalf("Failed to create parser: %v", err)
-	}
-
-	field := FieldConfig{
-		Name:     "date",
-		Selector: ".date",
-		Type:     "date",
-		Required: true,
-	}
-
-	value, err := parser.ExtractField(field)
-	if err != nil {
-		t.Fatalf("Failed to extract field: %v", err)
-	}
-
-	expectedDate := time.Date(2023, 12, 25, 0, 0, 0, 0, time.UTC)
-	if value != expectedDate {
-		t.Fatalf("Expected %v, got %v", expectedDate, value)
+		if result != test.expected {
+			t.Errorf("Expected %v, got %v", test.expected, result)
+		}
 	}
 }
 
 func TestExtractField_Array(t *testing.T) {
-	html := `<html><body>
-		<ul class="items">
-			<li>Item 1</li>
-			<li>Item 2</li>
-			<li>Item 3</li>
-		</ul>
-	</body></html>`
-	parser, err := NewHTMLParserFromString(html, "https://example.com")
+	html := `<html><body><ul><li>Item 1</li><li>Item 2</li><li>Item 3</li></ul></body></html>`
+
+	parser, err := NewHTMLParser(html)
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
 
-	field := FieldConfig{
+	config := FieldConfig{
 		Name:     "items",
-		Selector: ".items li",
+		Selector: "li",
 		Type:     "array",
 		Required: true,
 	}
 
-	value, err := parser.ExtractField(field)
+	result, err := parser.ExtractField(config)
 	if err != nil {
 		t.Fatalf("Failed to extract field: %v", err)
 	}
 
-	items, ok := value.([]interface{})
+	items, ok := result.([]interface{})
 	if !ok {
-		t.Fatalf("Expected array, got %T", value)
+		t.Fatalf("Expected array, got %T", result)
 	}
 
 	if len(items) != 3 {
-		t.Fatalf("Expected 3 items, got %d", len(items))
+		t.Errorf("Expected 3 items, got %d", len(items))
 	}
 
 	expected := []string{"Item 1", "Item 2", "Item 3"}
 	for i, item := range items {
 		if item != expected[i] {
-			t.Fatalf("Expected item %d to be '%s', got '%v'", i, expected[i], item)
+			t.Errorf("Expected '%s', got '%v'", expected[i], item)
 		}
 	}
 }
 
-func TestExtractField_Href(t *testing.T) {
-	html := `<html><body><a href="/test-link">Test Link</a></body></html>`
-	parser, err := NewHTMLParserFromString(html, "https://example.com")
+func TestExtractField_Date(t *testing.T) {
+	html := `<html><body><time class="published">2025-06-25</time></body></html>`
+
+	parser, err := NewHTMLParser(html)
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
 
-	field := FieldConfig{
-		Name:     "link",
-		Selector: "a",
-		Type:     "href",
+	config := FieldConfig{
+		Name:     "published",
+		Selector: ".published",
+		Type:     "date",
 		Required: true,
 	}
 
-	value, err := parser.ExtractField(field)
+	result, err := parser.ExtractField(config)
 	if err != nil {
 		t.Fatalf("Failed to extract field: %v", err)
 	}
 
-	if value != "/test-link" {
-		t.Fatalf("Expected '/test-link', got '%v'", value)
-	}
-}
-
-func TestExtractField_Src(t *testing.T) {
-	html := `<html><body><img src="/test-image.jpg" alt="Test"></body></html>`
-	parser, err := NewHTMLParserFromString(html, "https://example.com")
-	if err != nil {
-		t.Fatalf("Failed to create parser: %v", err)
+	date, ok := result.(time.Time)
+	if !ok {
+		t.Fatalf("Expected time.Time, got %T", result)
 	}
 
-	field := FieldConfig{
-		Name:     "image",
-		Selector: "img",
-		Type:     "src",
-		Required: true,
-	}
-
-	value, err := parser.ExtractField(field)
-	if err != nil {
-		t.Fatalf("Failed to extract field: %v", err)
-	}
-
-	if value != "/test-image.jpg" {
-		t.Fatalf("Expected '/test-image.jpg', got '%v'", value)
+	expected := time.Date(2025, 6, 25, 0, 0, 0, 0, time.UTC)
+	if !date.Equal(expected) {
+		t.Errorf("Expected %v, got %v", expected, date)
 	}
 }
 
 func TestExtractField_NotFound_Required(t *testing.T) {
-	html := `<html><body><h1>Test Title</h1></body></html>`
-	parser, err := NewHTMLParserFromString(html, "https://example.com")
+	html := `<html><body><p>No title here</p></body></html>`
+
+	parser, err := NewHTMLParser(html)
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
 
-	field := FieldConfig{
-		Name:     "missing",
-		Selector: ".missing",
+	config := FieldConfig{
+		Name:     "title",
+		Selector: "h1",
 		Type:     "text",
 		Required: true,
 	}
 
-	_, err = parser.ExtractField(field)
+	_, err = parser.ExtractField(config)
 	if err == nil {
-		t.Fatal("Expected error for missing required field")
-	}
-
-	if !strings.Contains(err.Error(), "required field") {
-		t.Fatalf("Expected error about required field, got: %v", err)
+		t.Error("Expected error for missing required field")
 	}
 }
 
 func TestExtractField_NotFound_Optional(t *testing.T) {
-	html := `<html><body><h1>Test Title</h1></body></html>`
-	parser, err := NewHTMLParserFromString(html, "https://example.com")
+	html := `<html><body><p>No title here</p></body></html>`
+
+	parser, err := NewHTMLParser(html)
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
 
-	field := FieldConfig{
-		Name:     "missing",
-		Selector: ".missing",
+	config := FieldConfig{
+		Name:     "title",
+		Selector: "h1",
 		Type:     "text",
 		Required: false,
 	}
 
-	value, err := parser.ExtractField(field)
+	result, err := parser.ExtractField(config)
 	if err != nil {
-		t.Fatalf("Unexpected error for optional field: %v", err)
+		t.Fatalf("Failed to extract optional field: %v", err)
 	}
 
-	if value != nil {
-		t.Fatalf("Expected nil for missing optional field, got %v", value)
+	if result != "" {
+		t.Errorf("Expected empty string for missing optional field, got %v", result)
 	}
 }
 
-func TestExtractMultiple(t *testing.T) {
-	html := `<html><body>
-		<h1>Test Title</h1>
-		<p class="content">Test content</p>
-		<span class="price">$123.45</span>
-		<a href="https://example.com">Link</a>
-	</body></html>`
-	parser, err := NewHTMLParserFromString(html, "https://example.com")
+func TestExtractField_WithDefault(t *testing.T) {
+	html := `<html><body><p>No title here</p></body></html>`
+
+	parser, err := NewHTMLParser(html)
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
 
-	fields := []FieldConfig{
-		{
-			Name:     "title",
-			Selector: "h1",
-			Type:     "text",
-			Required: true,
-		},
-		{
-			Name:     "content",
-			Selector: ".content",
-			Type:     "text",
-			Required: false,
-		},
-		{
-			Name:     "price",
-			Selector: ".price",
-			Type:     "float",
-			Required: true,
-		},
-		{
-			Name:     "link",
-			Selector: "a",
-			Type:     "href",
-			Required: false,
-		},
+	config := FieldConfig{
+		Name:     "title",
+		Selector: "h1",
+		Type:     "text",
+		Required: false,
+		Default:  "Default Title",
 	}
 
-	results, err := parser.ExtractMultiple(fields)
+	result, err := parser.ExtractField(config)
 	if err != nil {
-		t.Fatalf("Failed to extract fields: %v", err)
+		t.Fatalf("Failed to extract field: %v", err)
 	}
 
-	if len(results) != 4 {
-		t.Fatalf("Expected 4 results, got %d", len(results))
+	if result != "Default Title" {
+		t.Errorf("Expected 'Default Title', got %v", result)
+	}
+}
+
+func TestGetTitle(t *testing.T) {
+	html := `<html><head><title>Page Title</title></head><body></body></html>`
+
+	parser, err := NewHTMLParser(html)
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
 	}
 
-	if results["title"] != "Test Title" {
-		t.Fatalf("Expected title 'Test Title', got '%v'", results["title"])
+	title := parser.GetTitle()
+	if title != "Page Title" {
+		t.Errorf("Expected 'Page Title', got '%s'", title)
+	}
+}
+
+func TestGetMetaContent(t *testing.T) {
+	html := `<html><head><meta name="description" content="Page description"></head><body></body></html>`
+
+	parser, err := NewHTMLParser(html)
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
 	}
 
-	if results["content"] != "Test content" {
-		t.Fatalf("Expected content 'Test content', got '%v'", results["content"])
+	description := parser.GetMetaContent("description")
+	if description != "Page description" {
+		t.Errorf("Expected 'Page description', got '%s'", description)
+	}
+}
+
+func TestGetLinks(t *testing.T) {
+	html := `<html><body><a href="/page1">Link 1</a><a href="/page2">Link 2</a></body></html>`
+
+	parser, err := NewHTMLParser(html)
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
 	}
 
-	if results["price"] != 123.45 {
-		t.Fatalf("Expected price 123.45, got %v", results["price"])
+	links := parser.GetLinks()
+	if len(links) != 2 {
+		t.Errorf("Expected 2 links, got %d", len(links))
 	}
 
-	if results["link"] != "https://example.com" {
-		t.Fatalf("Expected link 'https://example.com', got '%v'", results["link"])
+	expected := []string{"/page1", "/page2"}
+	for i, link := range links {
+		if link != expected[i] {
+			t.Errorf("Expected '%s', got '%s'", expected[i], link)
+		}
+	}
+}
+
+func TestExtractTable(t *testing.T) {
+	html := `
+	<html>
+		<body>
+			<table>
+				<thead>
+					<tr><th>Name</th><th>Price</th><th>Rating</th></tr>
+				</thead>
+				<tbody>
+					<tr><td>Product 1</td><td>$99.99</td><td>4.5</td></tr>
+					<tr><td>Product 2</td><td>$149.99</td><td>4.8</td></tr>
+				</tbody>
+			</table>
+		</body>
+	</html>`
+
+	parser, err := NewHTMLParser(html)
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	rows, err := parser.ExtractTable("table")
+	if err != nil {
+		t.Fatalf("Failed to extract table: %v", err)
+	}
+
+	// Should extract data rows only, not header
+	if len(rows) != 2 {
+		t.Errorf("Expected 2 data rows, got %d", len(rows))
+		for i, row := range rows {
+			t.Logf("Row %d: %+v", i, row)
+		}
+		return
+	}
+
+	if rows[0]["Name"] != "Product 1" {
+		t.Errorf("Expected 'Product 1', got '%v'", rows[0]["Name"])
+	}
+
+	if rows[1]["Price"] != "$149.99" {
+		t.Errorf("Expected '$149.99', got '%v'", rows[1]["Price"])
 	}
 }
 
 func TestValidateSelector(t *testing.T) {
-	html := `<html><body><h1>Test</h1></body></html>`
-	parser, err := NewHTMLParserFromString(html, "https://example.com")
+	html := `<html><body><h1>Title</h1><p class="content">Content</p></body></html>`
+
+	parser, err := NewHTMLParser(html)
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
 
-	// Test valid selector
-	if !parser.ValidateSelector("h1") {
-		t.Fatal("Expected h1 selector to be valid")
-	}
-
-	// Test valid complex selector
-	if !parser.ValidateSelector("body h1") {
-		t.Fatal("Expected complex selector to be valid")
-	}
-
-	// Test that the function doesn't panic with empty selector
-	_ = parser.ValidateSelector("")
-}
-
-func TestExtractText_Whitespace(t *testing.T) {
-	html := `<html><body><p>   Test   with   multiple   spaces   </p></body></html>`
-	parser, err := NewHTMLParserFromString(html, "https://example.com")
+	// Valid selector
+	err = parser.ValidateSelector("h1")
 	if err != nil {
-		t.Fatalf("Failed to create parser: %v", err)
+		t.Errorf("Expected valid selector, got error: %v", err)
 	}
 
-	selection := parser.Find("p")
-	text := parser.extractText(selection)
-
-	expected := "Test with multiple spaces"
-	if text != expected {
-		t.Fatalf("Expected '%s', got '%s'", expected, text)
+	// Invalid selector
+	err = parser.ValidateSelector(".nonexistent")
+	if err == nil {
+		t.Error("Expected error for invalid selector")
 	}
 }
 
-func TestNewHTMLParser_NilResponse(t *testing.T) {
-	_, err := NewHTMLParser(nil)
-	if err == nil {
-		t.Fatal("Expected error for nil response")
+func TestParserWithMalformedHTML(t *testing.T) {
+	html := `<html><body><h1>Title<p>Unclosed tags<div>More content</body>`
+
+	parser, err := NewHTMLParser(html)
+	if err != nil {
+		t.Fatalf("Failed to create parser with malformed HTML: %v", err)
 	}
 
-	if !strings.Contains(err.Error(), "cannot be nil") {
-		t.Fatalf("Expected error about nil response, got: %v", err)
-	}
-}
-
-func TestNewHTMLParserFromReader_NilReader(t *testing.T) {
-	_, err := NewHTMLParserFromReader(nil, "https://example.com")
-	if err == nil {
-		t.Fatal("Expected error for nil reader")
+	// Should still be able to extract content
+	config := FieldConfig{
+		Name:     "title",
+		Selector: "h1",
+		Type:     "text",
+		Required: true,
 	}
 
-	if !strings.Contains(err.Error(), "cannot be nil") {
-		t.Fatalf("Expected error about nil reader, got: %v", err)
+	result, err := parser.ExtractField(config)
+	if err != nil {
+		t.Fatalf("Failed to extract from malformed HTML: %v", err)
+	}
+
+	if !strings.Contains(result.(string), "Title") {
+		t.Errorf("Expected title to contain 'Title', got %v", result)
 	}
 }

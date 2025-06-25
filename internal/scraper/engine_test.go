@@ -241,7 +241,7 @@ func TestScrapingEngine_Scrape_Timeout(t *testing.T) {
 	config := &EngineConfig{
 		UserAgents:     []string{"TestAgent/1.0"},
 		RequestTimeout: 500 * time.Millisecond,
-		RetryAttempts:  1,
+		RetryAttempts:  0, // No retries to ensure quick timeout
 		Fields: []FieldConfig{
 			{
 				Name:     "title",
@@ -272,7 +272,7 @@ func TestScrapingEngine_Scrape_Timeout(t *testing.T) {
 	}
 
 	if duration > 1*time.Second {
-		t.Errorf("Request took too long: %v", duration)
+		t.Errorf("Request took too long: %v (expected ~500ms)", duration)
 	}
 }
 

@@ -362,7 +362,7 @@ func TestErrorHandlingAndRecovery(t *testing.T) {
 func TestTimeoutImplementationFix(t *testing.T) {
 	// Create a slow server that delays response
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(3 * time.Second) // Delay longer than client timeout
+		time.Sleep(5 * time.Second) // Delay longer than client timeout
 		fmt.Fprint(w, "<html><body><h1>Slow Response</h1></body></html>")
 	}))
 	defer server.Close()
@@ -370,7 +370,7 @@ func TestTimeoutImplementationFix(t *testing.T) {
 	// Create engine config with short timeout
 	config := &scraper.EngineConfig{
 		RequestTimeout: 1 * time.Second, // Short timeout to trigger timeout error
-		RetryAttempts:  1,                // Single attempt to avoid retry delays
+		RetryAttempts:  0,                // No retries to avoid retry delays
 		UserAgents:     []string{"TestAgent/1.0"},
 		Fields: []scraper.FieldConfig{
 			{
@@ -409,7 +409,7 @@ func TestTimeoutImplementationFix(t *testing.T) {
 		return
 	}
 
-	// Verify that the timeout was actually enforced (should be around 1 second, not 3)
+	// Verify that the timeout was actually enforced (should be around 1 second, not 5)
 	if duration > 2*time.Second {
 		t.Errorf("Timeout not properly enforced. Expected ~1s, took %v", duration)
 		return
