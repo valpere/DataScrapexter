@@ -3,8 +3,6 @@ package scraper
 
 import (
 	"fmt"
-	"io"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -12,203 +10,147 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-// HTMLParser provides robust HTML parsing capabilities using GoQuery for CSS selector-based extraction
+// HTMLParser handles HTML parsing with GoQuery
 type HTMLParser struct {
 	document *goquery.Document
-	baseURL  string
 }
 
-// NewHTMLParser creates a new HTML parser instance from an HTTP response
-func NewHTMLParser(response *http.Response) (*HTMLParser, error) {
-	if response == nil {
-		return nil, fmt.Errorf("HTTP response cannot be nil")
-	}
-
-	defer response.Body.Close()
-
-	document, err := goquery.NewDocumentFromReader(response.Body)
+// NewHTMLParser creates a new HTML parser from HTML content
+func NewHTMLParser(html string) (*HTMLParser, error) {
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse HTML document: %w", err)
+		return nil, fmt.Errorf("failed to parse HTML: %w", err)
 	}
 
 	return &HTMLParser{
-		document: document,
-		baseURL:  response.Request.URL.String(),
+		document: doc,
 	}, nil
 }
 
-// NewHTMLParserFromReader creates a parser from an io.Reader containing HTML content
-func NewHTMLParserFromReader(reader io.Reader, baseURL string) (*HTMLParser, error) {
-	if reader == nil {
-		return nil, fmt.Errorf("reader cannot be nil")
-	}
-
-	document, err := goquery.NewDocumentFromReader(reader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse HTML document: %w", err)
-	}
-
+// NewHTMLParserFromDocument creates a parser from existing goquery document
+func NewHTMLParserFromDocument(doc *goquery.Document) *HTMLParser {
 	return &HTMLParser{
-		document: document,
-		baseURL:  baseURL,
-	}, nil
-}
-
-// NewHTMLParserFromString creates a parser from HTML string content
-func NewHTMLParserFromString(html, baseURL string) (*HTMLParser, error) {
-	return NewHTMLParserFromReader(strings.NewReader(html), baseURL)
-}
-
-// ExtractField extracts data from the document using a field configuration
-func (p *HTMLParser) ExtractField(field FieldConfig) (interface{}, error) {
-	if p.document == nil {
-		return nil, fmt.Errorf("HTML document not initialized")
+		document: doc,
 	}
+}
 
-	selection := p.document.Find(field.Selector)
+// ExtractField extracts a field value using CSS selector
+func (p *HTMLParser) ExtractField(config FieldConfig) (interface{}, error) {
+	selection := p.document.Find(config.Selector)
+	
 	if selection.Length() == 0 {
-		if field.Required {
-			return nil, fmt.Errorf("required field '%s' not found with selector '%s'", field.Name, field.Selector)
+		if config.Required {
+			return nil, fmt.Errorf("required field '%s' not found with selector '%s'", config.Name, config.Selector)
 		}
-		return nil, nil
+		return p.getDefaultValue(config), nil
 	}
 
-	return p.extractValue(selection, field)
-}
-
-// extractValue extracts the appropriate value based on field type
-func (p *HTMLParser) extractValue(selection *goquery.Selection, field FieldConfig) (interface{}, error) {
-	switch field.Type {
+	switch config.Type {
 	case "text":
-		return p.extractText(selection), nil
+		return p.extractText(selection)
 	case "html":
-		return p.extractHTML(selection), nil
+		return p.extractHTML(selection)
 	case "attribute":
-		// For attribute extraction, we'll use a simple approach since the field doesn't have an Attribute field
-		// This will extract the first common attribute if none specified
-		return p.extractFirstAttribute(selection), nil
+		return p.extractAttribute(selection, config.Attribute)
 	case "href":
-		return p.extractHref(selection), nil
+		return p.extractAttribute(selection, "href")
 	case "src":
-		return p.extractSrc(selection), nil
+		return p.extractAttribute(selection, "src")
 	case "int", "number":
-		text := p.extractText(selection)
-		return p.parseInt(text)
+		return p.extractInt(selection)
 	case "float":
-		text := p.extractText(selection)
-		return p.parseFloat(text)
+		return p.extractFloat(selection)
 	case "bool", "boolean":
-		text := p.extractText(selection)
-		return p.parseBool(text), nil
-	case "date":
-		text := p.extractText(selection)
-		return p.parseDate(text, "2006-01-02") // Use default format
+		return p.extractBool(selection)
 	case "array":
-		return p.extractArray(selection), nil
+		return p.extractArray(selection)
+	case "date":
+		return p.extractDate(selection)
 	default:
-		return p.extractText(selection), nil
+		return nil, fmt.Errorf("unsupported field type: %s", config.Type)
 	}
 }
 
-// extractText extracts and cleans text content
-func (p *HTMLParser) extractText(selection *goquery.Selection) string {
-	text := selection.Text()
-	// Clean up whitespace
-	text = strings.TrimSpace(text)
-	// Normalize multiple whitespace to single space
-	text = strings.Join(strings.Fields(text), " ")
-	return text
+// extractText extracts text content from selection
+func (p *HTMLParser) extractText(selection *goquery.Selection) (string, error) {
+	text := strings.TrimSpace(selection.First().Text())
+	return text, nil
 }
 
-// extractHTML extracts HTML content
-func (p *HTMLParser) extractHTML(selection *goquery.Selection) string {
-	html, _ := selection.Html()
-	return strings.TrimSpace(html)
+// extractHTML extracts HTML content from selection
+func (p *HTMLParser) extractHTML(selection *goquery.Selection) (string, error) {
+	html, err := selection.First().Html()
+	if err != nil {
+		return "", fmt.Errorf("failed to extract HTML: %w", err)
+	}
+	return strings.TrimSpace(html), nil
 }
 
-// extractFirstAttribute extracts the first available common attribute
-func (p *HTMLParser) extractFirstAttribute(selection *goquery.Selection) string {
-	// Common attributes to check in order
-	commonAttrs := []string{"href", "src", "alt", "title", "class", "id", "data-value", "value"}
+// extractAttribute extracts attribute value from selection
+func (p *HTMLParser) extractAttribute(selection *goquery.Selection, attribute string) (string, error) {
+	if attribute == "" {
+		return "", fmt.Errorf("attribute name is required")
+	}
 	
-	for _, attr := range commonAttrs {
-		if value, exists := selection.Attr(attr); exists && value != "" {
-			return strings.TrimSpace(value)
-		}
+	value, exists := selection.First().Attr(attribute)
+	if !exists {
+		return "", fmt.Errorf("attribute '%s' not found", attribute)
 	}
-	return ""
+	return strings.TrimSpace(value), nil
 }
 
-// extractHref extracts href attribute (convenience method)
-func (p *HTMLParser) extractHref(selection *goquery.Selection) string {
-	attr, _ := selection.Attr("href")
-	return strings.TrimSpace(attr)
-}
-
-// extractSrc extracts src attribute (convenience method)
-func (p *HTMLParser) extractSrc(selection *goquery.Selection) string {
-	attr, _ := selection.Attr("src")
-	return strings.TrimSpace(attr)
-}
-
-// parseInt parses text to integer
-func (p *HTMLParser) parseInt(text string) (int, error) {
+// extractInt extracts integer value from selection
+func (p *HTMLParser) extractInt(selection *goquery.Selection) (int, error) {
+	text := strings.TrimSpace(selection.First().Text())
 	if text == "" {
-		return 0, fmt.Errorf("empty text cannot be parsed as integer")
+		return 0, fmt.Errorf("empty text for integer extraction")
 	}
 	
-	// Clean text for parsing (remove commas, currency symbols, etc.)
+	// Clean the text (remove common non-numeric characters)
 	cleaned := strings.ReplaceAll(text, ",", "")
-	cleaned = strings.ReplaceAll(cleaned, "$", "")
-	cleaned = strings.ReplaceAll(cleaned, "€", "")
-	cleaned = strings.ReplaceAll(cleaned, "£", "")
-	cleaned = strings.TrimSpace(cleaned)
+	cleaned = strings.ReplaceAll(cleaned, " ", "")
 	
-	return strconv.Atoi(cleaned)
+	value, err := strconv.Atoi(cleaned)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse integer from '%s': %w", text, err)
+	}
+	return value, nil
 }
 
-// parseFloat parses text to float64
-func (p *HTMLParser) parseFloat(text string) (float64, error) {
+// extractFloat extracts float value from selection
+func (p *HTMLParser) extractFloat(selection *goquery.Selection) (float64, error) {
+	text := strings.TrimSpace(selection.First().Text())
 	if text == "" {
-		return 0.0, fmt.Errorf("empty text cannot be parsed as float")
+		return 0.0, fmt.Errorf("empty text for float extraction")
 	}
 	
-	// Clean text for parsing
+	// Clean the text (remove common non-numeric characters except decimal point)
 	cleaned := strings.ReplaceAll(text, ",", "")
-	cleaned = strings.ReplaceAll(cleaned, "$", "")
-	cleaned = strings.ReplaceAll(cleaned, "€", "")
-	cleaned = strings.ReplaceAll(cleaned, "£", "")
-	cleaned = strings.TrimSpace(cleaned)
+	cleaned = strings.ReplaceAll(cleaned, " ", "")
 	
-	return strconv.ParseFloat(cleaned, 64)
+	value, err := strconv.ParseFloat(cleaned, 64)
+	if err != nil {
+		return 0.0, fmt.Errorf("failed to parse float from '%s': %w", text, err)
+	}
+	return value, nil
 }
 
-// parseBool parses text to boolean
-func (p *HTMLParser) parseBool(text string) bool {
-	text = strings.ToLower(strings.TrimSpace(text))
+// extractBool extracts boolean value from selection
+func (p *HTMLParser) extractBool(selection *goquery.Selection) (bool, error) {
+	text := strings.ToLower(strings.TrimSpace(selection.First().Text()))
+	
 	switch text {
-	case "true", "yes", "1", "on", "enabled", "active", "available", "in stock":
-		return true
+	case "true", "yes", "1", "on", "enabled", "active":
+		return true, nil
+	case "false", "no", "0", "off", "disabled", "inactive":
+		return false, nil
 	default:
-		return false
+		return false, fmt.Errorf("cannot parse boolean from: %s", text)
 	}
 }
 
-// parseDate parses text to time.Time using default format
-func (p *HTMLParser) parseDate(text, format string) (time.Time, error) {
-	if text == "" {
-		return time.Time{}, fmt.Errorf("empty text cannot be parsed as date")
-	}
-	
-	if format == "" {
-		format = "2006-01-02" // Default format
-	}
-	
-	return time.Parse(format, strings.TrimSpace(text))
-}
-
-// extractArray extracts multiple values as an array of strings
-func (p *HTMLParser) extractArray(selection *goquery.Selection) []interface{} {
+// extractArray extracts array of values from selection
+func (p *HTMLParser) extractArray(selection *goquery.Selection) ([]interface{}, error) {
 	var results []interface{}
 	
 	selection.Each(func(i int, s *goquery.Selection) {
@@ -218,7 +160,66 @@ func (p *HTMLParser) extractArray(selection *goquery.Selection) []interface{} {
 		}
 	})
 	
-	return results
+	return results, nil
+}
+
+// extractDate extracts date value from selection
+func (p *HTMLParser) extractDate(selection *goquery.Selection) (time.Time, error) {
+	text := strings.TrimSpace(selection.First().Text())
+	if text == "" {
+		return time.Time{}, fmt.Errorf("empty text for date extraction")
+	}
+	
+	// Try common date formats
+	formats := []string{
+		"2006-01-02",
+		"2006-01-02T15:04:05Z",
+		"2006-01-02 15:04:05",
+		"January 2, 2006",
+		"Jan 2, 2006",
+		"02/01/2006",
+		"01/02/2006",
+		"2/1/2006",
+		"1/2/2006",
+		"2006/01/02",
+		"02-01-2006",
+		"01-02-2006",
+	}
+	
+	for _, format := range formats {
+		if date, err := time.Parse(format, text); err == nil {
+			return date, nil
+		}
+	}
+	
+	return time.Time{}, fmt.Errorf("failed to parse date from '%s'", text)
+}
+
+// getDefaultValue returns default value for field type
+func (p *HTMLParser) getDefaultValue(config FieldConfig) interface{} {
+	if config.Default != nil {
+		return config.Default
+	}
+	
+	switch config.Type {
+	case "int", "number":
+		return 0
+	case "float":
+		return 0.0
+	case "bool", "boolean":
+		return false
+	case "array":
+		return []interface{}{}
+	case "date":
+		return time.Time{}
+	default:
+		return ""
+	}
+}
+
+// FindElements finds elements matching CSS selector
+func (p *HTMLParser) FindElements(selector string) *goquery.Selection {
+	return p.document.Find(selector)
 }
 
 // GetDocument returns the underlying goquery document
@@ -226,61 +227,105 @@ func (p *HTMLParser) GetDocument() *goquery.Document {
 	return p.document
 }
 
-// GetBaseURL returns the base URL for resolving relative URLs
-func (p *HTMLParser) GetBaseURL() string {
-	return p.baseURL
+// GetTitle extracts page title
+func (p *HTMLParser) GetTitle() string {
+	return strings.TrimSpace(p.document.Find("title").First().Text())
 }
 
-// Find returns a selection matching the CSS selector
-func (p *HTMLParser) Find(selector string) *goquery.Selection {
-	if p.document == nil {
-		return &goquery.Selection{}
-	}
-	return p.document.Find(selector)
+// GetMetaContent extracts meta tag content
+func (p *HTMLParser) GetMetaContent(name string) string {
+	selector := fmt.Sprintf(`meta[name="%s"]`, name)
+	content, _ := p.document.Find(selector).Attr("content")
+	return strings.TrimSpace(content)
 }
 
-// ValidateSelector checks if a CSS selector is valid by attempting to use it
-func (p *HTMLParser) ValidateSelector(selector string) bool {
-	if p.document == nil {
-		return false
-	}
-	
-	// Try to use the selector - if it doesn't panic, it's valid
-	defer func() {
-		if recover() != nil {
-			// Selector caused a panic, so it's invalid
+// GetLinks extracts all links from the page
+func (p *HTMLParser) GetLinks() []string {
+	var links []string
+	p.document.Find("a[href]").Each(func(i int, s *goquery.Selection) {
+		if href, exists := s.Attr("href"); exists && href != "" {
+			links = append(links, strings.TrimSpace(href))
 		}
-	}()
-	
-	_ = p.document.Find(selector)
-	return true
+	})
+	return links
 }
 
-// ExtractMultiple extracts data for multiple field configurations
-func (p *HTMLParser) ExtractMultiple(fields []FieldConfig) (map[string]interface{}, error) {
-	results := make(map[string]interface{})
-	var errors []string
+// GetImages extracts all image sources
+func (p *HTMLParser) GetImages() []string {
+	var images []string
+	p.document.Find("img[src]").Each(func(i int, s *goquery.Selection) {
+		if src, exists := s.Attr("src"); exists && src != "" {
+			images = append(images, strings.TrimSpace(src))
+		}
+	})
+	return images
+}
+
+// ValidateSelector checks if a CSS selector is valid by testing it
+func (p *HTMLParser) ValidateSelector(selector string) error {
+	selection := p.document.Find(selector)
+	if selection.Length() == 0 {
+		return fmt.Errorf("selector '%s' matches no elements", selector)
+	}
+	return nil
+}
+
+// GetElementCount returns the number of elements matching selector
+func (p *HTMLParser) GetElementCount(selector string) int {
+	return p.document.Find(selector).Length()
+}
+
+// ExtractTable extracts table data as structured map
+func (p *HTMLParser) ExtractTable(tableSelector string) ([]map[string]interface{}, error) {
+	table := p.document.Find(tableSelector).First()
+	if table.Length() == 0 {
+		return nil, fmt.Errorf("table not found with selector: %s", tableSelector)
+	}
+
+	var headers []string
+	var rows []map[string]interface{}
+
+	// Extract headers from thead or first row
+	headerRow := table.Find("thead tr").First()
+	if headerRow.Length() == 0 {
+		headerRow = table.Find("tr").First()
+	}
 	
-	for _, field := range fields {
-		value, err := p.ExtractField(field)
-		if err != nil {
-			if field.Required {
-				return nil, fmt.Errorf("required field '%s' extraction failed: %w", field.Name, err)
+	headerRow.Find("th, td").Each(func(i int, s *goquery.Selection) {
+		header := strings.TrimSpace(s.Text())
+		if header != "" {
+			headers = append(headers, header)
+		}
+	})
+
+	// If no headers found, use generic column names
+	if len(headers) == 0 {
+		firstRow := table.Find("tr").First()
+		firstRow.Find("td").Each(func(i int, s *goquery.Selection) {
+			headers = append(headers, fmt.Sprintf("column_%d", i+1))
+		})
+	}
+
+	// Extract data rows (skip header row)
+	dataRows := table.Find("tbody tr")
+	if dataRows.Length() == 0 {
+		// No tbody, use all rows except first (header)
+		dataRows = table.Find("tr").Slice(1, goquery.ToEnd)
+	}
+
+	dataRows.Each(func(i int, row *goquery.Selection) {
+		rowData := make(map[string]interface{})
+		row.Find("td, th").Each(func(j int, cell *goquery.Selection) {
+			if j < len(headers) {
+				cellText := strings.TrimSpace(cell.Text())
+				rowData[headers[j]] = cellText
 			}
-			errors = append(errors, fmt.Sprintf("field '%s': %v", field.Name, err))
-			continue
+		})
+
+		if len(rowData) > 0 {
+			rows = append(rows, rowData)
 		}
-		
-		if value != nil {
-			results[field.Name] = value
-		}
-	}
-	
-	// Log non-fatal errors but don't fail the extraction
-	if len(errors) > 0 {
-		// In a real implementation, you would use a proper logger here
-		// For now, we'll just continue without the failed fields
-	}
-	
-	return results, nil
+	})
+
+	return rows, nil
 }
