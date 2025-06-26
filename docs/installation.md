@@ -4,7 +4,7 @@
 
 DataScrapexter requires a modern operating system with Go runtime support. The application has been tested on Linux (Ubuntu 20.04+, CentOS 8+, Debian 10+), macOS (10.15 Catalina and later), and Windows (Windows 10 version 1909 and later). Your system should have at least 2 GB of RAM for basic operations, though 4 GB or more is recommended for large-scale scraping operations. Storage requirements are minimal for the application itself, requiring only 50 MB, but you should allocate sufficient space for scraped data storage based on your expected usage.
 
-The primary prerequisite is Go version 1.21 or later. DataScrapexter leverages modern Go features for performance and reliability, making this version requirement essential. Additionally, Git is required for source installation, and Make is recommended for simplified building and installation processes.
+The primary prerequisite is Go version 1.24 or later. DataScrapexter leverages modern Go features for performance and reliability, making this version requirement essential. Additionally, Git is required for source installation, and Make is recommended for simplified building and installation processes.
 
 ## Installation Methods
 
@@ -245,7 +245,7 @@ Compilation errors often result from incompatible Go versions. Verify your Go in
 go version
 ```
 
-If the version is below 1.21, update Go following the official installation guide at https://golang.org/doc/install.
+If the version is below 1.24, update Go following the official installation guide at https://golang.org/doc/install.
 
 Missing dependencies manifest as import errors during compilation. Ensure you run `go mod download` before building, and that your internet connection allows access to Go module repositories.
 

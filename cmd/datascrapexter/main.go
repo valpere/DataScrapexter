@@ -1,9 +1,12 @@
-// cmd/datascrapexter/main.go
+// cmd/datascrapexter/main.go - Enhanced placeholder functions only
 package main
 
 import (
 	"fmt"
 	"os"
+
+	"github.com/valpere/DataScrapexter/internal/config"
+	"gopkg.in/yaml.v3"
 )
 
 // Build-time variables (set by ldflags)
@@ -73,6 +76,7 @@ func printUsage() {
 	fmt.Println("  datascrapexter template > new_config.yaml")
 }
 
+// Enhanced runScraper - now uses existing internal packages
 func runScraper(configFile string) {
 	fmt.Printf("Running scraper with config: %s\n", configFile)
 	
@@ -82,11 +86,23 @@ func runScraper(configFile string) {
 		os.Exit(1)
 	}
 	
-	// TODO: Implement actual scraping logic
+	// Load configuration using existing config package
+	cfg, err := config.LoadFromFile(configFile)
+	if err != nil {
+		fmt.Printf("Error loading configuration: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Loaded configuration: %s\n", cfg.Name)
+	
+	// For now, just simulate scraping until we verify the interfaces
 	fmt.Println("Starting scraper...")
+	fmt.Printf("Would scrape: %s\n", cfg.BaseURL)
+	fmt.Printf("With %d fields\n", len(cfg.Fields))
 	fmt.Println("Scraper completed successfully!")
 }
 
+// Enhanced validateConfig - now uses existing config package
 func validateConfig(configFile string) {
 	fmt.Printf("Validating config: %s\n", configFile)
 	
@@ -96,76 +112,42 @@ func validateConfig(configFile string) {
 		os.Exit(1)
 	}
 	
-	// TODO: Implement actual config validation
+	// Load and validate using existing config package
+	cfg, err := config.LoadFromFile(configFile)
+	if err != nil {
+		fmt.Printf("Configuration validation failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Additional validation using existing validation methods
+	if err := cfg.Validate(); err != nil {
+		fmt.Printf("Configuration is invalid: %v\n", err)
+		os.Exit(1)
+	}
+
 	fmt.Println("Configuration is valid!")
+	fmt.Printf("  Name: %s\n", cfg.Name)
+	fmt.Printf("  Base URL: %s\n", cfg.BaseURL)
+	fmt.Printf("  Fields: %d\n", len(cfg.Fields))
 }
 
+// Enhanced generateTemplate - now uses existing config package  
 func generateTemplate() {
-	template := `# DataScrapexter Configuration Template
-name: "example_scraper"
-base_url: "https://example.com"
+	// Check for template type argument
+	templateType := "basic"
+	if len(os.Args) > 2 {
+		templateType = os.Args[2]
+	}
 
-# Rate limiting
-rate_limit: "2s"
-max_pages: 10
+	// Generate template using existing config package - returns single value
+	template := config.GenerateTemplate(templateType)
 
-# User agents
-user_agents:
-  - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+	// Convert to YAML manually since ToYAML method doesn't exist
+	yamlData, err := yaml.Marshal(template)
+	if err != nil {
+		fmt.Printf("Error converting template to YAML: %v\n", err)
+		os.Exit(1)
+	}
 
-# Data extraction fields
-fields:
-  - name: "title"
-    selector: "h1"
-    type: "text"
-    required: true
-    transform:
-      - type: "trim"
-      - type: "normalize_spaces"
-
-  - name: "price"
-    selector: ".price"
-    type: "text"
-    transform:
-      - type: "regex"
-        pattern: "\\$([0-9,]+\\.?[0-9]*)"
-        replacement: "$1"
-      - type: "parse_float"
-
-  - name: "description"
-    selector: ".description"
-    type: "text"
-    transform:
-      - type: "trim"
-      - type: "remove_html"
-
-# Pagination (optional)
-pagination:
-  type: "next_button"
-  selector: ".pagination .next"
-  max_pages: 50
-
-# Output configuration
-output:
-  format: "json"
-  file: "output.json"
-
-# Browser settings (optional)
-browser:
-  enabled: false
-  headless: true
-  timeout: "30s"
-
-# Anti-detection (optional)
-anti_detection:
-  proxy:
-    enabled: false
-  captcha:
-    enabled: false
-  rate_limiting:
-    requests_per_second: 2
-    burst: 5
-`
-	
-	fmt.Print(template)
+	fmt.Print(string(yamlData))
 }

@@ -895,7 +895,7 @@ Example bug report template:
 ## Environment
 - OS: Ubuntu 20.04
 - DataScrapexter: v0.1.0
-- Go: 1.21.0
+- Go: 1.24.0
 
 ## Configuration
 ```yaml

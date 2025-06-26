@@ -35,7 +35,7 @@ run:
   allow-parallel-runners: true
   
   # Define Go version
-  go: "1.21"
+  go: "1.24"
 
 # Output configuration options
 output:
@@ -182,7 +182,7 @@ linters-settings:
 
   # Gofumpt checks
   gofumpt:
-    lang-version: "1.21"
+    lang-version: "1.24"
     extra-rules: true
 
   # Imports formatting
