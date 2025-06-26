@@ -1,6 +1,6 @@
 # DataScrapexter
 
-[![Go Version](https://img.shields.io/badge/Go-1.21%2B-00ADD8?style=flat&logo=go)](https://golang.org/)
+[![Go Version](https://img.shields.io/badge/Go-1.24%2B-00ADD8?style=flat&logo=go)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/valpere/DataScrapexter)](https://goreportcard.com/report/github.com/valpere/DataScrapexter)
 [![codecov](https://codecov.io/gh/valpere/DataScrapexter/branch/main/graph/badge.svg)](https://codecov.io/gh/valpere/DataScrapexter)

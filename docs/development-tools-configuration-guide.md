@@ -200,7 +200,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
         with:
-          go-version: '1.21'
+          go-version: '1.24'
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
@@ -596,7 +596,7 @@ Optimize Docker builds by excluding unnecessary files:
 #### `go.mod` and `go.sum`
 Go module configuration:
 - Module path: `github.com/valpere/DataScrapexter`
-- Go version requirement: 1.21
+- Go version requirement: 1.24
 - Direct and indirect dependencies
 - Cryptographic checksums for reproducible builds
 
@@ -662,7 +662,7 @@ The Makefile provides standardized commands for development tasks:
 #### Development Environment Setup:
 
 **Required Tools**:
-- Go 1.21+
+- Go 1.24+
 - Git
 - Make
 - Docker (optional)
@@ -709,7 +709,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
         with:
-          go-version: '1.21'
+          go-version: '1.24'
       - run: make deps
       - run: make lint
       - run: make test-coverage
@@ -914,7 +914,7 @@ Comprehensive linter configuration for Go code quality:
 
 #### Key Settings:
 - **Timeout**: 5 minutes for analysis
-- **Go version**: 1.21
+- **Go version**: 1.24
 - **Line length**: Maximum 120 characters
 - **Cyclomatic complexity**: Maximum 15
 - **Function length**: Maximum 100 lines

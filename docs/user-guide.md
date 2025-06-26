@@ -27,7 +27,7 @@ DataScrapexter excels in various scenarios including e-commerce price monitoring
 
 ### Prerequisites
 
-Before installing DataScrapexter, ensure you have Go 1.21 or later installed on your system. You can verify your Go installation by running `go version` in your terminal. Additionally, Git is required for cloning the repository and managing version control.
+Before installing DataScrapexter, ensure you have Go 1.24 or later installed on your system. You can verify your Go installation by running `go version` in your terminal. Additionally, Git is required for cloning the repository and managing version control.
 
 ### Installation Methods
 
