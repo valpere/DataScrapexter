@@ -1,4 +1,3 @@
-// go.mod - Preserve existing structure, only add essential deps for Task 3.1
 module github.com/valpere/DataScrapexter
 
 go 1.24

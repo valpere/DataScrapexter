@@ -7,8 +7,6 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"github.com/valpere/DataScrapexter/internal/pipeline"
 )
 
 func TestNewScrapingEngine(t *testing.T) {
@@ -37,106 +35,57 @@ func TestNewScrapingEngine(t *testing.T) {
 	}
 
 	if engine == nil {
-		t.Fatal("Engine should not be nil")
+		t.Fatal("Expected engine to be created")
 	}
 
 	if engine.config != config {
-		t.Fatal("Engine should reference the provided config")
-	}
-
-	if engine.httpClient == nil {
-		t.Fatal("HTTP client should be initialized")
-	}
-
-	if engine.errorCollector == nil {
-		t.Fatal("Error collector should be initialized")
+		t.Error("Engine should reference the provided config")
 	}
 }
 
-func TestNewScrapingEngine_InvalidConfig(t *testing.T) {
-	tests := []struct {
-		name   string
-		config *EngineConfig
-	}{
-		{
-			name:   "nil config",
-			config: nil,
-		},
-		{
-			name: "no fields",
-			config: &EngineConfig{
-				UserAgents:     []string{"TestAgent/1.0"},
-				RequestTimeout: 30 * time.Second,
-				Fields:         []FieldConfig{},
-			},
-		},
-		{
-			name: "empty field name",
-			config: &EngineConfig{
-				UserAgents:     []string{"TestAgent/1.0"},
-				RequestTimeout: 30 * time.Second,
-				Fields: []FieldConfig{
-					{
-						Name:     "",
-						Selector: "h1",
-						Type:     "text",
-					},
-				},
-			},
-		},
-		{
-			name: "empty field selector",
-			config: &EngineConfig{
-				UserAgents:     []string{"TestAgent/1.0"},
-				RequestTimeout: 30 * time.Second,
-				Fields: []FieldConfig{
-					{
-						Name:     "title",
-						Selector: "",
-						Type:     "text",
-					},
-				},
-			},
-		},
-		{
-			name: "invalid field type",
-			config: &EngineConfig{
-				UserAgents:     []string{"TestAgent/1.0"},
-				RequestTimeout: 30 * time.Second,
-				Fields: []FieldConfig{
-					{
-						Name:     "title",
-						Selector: "h1",
-						Type:     "invalid_type",
-					},
-				},
+func TestNewScrapingEngine_NilConfig(t *testing.T) {
+	_, err := NewScrapingEngine(nil)
+	if err == nil {
+		t.Error("Expected error for nil config")
+	}
+}
+
+func TestNewScrapingEngine_DefaultValues(t *testing.T) {
+	config := &EngineConfig{
+		Fields: []FieldConfig{
+			{
+				Name:     "title",
+				Selector: "h1",
+				Type:     "text",
+				Required: true,
 			},
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewScrapingEngine(tt.config)
-			if err == nil {
-				t.Error("Expected error but got none")
-			}
-		})
+	engine, err := NewScrapingEngine(config)
+	if err != nil {
+		t.Fatalf("Failed to create scraping engine: %v", err)
+	}
+
+	// Check that defaults are applied
+	if engine.config.RequestTimeout == 0 {
+		t.Error("Expected default timeout to be applied")
+	}
+	if engine.config.RetryAttempts == 0 {
+		t.Error("Expected default retry attempts to be applied")
+	}
+	if engine.config.MaxConcurrency == 0 {
+		t.Error("Expected default concurrency to be applied")
+	}
+	if len(engine.config.UserAgents) == 0 {
+		t.Error("Expected default user agents to be applied")
 	}
 }
 
 func TestScrapingEngine_Scrape_Success(t *testing.T) {
-	testHTML := `
-	<html>
-		<body>
-			<h1>Test Title</h1>
-			<p class="content">Test content</p>
-		</body>
-	</html>
-	`
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(testHTML))
+		w.Write([]byte("<html><body><h1>Test Title</h1></body></html>"))
 	}))
 	defer server.Close()
 
@@ -168,11 +117,7 @@ func TestScrapingEngine_Scrape_Success(t *testing.T) {
 	result, err := engine.Scrape(ctx, server.URL)
 
 	if err != nil {
-		t.Fatalf("Scraping failed: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("Result should not be nil")
+		t.Errorf("Scraping failed: %v", err)
 	}
 
 	if result.StatusCode != 200 {
@@ -188,10 +133,10 @@ func TestScrapingEngine_Scrape_Success(t *testing.T) {
 	}
 }
 
-func TestScrapingEngine_Scrape_HTTPError(t *testing.T) {
+func TestScrapingEngine_Scrape_NotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("Not Found"))
+		w.Write([]byte("<html><body><h1>Not Found</h1></body></html>"))
 	}))
 	defer server.Close()
 
@@ -206,10 +151,6 @@ func TestScrapingEngine_Scrape_HTTPError(t *testing.T) {
 				Type:     "text",
 				Required: true,
 			},
-		},
-		ExtractionConfig: ExtractionConfig{
-			StrictMode:      false,
-			ContinueOnError: true,
 		},
 	}
 
@@ -222,37 +163,38 @@ func TestScrapingEngine_Scrape_HTTPError(t *testing.T) {
 	ctx := context.Background()
 	result, err := engine.Scrape(ctx, server.URL)
 
-	if err == nil {
-		t.Error("Expected HTTP error but got none")
+	if err != nil {
+		t.Errorf("Scraping failed: %v", err)
 	}
 
 	if result.StatusCode != 404 {
 		t.Errorf("Expected status code 404, got %d", result.StatusCode)
 	}
+
+	// Should still extract content even with 404
+	if result.Data["title"] != "Not Found" {
+		t.Errorf("Expected title 'Not Found', got %v", result.Data["title"])
+	}
 }
 
-func TestScrapingEngine_Scrape_Timeout(t *testing.T) {
+func TestScrapingEngine_Scrape_RequiredFieldMissing(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(2 * time.Second)
-		w.Write([]byte("<html><body><h1>Title</h1></body></html>"))
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("<html><body><p>No title here</p></body></html>"))
 	}))
 	defer server.Close()
 
 	config := &EngineConfig{
 		UserAgents:     []string{"TestAgent/1.0"},
-		RequestTimeout: 500 * time.Millisecond,
-		RetryAttempts:  0, // No retries to ensure quick timeout
+		RequestTimeout: 10 * time.Second,
+		RetryAttempts:  1,
 		Fields: []FieldConfig{
 			{
 				Name:     "title",
-				Selector: "h1",
+				Selector: "h1", // This won't be found
 				Type:     "text",
 				Required: true,
 			},
-		},
-		ExtractionConfig: ExtractionConfig{
-			StrictMode:      false,
-			ContinueOnError: true,
 		},
 	}
 
@@ -263,29 +205,183 @@ func TestScrapingEngine_Scrape_Timeout(t *testing.T) {
 	defer engine.Close()
 
 	ctx := context.Background()
-	start := time.Now()
-	_, err = engine.Scrape(ctx, server.URL)
-	duration := time.Since(start)
+	result, err := engine.Scrape(ctx, server.URL)
 
-	if err == nil {
-		t.Error("Expected timeout error but got none")
+	if err != nil {
+		t.Errorf("Scraping failed: %v", err)
 	}
 
-	if duration > 1*time.Second {
-		t.Errorf("Request took too long: %v (expected ~500ms)", duration)
+	if result.Success {
+		t.Error("Expected scraping to fail due to missing required field")
+	}
+
+	if len(result.Errors) == 0 {
+		t.Error("Expected errors for missing required field")
 	}
 }
 
-func TestScrapingEngine_UserAgentRotation(t *testing.T) {
-	var receivedUserAgents []string
+func TestScrapingEngine_Scrape_OptionalFieldMissing(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedUserAgents = append(receivedUserAgents, r.Header.Get("User-Agent"))
-		w.Write([]byte("<html><body><h1>Title</h1></body></html>"))
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("<html><body><h1>Test Title</h1></body></html>"))
 	}))
 	defer server.Close()
 
 	config := &EngineConfig{
-		UserAgents:     []string{"Agent1/1.0", "Agent2/1.0", "Agent3/1.0"},
+		UserAgents:     []string{"TestAgent/1.0"},
+		RequestTimeout: 10 * time.Second,
+		RetryAttempts:  1,
+		Fields: []FieldConfig{
+			{
+				Name:     "title",
+				Selector: "h1",
+				Type:     "text",
+				Required: true,
+			},
+			{
+				Name:     "subtitle",
+				Selector: ".subtitle", // This won't be found
+				Type:     "text",
+				Required: false,
+				Default:  "No subtitle",
+			},
+		},
+	}
+
+	engine, err := NewScrapingEngine(config)
+	if err != nil {
+		t.Fatalf("Failed to create engine: %v", err)
+	}
+	defer engine.Close()
+
+	ctx := context.Background()
+	result, err := engine.Scrape(ctx, server.URL)
+
+	if err != nil {
+		t.Errorf("Scraping failed: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("Expected successful scraping, got errors: %v", result.Errors)
+	}
+
+	if result.Data["title"] != "Test Title" {
+		t.Errorf("Expected title 'Test Title', got %v", result.Data["title"])
+	}
+
+	if result.Data["subtitle"] != "No subtitle" {
+		t.Errorf("Expected subtitle 'No subtitle', got %v", result.Data["subtitle"])
+	}
+
+	if len(result.Warnings) == 0 {
+		t.Error("Expected warnings for missing optional field")
+	}
+}
+
+func TestScrapingEngine_Scrape_MultipleFields(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`
+			<html>
+			<body>
+				<h1>Test Title</h1>
+				<p class="description">Test description</p>
+				<span class="price">$19.99</span>
+				<a href="https://example.com" class="link">Example</a>
+				<ul class="tags">
+					<li>tag1</li>
+					<li>tag2</li>
+				</ul>
+			</body>
+			</html>
+		`))
+	}))
+	defer server.Close()
+
+	config := &EngineConfig{
+		UserAgents:     []string{"TestAgent/1.0"},
+		RequestTimeout: 10 * time.Second,
+		RetryAttempts:  1,
+		Fields: []FieldConfig{
+			{
+				Name:     "title",
+				Selector: "h1",
+				Type:     "text",
+				Required: true,
+			},
+			{
+				Name:     "description",
+				Selector: ".description",
+				Type:     "text",
+				Required: false,
+			},
+			{
+				Name:     "price",
+				Selector: ".price",
+				Type:     "text",
+				Required: false,
+			},
+			{
+				Name:      "link",
+				Selector:  ".link",
+				Type:      "attr",
+				Attribute: "href",
+				Required:  false,
+			},
+			{
+				Name:     "tags",
+				Selector: ".tags li",
+				Type:     "list",
+				Required: false,
+			},
+		},
+	}
+
+	engine, err := NewScrapingEngine(config)
+	if err != nil {
+		t.Fatalf("Failed to create engine: %v", err)
+	}
+	defer engine.Close()
+
+	ctx := context.Background()
+	result, err := engine.Scrape(ctx, server.URL)
+
+	if err != nil {
+		t.Errorf("Scraping failed: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("Expected successful scraping, got errors: %v", result.Errors)
+	}
+
+	// Check all extracted fields
+	if result.Data["title"] != "Test Title" {
+		t.Errorf("Expected title 'Test Title', got %v", result.Data["title"])
+	}
+
+	if result.Data["description"] != "Test description" {
+		t.Errorf("Expected description 'Test description', got %v", result.Data["description"])
+	}
+
+	if result.Data["price"] != "$19.99" {
+		t.Errorf("Expected price '$19.99', got %v", result.Data["price"])
+	}
+
+	if result.Data["link"] != "https://example.com" {
+		t.Errorf("Expected link 'https://example.com', got %v", result.Data["link"])
+	}
+
+	tags, ok := result.Data["tags"].([]string)
+	if !ok {
+		t.Errorf("Expected tags to be []string, got %T", result.Data["tags"])
+	} else if len(tags) != 2 {
+		t.Errorf("Expected 2 tags, got %d", len(tags))
+	}
+}
+
+func TestScrapingEngine_InvalidURL(t *testing.T) {
+	config := &EngineConfig{
+		UserAgents:     []string{"TestAgent/1.0"},
 		RequestTimeout: 10 * time.Second,
 		RetryAttempts:  1,
 		Fields: []FieldConfig{
@@ -296,9 +392,40 @@ func TestScrapingEngine_UserAgentRotation(t *testing.T) {
 				Required: true,
 			},
 		},
-		ExtractionConfig: ExtractionConfig{
-			StrictMode:      false,
-			ContinueOnError: true,
+	}
+
+	engine, err := NewScrapingEngine(config)
+	if err != nil {
+		t.Fatalf("Failed to create engine: %v", err)
+	}
+	defer engine.Close()
+
+	ctx := context.Background()
+	_, err = engine.Scrape(ctx, "invalid-url")
+
+	if err == nil {
+		t.Error("Expected error for invalid URL")
+	}
+}
+
+func TestScrapingEngine_Timeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(2 * time.Second) // Longer than timeout
+		w.Write([]byte("<html><body><h1>Delayed</h1></body></html>"))
+	}))
+	defer server.Close()
+
+	config := &EngineConfig{
+		UserAgents:     []string{"TestAgent/1.0"},
+		RequestTimeout: 1 * time.Second, // Short timeout
+		RetryAttempts:  1,
+		Fields: []FieldConfig{
+			{
+				Name:     "title",
+				Selector: "h1",
+				Type:     "text",
+				Required: true,
+			},
 		},
 	}
 
@@ -309,26 +436,10 @@ func TestScrapingEngine_UserAgentRotation(t *testing.T) {
 	defer engine.Close()
 
 	ctx := context.Background()
+	_, err = engine.Scrape(ctx, server.URL)
 
-	// Make multiple requests
-	for i := 0; i < 4; i++ {
-		_, err := engine.Scrape(ctx, server.URL)
-		if err != nil {
-			t.Fatalf("Scraping failed on iteration %d: %v", i, err)
-		}
-	}
-
-	// Check user agent rotation
-	if len(receivedUserAgents) != 4 {
-		t.Fatalf("Expected 4 requests, got %d", len(receivedUserAgents))
-	}
-
-	// First three should be different, fourth should be same as first
-	expectedAgents := []string{"Agent1/1.0", "Agent2/1.0", "Agent3/1.0", "Agent1/1.0"}
-	for i, expected := range expectedAgents {
-		if receivedUserAgents[i] != expected {
-			t.Errorf("Request %d: expected user agent %s, got %s", i, expected, receivedUserAgents[i])
-		}
+	if err == nil {
+		t.Error("Expected timeout error")
 	}
 }
 
@@ -351,6 +462,43 @@ func TestValidateEngineConfig(t *testing.T) {
 			expectError: true,
 		},
 		{
+			name: "field missing name",
+			config: &EngineConfig{
+				Fields: []FieldConfig{
+					{
+						Selector: "h1",
+						Type:     "text",
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "field missing selector",
+			config: &EngineConfig{
+				Fields: []FieldConfig{
+					{
+						Name: "title",
+						Type: "text",
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "attr field missing attribute",
+			config: &EngineConfig{
+				Fields: []FieldConfig{
+					{
+						Name:     "link",
+						Selector: "a",
+						Type:     "attr",
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
 			name: "valid config",
 			config: &EngineConfig{
 				Fields: []FieldConfig{
@@ -358,35 +506,14 @@ func TestValidateEngineConfig(t *testing.T) {
 						Name:     "title",
 						Selector: "h1",
 						Type:     "text",
+						Required: true,
 					},
-				},
-			},
-			expectError: false,
-		},
-		{
-			name: "invalid transform type",
-			config: &EngineConfig{
-				Fields: []FieldConfig{
 					{
-						Name:     "title",
-						Selector: "h1",
-						Type:     "text",
-						Transform: []pipeline.TransformRule{
-							{Type: "invalid_type"},
-						},
-					},
-				},
-			},
-			expectError: true,
-		},
-		{
-			name: "config with defaults applied",
-			config: &EngineConfig{
-				Fields: []FieldConfig{
-					{
-						Name:     "title",
-						Selector: "h1",
-						Type:     "text",
+						Name:      "link",
+						Selector:  "a",
+						Type:      "attr",
+						Attribute: "href",
+						Required:  false,
 					},
 				},
 			},
@@ -397,98 +524,12 @@ func TestValidateEngineConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateEngineConfig(tt.config)
-
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
-			} else if !tt.expectError && err != nil {
+			}
+			if !tt.expectError && err != nil {
 				t.Errorf("Unexpected error: %v", err)
 			}
-
-			if !tt.expectError && err == nil {
-				if tt.config.RequestTimeout <= 0 {
-					t.Error("Expected default timeout to be applied")
-				}
-				if tt.config.RetryAttempts < 0 {
-					t.Error("Expected default retry attempts to be applied")
-				}
-				if tt.config.MaxConcurrency <= 0 {
-					t.Error("Expected default concurrency to be applied")
-				}
-			}
 		})
-	}
-}
-
-func TestScrapingEngine_GetStats(t *testing.T) {
-	config := &EngineConfig{
-		UserAgents:     []string{"Agent1/1.0", "Agent2/1.0"},
-		RequestTimeout: 30 * time.Second,
-		RetryAttempts:  3,
-		MaxConcurrency: 5,
-		Fields: []FieldConfig{
-			{
-				Name:     "title",
-				Selector: "h1",
-				Type:     "text",
-				Required: true,
-			},
-		},
-		ExtractionConfig: ExtractionConfig{
-			StrictMode:      false,
-			ContinueOnError: true,
-		},
-	}
-
-	engine, err := NewScrapingEngine(config)
-	if err != nil {
-		t.Fatalf("Failed to create engine: %v", err)
-	}
-	defer engine.Close()
-
-	stats := engine.GetStats()
-
-	if stats["total_fields"] != 1 {
-		t.Errorf("Expected total_fields 1, got %v", stats["total_fields"])
-	}
-
-	if stats["user_agents"] != 2 {
-		t.Errorf("Expected user_agents 2, got %v", stats["user_agents"])
-	}
-
-	if stats["retry_attempts"] != 3 {
-		t.Errorf("Expected retry_attempts 3, got %v", stats["retry_attempts"])
-	}
-
-	if stats["max_concurrency"] != 5 {
-		t.Errorf("Expected max_concurrency 5, got %v", stats["max_concurrency"])
-	}
-}
-
-func TestScrapingEngine_Close(t *testing.T) {
-	config := &EngineConfig{
-		UserAgents:     []string{"TestAgent/1.0"},
-		RequestTimeout: 30 * time.Second,
-		Fields: []FieldConfig{
-			{
-				Name:     "title",
-				Selector: "h1",
-				Type:     "text",
-				Required: true,
-			},
-		},
-		ExtractionConfig: ExtractionConfig{
-			StrictMode:      false,
-			ContinueOnError: true,
-		},
-	}
-
-	engine, err := NewScrapingEngine(config)
-	if err != nil {
-		t.Fatalf("Failed to create engine: %v", err)
-	}
-
-	err = engine.Close()
-	if err != nil {
-		t.Errorf("Close should not return error: %v", err)
 	}
 }

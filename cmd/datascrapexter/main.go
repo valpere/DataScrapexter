@@ -2,13 +2,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
+	"time"
 
 	"github.com/valpere/DataScrapexter/internal/config"
-	"gopkg.in/yaml.v3"
+	"github.com/valpere/DataScrapexter/internal/output"
+	"github.com/valpere/DataScrapexter/internal/pipeline"
+	"github.com/valpere/DataScrapexter/internal/scraper"
 )
 
 // Build-time variables (set by ldflags)
@@ -20,54 +22,54 @@ var (
 
 // Global flags
 var (
-	verbose    bool
+	verbose   bool
 	outputFile string
-	dryRun     bool
+	dryRun    bool
 )
 
 func main() {
-	// Parse global flags before command processing
-	parseGlobalFlags()
-
-	if len(os.Args) > 1 && os.Args[1] == "version" {
-		printVersion()
-		return
-	}
-
-	if len(os.Args) < 2 {
+	args := os.Args[1:]
+	if len(args) == 0 {
 		printUsage()
 		return
 	}
 
-	switch os.Args[1] {
+	// Parse global flags
+	args = parseGlobalFlags(args)
+
+	command := args[0]
+	commandArgs := args[1:]
+
+	switch command {
 	case "run":
-		if len(os.Args) < 3 {
-			fmt.Println("Error: config file required")
+		if len(commandArgs) < 1 {
+			fmt.Println("Error: configuration file required")
 			fmt.Println("Usage: datascrapexter run <config.yaml>")
 			os.Exit(1)
 		}
-		runScraper(os.Args[2])
+		runScraper(commandArgs[0])
 	case "validate":
-		if len(os.Args) < 3 {
-			fmt.Println("Error: config file required")
+		if len(commandArgs) < 1 {
+			fmt.Println("Error: configuration file required")
 			fmt.Println("Usage: datascrapexter validate <config.yaml>")
 			os.Exit(1)
 		}
-		validateConfig(os.Args[2])
+		validateConfig(commandArgs[0])
 	case "template":
 		generateTemplate()
+	case "version":
+		printVersion()
 	case "help", "--help", "-h":
 		printUsage()
 	default:
-		fmt.Printf("Unknown command: %s\n", os.Args[1])
+		fmt.Printf("Error: unknown command '%s'\n", command)
 		printUsage()
 		os.Exit(1)
 	}
 }
 
-func parseGlobalFlags() {
-	args := os.Args[1:]
-	filtered := make([]string, 0, len(args))
+func parseGlobalFlags(args []string) []string {
+	var remaining []string
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -81,12 +83,35 @@ func parseGlobalFlags() {
 		case "--dry-run":
 			dryRun = true
 		default:
-			filtered = append(filtered, args[i])
+			remaining = append(remaining, args[i])
 		}
 	}
 
-	// Rebuild os.Args with filtered arguments
-	os.Args = append([]string{os.Args[0]}, filtered...)
+	return remaining
+}
+
+func printUsage() {
+	fmt.Printf("DataScrapexter %s - Universal web scraper\n\n", version)
+	fmt.Println("Usage:")
+	fmt.Println("  datascrapexter [global-options] <command> [arguments]")
+	fmt.Println()
+	fmt.Println("Global Options:")
+	fmt.Println("  -v, --verbose     Enable verbose logging")
+	fmt.Println("  -o, --output FILE Override output file")
+	fmt.Println("  --dry-run         Validate configuration without scraping")
+	fmt.Println()
+	fmt.Println("Commands:")
+	fmt.Println("  run <config.yaml>      Run scraper with configuration")
+	fmt.Println("  validate <config.yaml> Validate configuration file")
+	fmt.Println("  template               Generate configuration template")
+	fmt.Println("  version                Show version information")
+	fmt.Println("  help                   Show this help message")
+	fmt.Println()
+	fmt.Println("Examples:")
+	fmt.Println("  datascrapexter run examples/basic.yaml")
+	fmt.Println("  datascrapexter -v run config.yaml")
+	fmt.Println("  datascrapexter --dry-run run config.yaml")
+	fmt.Println("  datascrapexter template > myconfig.yaml")
 }
 
 func printVersion() {
@@ -95,43 +120,9 @@ func printVersion() {
 	fmt.Printf("Git commit: %s\n", gitCommit)
 }
 
-func printUsage() {
-	fmt.Printf("DataScrapexter v%s\n", version)
-	fmt.Printf("Universal web scraper built with Go\n")
-	fmt.Printf("Build: %s (%s)\n", gitCommit, buildTime)
-	fmt.Println()
-	fmt.Println("Usage: datascrapexter [global-flags] <command> [options]")
-	fmt.Println()
-	fmt.Println("Global Flags:")
-	fmt.Println("  -v, --verbose     Enable verbose output")
-	fmt.Println("  -o, --output      Specify output file")
-	fmt.Println("      --dry-run     Validate configuration without scraping")
-	fmt.Println()
-	fmt.Println("Commands:")
-	fmt.Println("  run <config>      Run scraper with specified config file")
-	fmt.Println("  validate <config> Validate configuration file")
-	fmt.Println("  template          Generate template configuration")
-	fmt.Println("  version           Show version information")
-	fmt.Println("  help              Show this help message")
-	fmt.Println()
-	fmt.Println("Examples:")
-	fmt.Println("  datascrapexter run example.yaml")
-	fmt.Println("  datascrapexter -v run config.yaml")
-	fmt.Println("  datascrapexter -o results.csv run config.yaml")
-	fmt.Println("  datascrapexter --dry-run run config.yaml")
-	fmt.Println("  datascrapexter validate config.yaml")
-	fmt.Println("  datascrapexter template > new_config.yaml")
-}
-
 func runScraper(configFile string) {
 	if verbose {
-		fmt.Printf("Running scraper with config: %s\n", configFile)
-	}
-
-	// Check if config file exists
-	if _, err := os.Stat(configFile); os.IsNotExist(err) {
-		fmt.Printf("Error: Config file not found: %s\n", configFile)
-		os.Exit(1)
+		fmt.Printf("Starting scraper with config: %s\n", configFile)
 	}
 
 	// Load configuration
@@ -141,148 +132,231 @@ func runScraper(configFile string) {
 		os.Exit(1)
 	}
 
+	if verbose {
+		fmt.Printf("Configuration loaded: %s\n", cfg.Name)
+	}
+
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
 		fmt.Printf("Configuration validation failed: %v\n", err)
 		os.Exit(1)
 	}
 
-	if verbose {
-		fmt.Printf("Loaded configuration: %s\n", cfg.Name)
-		fmt.Printf("Target URL: %s\n", cfg.BaseURL)
-		fmt.Printf("Fields to extract: %d\n", len(cfg.Fields))
-	}
-
-	// Override output file from command line
+	// Override output file if specified
 	if outputFile != "" {
 		cfg.Output.File = outputFile
 	}
 
-	// Dry run mode - just validate and show what would be done
+	// Dry run mode
 	if dryRun {
-		fmt.Println("DRY RUN MODE - No actual scraping will be performed")
-		fmt.Printf("Configuration is valid for: %s\n", cfg.Name)
-		fmt.Printf("Would scrape: %s\n", cfg.BaseURL)
-		fmt.Printf("Would extract %d fields\n", len(cfg.Fields))
-		fmt.Printf("Would write to: %s (format: %s)\n",
-			cfg.Output.File, cfg.Output.Format)
-		if cfg.Pagination != nil {
-			fmt.Printf("Would handle pagination: %s\n", cfg.Pagination.Type)
-		}
+		fmt.Println("Configuration is valid")
 		return
 	}
 
-	// Set up graceful shutdown (but don't use ctx yet)
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	// Convert config to engine config
+	engineConfig := convertToEngineConfig(cfg)
 
-	go func() {
-		<-sigChan
-		fmt.Println("\nReceived interrupt signal, shutting down gracefully...")
-		os.Exit(0)
-	}()
+	// Create scraping engine
+	engine, err := scraper.NewScrapingEngine(engineConfig)
+	if err != nil {
+		fmt.Printf("Error creating scraping engine: %v\n", err)
+		os.Exit(1)
+	}
+	defer engine.Close()
 
-	// Create scraping engine - simplified call
-	// Note: We need to create a simplified NewEngine function
-	results := []map[string]interface{}{
-		{
-			"url":    cfg.BaseURL,
-			"status": "completed",
-			"data":   make(map[string]interface{}),
-		},
+	// Create output manager
+	outputManager, err := output.NewManager(&cfg.Output)
+	if err != nil {
+		fmt.Printf("Error creating output manager: %v\n", err)
+		os.Exit(1)
 	}
 
-	// Progress reporting
+	// Perform scraping
+	ctx := context.Background()
+	
+	// Determine target URL
+	targetURL := cfg.BaseURL
+	if len(cfg.URLs) > 0 {
+		targetURL = cfg.URLs[0] // Use first URL for now
+	}
+	
 	if verbose {
-		fmt.Println("Starting scraper...")
-		fmt.Printf("Scraping %s...\n", cfg.BaseURL)
+		fmt.Printf("Scraping URL: %s\n", targetURL)
+	}
+	
+	result, err := engine.Scrape(ctx, targetURL)
+	if err != nil {
+		fmt.Printf("Scraping failed: %v\n", err)
+		os.Exit(1)
 	}
 
-	// TODO: Replace this with actual scraper engine when it's available
-	if verbose {
-		fmt.Printf("Extracted %d records\n", len(results))
+	// Check for scraping errors
+	if !result.Success {
+		fmt.Printf("Scraping completed with errors: %v\n", result.Errors)
 	}
 
-	// Write results - simplified for now
-	if cfg.Output.File != "" {
-		// TODO: Replace with actual output manager when available
-		fmt.Printf("Results would be written to: %s\n", cfg.Output.File)
+	// Convert single result to slice for output
+	outputData := []map[string]interface{}{result.Data}
+	
+	// Write results
+	err = outputManager.WriteResults(outputData)
+	if err != nil {
+		fmt.Printf("Error writing results: %v\n", err)
+		os.Exit(1)
 	}
 
-	// Success message
-	if cfg.Output.File != "" {
-		fmt.Printf("Results written to: %s\n", cfg.Output.File)
-	}
-
-	if verbose {
-		fmt.Println("Scraper completed successfully!")
-	}
+	fmt.Printf("Scraping completed successfully. Results written to %s\n", cfg.Output.File)
 }
 
 func validateConfig(configFile string) {
 	if verbose {
-		fmt.Printf("Validating config: %s\n", configFile)
+		fmt.Printf("Validating configuration: %s\n", configFile)
 	}
 
-	// Check if config file exists
-	if _, err := os.Stat(configFile); os.IsNotExist(err) {
-		fmt.Printf("Error: Config file not found: %s\n", configFile)
+	cfg, err := config.LoadFromFile(configFile)
+	if err != nil {
+		fmt.Printf("Error loading configuration: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Load and validate configuration
-	cfg, err := config.LoadFromFile(configFile)
-	if err != nil {
+	if err := cfg.Validate(); err != nil {
 		fmt.Printf("Configuration validation failed: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Perform validation
-	if err := cfg.Validate(); err != nil {
-		fmt.Printf("Configuration is invalid: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Println("Configuration is valid!")
-
-	if verbose {
-		fmt.Printf("  Name: %s\n", cfg.Name)
-		fmt.Printf("  Base URL: %s\n", cfg.BaseURL)
-		fmt.Printf("  Fields: %d\n", len(cfg.Fields))
-		fmt.Printf("  Output format: %s\n", cfg.Output.Format)
-		if cfg.RateLimit != "" {
-			fmt.Printf("  Rate limit: %s\n", cfg.RateLimit)
-		}
-	}
+	fmt.Println("Configuration is valid")
 }
 
 func generateTemplate() {
-	// Check for template type argument
-	templateType := "basic"
-	if len(os.Args) > 2 {
-		switch os.Args[2] {
-		case "ecommerce", "news", "jobs", "social", "basic":
-			templateType = os.Args[2]
-		default:
-			fmt.Printf("Unknown template type: %s\n", os.Args[2])
-			fmt.Println("Available types: basic, ecommerce, news, jobs, social")
-			os.Exit(1)
+	template := `# DataScrapexter Configuration Template
+name: "example_scraper"
+base_url: "https://example.com"
+
+# Optional: Multiple URLs to scrape
+# urls:
+#   - "https://example.com/page1"
+#   - "https://example.com/page2"
+
+# Request configuration
+user_agents:
+  - "DataScrapexter/1.0"
+rate_limit: "2s"
+timeout: "30s"
+max_retries: 3
+
+# Optional headers and cookies
+# headers:
+#   Accept: "text/html,application/xhtml+xml"
+# cookies:
+#   session: "abc123"
+
+# Fields to extract
+fields:
+  - name: "title"
+    selector: "h1"
+    type: "text"
+    required: true
+    
+  - name: "description"
+    selector: ".description"
+    type: "text"
+    required: false
+    transform:
+      - type: "trim"
+      - type: "normalize_spaces"
+      
+  - name: "price"
+    selector: ".price"
+    type: "text"
+    required: false
+    transform:
+      - type: "regex"
+        pattern: "\\$([0-9,]+\\.?[0-9]*)"
+        replacement: "$1"
+      - type: "parse_float"
+
+  - name: "image_url"
+    selector: "img.main-image"
+    type: "attr"
+    attribute: "src"
+    required: false
+
+  - name: "tags"
+    selector: ".tag"
+    type: "list"
+    required: false
+
+# Optional pagination
+# pagination:
+#   type: "next_button"
+#   selector: ".next-page"
+#   max_pages: 10
+
+# Output configuration
+output:
+  format: "json"
+  file: "results.json"
+`
+
+	fmt.Print(template)
+}
+
+// convertToEngineConfig converts config.ScraperConfig to scraper.EngineConfig
+func convertToEngineConfig(cfg *config.ScraperConfig) *scraper.EngineConfig {
+	// Convert fields
+	var fields []scraper.FieldConfig
+	for _, field := range cfg.Fields {
+		fieldConfig := scraper.FieldConfig{
+			Name:      field.Name,
+			Selector:  field.Selector,
+			Type:      field.Type,
+			Required:  field.Required,
+			Attribute: field.Attribute,
+			Default:   field.Default,
+		}
+		
+		// Convert transform rules
+		for _, transform := range field.Transform {
+			fieldConfig.Transform = append(fieldConfig.Transform, convertTransformRule(transform))
+		}
+		
+		fields = append(fields, fieldConfig)
+	}
+
+	// Parse timeout
+	timeout := 30 * time.Second
+	if cfg.Timeout != "" {
+		if parsed, err := time.ParseDuration(cfg.Timeout); err == nil {
+			timeout = parsed
 		}
 	}
 
-	if verbose {
-		fmt.Printf("Generating %s template...\n", templateType)
+	// Parse rate limit
+	rateLimit := time.Duration(0)
+	if cfg.RateLimit != "" {
+		if parsed, err := time.ParseDuration(cfg.RateLimit); err == nil {
+			rateLimit = parsed
+		}
 	}
 
-	// Generate template using config package
-	template := config.GenerateTemplate(templateType)
-
-	// Convert to YAML
-	yamlData, err := yaml.Marshal(template)
-	if err != nil {
-		fmt.Printf("Error converting template to YAML: %v\n", err)
-		os.Exit(1)
+	return &scraper.EngineConfig{
+		Fields:         fields,
+		UserAgents:     cfg.UserAgents,
+		RequestTimeout: timeout,
+		RetryAttempts:  cfg.MaxRetries,
+		RateLimit:      rateLimit,
+		ExtractionConfig: scraper.ExtractionConfig{
+			StrictMode:      false,
+			ContinueOnError: true,
+		},
 	}
+}
 
-	fmt.Print(string(yamlData))
+// convertTransformRule converts config.TransformRule to pipeline.TransformRule
+func convertTransformRule(rule config.TransformRule) pipeline.TransformRule {
+	return pipeline.TransformRule{
+		Type:        rule.Type,
+		Pattern:     rule.Pattern,
+		Replacement: rule.Replacement,
+	}
 }

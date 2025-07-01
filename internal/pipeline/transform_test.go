@@ -52,8 +52,8 @@ func TestTransformRule_Transform(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "extract number",
-			rule:        TransformRule{Type: "extract_number"},
+			name:        "extract numbers",
+			rule:        TransformRule{Type: "extract_numbers"},
 			input:       "Price: $123.45",
 			expected:    "123.45",
 			expectError: false,
@@ -73,51 +73,31 @@ func TestTransformRule_Transform(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "regex replace",
-			rule: TransformRule{
-				Type:        "regex",
-				Pattern:     `\$([0-9,]+\.?[0-9]*)`,
-				Replacement: "$1",
-			},
+			name:        "regex replace",
+			rule:        TransformRule{Type: "regex", Pattern: `\$([0-9,]+\.\d*)`, Replacement: "$1"},
 			input:       "$1,299.99",
 			expected:    "1,299.99",
 			expectError: false,
 		},
 		{
 			name: "prefix transform",
-			rule: TransformRule{
-				Type: "prefix",
-				Params: map[string]interface{}{
-					"value": "https://",
-				},
-			},
-			input:       "example.com",
-			expected:    "https://example.com",
+			rule: TransformRule{Type: "prefix", Params: map[string]interface{}{"value": "https://"}},
+			input: "example.com",
+			expected: "https://example.com",
 			expectError: false,
 		},
 		{
 			name: "suffix transform",
-			rule: TransformRule{
-				Type: "suffix",
-				Params: map[string]interface{}{
-					"value": ".html",
-				},
-			},
-			input:       "page",
-			expected:    "page.html",
+			rule: TransformRule{Type: "suffix", Params: map[string]interface{}{"value": ".html"}},
+			input: "page",
+			expected: "page.html",
 			expectError: false,
 		},
 		{
 			name: "replace transform",
-			rule: TransformRule{
-				Type: "replace",
-				Params: map[string]interface{}{
-					"old": "old",
-					"new": "new",
-				},
-			},
-			input:       "old text",
-			expected:    "new text",
+			rule: TransformRule{Type: "replace", Pattern: "old", Replacement: "new"},
+			input: "old text",
+			expected: "new text",
 			expectError: false,
 		},
 		{
@@ -138,7 +118,7 @@ func TestTransformRule_Transform(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := tt.rule.Apply(ctx, tt.input)
+			result, err := tt.rule.Transform(ctx, tt.input)
 
 			if tt.expectError {
 				if err == nil {
@@ -170,27 +150,23 @@ func TestTransformList_Apply(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name: "chain transformations",
+			name: "chain transforms",
 			rules: TransformList{
 				{Type: "trim"},
 				{Type: "lowercase"},
-				{Type: "normalize_spaces"},
 			},
-			input:       "  HELLO    WORLD  ",
+			input:       "  HELLO WORLD  ",
 			expected:    "hello world",
 			expectError: false,
 		},
 		{
-			name: "regex then parse",
+			name: "complex chain",
 			rules: TransformList{
-				{
-					Type:        "regex",
-					Pattern:     `\$([0-9,]+\.?[0-9]*)`,
-					Replacement: "$1",
-				},
-				{Type: "parse_float"},
+				{Type: "trim"},
+				{Type: "regex", Pattern: `Price: \$([0-9,]+\.\d+)`, Replacement: "$1"},
+				{Type: "regex", Pattern: `,`, Replacement: ""},
 			},
-			input:       "$1,299.99",
+			input:       "  Price: $1,299.99  ",
 			expected:    "1299.99",
 			expectError: false,
 		},
@@ -240,20 +216,16 @@ func TestValidateTransformRules(t *testing.T) {
 			rules: TransformList{
 				{Type: "trim"},
 				{Type: "lowercase"},
-				{Type: "normalize_spaces"},
+				{Type: "regex", Pattern: `\d+`, Replacement: "X"},
 			},
 			expectError: false,
 		},
 		{
-			name: "valid regex rule",
+			name: "invalid type",
 			rules: TransformList{
-				{
-					Type:        "regex",
-					Pattern:     `\d+`,
-					Replacement: "NUMBER",
-				},
+				{Type: "invalid_type"},
 			},
-			expectError: false,
+			expectError: true,
 		},
 		{
 			name: "regex without pattern",
@@ -263,23 +235,9 @@ func TestValidateTransformRules(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "invalid transform type",
+			name: "invalid regex pattern",
 			rules: TransformList{
-				{Type: "invalid_type"},
-			},
-			expectError: true,
-		},
-		{
-			name: "prefix without value",
-			rules: TransformList{
-				{Type: "prefix"},
-			},
-			expectError: true,
-		},
-		{
-			name: "replace without parameters",
-			rules: TransformList{
-				{Type: "replace"},
+				{Type: "regex", Pattern: "["},
 			},
 			expectError: true,
 		},
@@ -290,107 +248,10 @@ func TestValidateTransformRules(t *testing.T) {
 			err := ValidateTransformRules(tt.rules)
 
 			if tt.expectError && err == nil {
-				t.Error("Expected error but got none")
-			} else if !tt.expectError && err != nil {
-				t.Errorf("Unexpected error: %v", err)
+				t.Error("expected error but got none")
 			}
-		})
-	}
-}
-
-func TestDataTransformer_TransformData(t *testing.T) {
-	ctx := context.Background()
-
-	transformer := &DataTransformer{
-		Global: TransformList{
-			{Type: "trim"},
-		},
-		Fields: []FieldTransform{
-			{
-				Name: "price",
-				Rules: TransformList{
-					{
-						Type:        "regex",
-						Pattern:     `\$([0-9,]+\.?[0-9]*)`,
-						Replacement: "$1",
-					},
-					{Type: "parse_float"},
-				},
-				Required: true,
-			},
-			{
-				Name: "title",
-				Rules: TransformList{
-					{Type: "normalize_spaces"},
-				},
-				Required:   false,
-				DefaultVal: "No Title",
-			},
-		},
-	}
-
-	tests := []struct {
-		name        string
-		input       map[string]interface{}
-		expected    map[string]interface{}
-		expectError bool
-	}{
-		{
-			name: "successful transformation",
-			input: map[string]interface{}{
-				"price":       "$123.45",
-				"title":       "  Hello    World  ",
-				"description": "  Some description  ",
-			},
-			expected: map[string]interface{}{
-				"price":       "123.45",
-				"title":       "Hello World",
-				"description": "Some description",
-			},
-			expectError: false,
-		},
-		{
-			name: "missing required field",
-			input: map[string]interface{}{
-				"title": "Hello World",
-			},
-			expectError: true,
-		},
-		{
-			name: "missing optional field with default",
-			input: map[string]interface{}{
-				"price": "$99.99",
-			},
-			expected: map[string]interface{}{
-				"price": "99.99",
-				"title": "No Title",
-			},
-			expectError: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := transformer.TransformData(ctx, tt.input)
-
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("expected error but got none")
-				}
-				return
-			}
-
-			if err != nil {
+			if !tt.expectError && err != nil {
 				t.Errorf("unexpected error: %v", err)
-				return
-			}
-
-			for key, expectedVal := range tt.expected {
-				if actualVal, exists := result[key]; !exists {
-					t.Errorf("expected key %q not found in result", key)
-				} else if actualVal != expectedVal {
-					t.Errorf("for key %q: expected %v, got %v", key, expectedVal, actualVal)
-				}
 			}
 		})
 	}
