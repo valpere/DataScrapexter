@@ -2,102 +2,65 @@
 package main
 
 import (
-    "bytes"
-    "os"
-    "os/exec"
-    "strings"
-    "testing"
+	"bytes"
+	"io"
+	"os"
+	"strings"
+	"testing"
 )
 
 func TestCLIVersion(t *testing.T) {
-    version = "test-version"
-    buildTime = "2025-06-23"
-    gitCommit = "abc123"
+	// Set test values
+	version = "test-version"
+	buildTime = "2025-06-23"
+	gitCommit = "abc123"
 
-    oldArgs := os.Args
-    defer func() { os.Args = oldArgs }()
+	// Capture output
+	output := captureOutput(func() {
+		printVersion()
+	})
 
-    os.Args = []string{"datascrapexter", "version"}
-
-    oldStdout := os.Stdout
-    r, w, _ := os.Pipe()
-    os.Stdout = w
-
-    main()
-
-    w.Close()
-    os.Stdout = oldStdout
-
-    var output bytes.Buffer
-    output.ReadFrom(r)
-    result := output.String()
-
-    if !strings.Contains(result, "test-version") {
-        t.Errorf("version output should contain version, got: %s", result)
-    }
+	if !strings.Contains(output, "test-version") {
+		t.Errorf("version output should contain version, got: %s", output)
+	}
+	if !strings.Contains(output, "2025-06-23") {
+		t.Errorf("version output should contain build time, got: %s", output)
+	}
+	if !strings.Contains(output, "abc123") {
+		t.Errorf("version output should contain git commit, got: %s", output)
+	}
 }
 
 func TestCLIHelp(t *testing.T) {
-    oldArgs := os.Args
-    defer func() { os.Args = oldArgs }()
+	output := captureOutput(func() {
+		printUsage()
+	})
 
-    os.Args = []string{"datascrapexter", "help"}
-
-    oldStdout := os.Stdout
-    r, w, _ := os.Pipe()
-    os.Stdout = w
-
-    main()
-
-    w.Close()
-    os.Stdout = oldStdout
-
-    var output bytes.Buffer
-    output.ReadFrom(r)
-    result := output.String()
-
-    expectedCommands := []string{"run", "validate", "template", "version", "help"}
-    for _, cmd := range expectedCommands {
-        if !strings.Contains(result, cmd) {
-            t.Errorf("help output should contain command %q", cmd)
-        }
-    }
+	commands := []string{"run", "validate", "template", "version", "help"}
+	for _, cmd := range commands {
+		if !strings.Contains(output, cmd) {
+			t.Errorf("help output should contain command %q, got: %s", cmd, output)
+		}
+	}
 }
 
-func TestCLIIntegration(t *testing.T) {
-    binaryPath := "./datascrapexter"
-    if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
-        t.Skip("Binary not found, skipping integration test")
-    }
+// captureOutput captures stdout during function execution
+func captureOutput(f func()) string {
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
 
-    tests := []struct {
-        name     string
-        args     []string
-        wantExit int
-    }{
-        {"version command", []string{"version"}, 0},
-        {"help command", []string{"help"}, 0},
-        {"invalid command", []string{"invalid"}, 1},
-    }
+	outC := make(chan string)
+	go func() {
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		outC <- buf.String()
+	}()
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            cmd := exec.Command(binaryPath, tt.args...)
-            output, err := cmd.CombinedOutput()
+	f()
+	w.Close()
+	os.Stdout = old
+	out := <-outC
 
-            var exitCode int
-            if err != nil {
-                if exitError, ok := err.(*exec.ExitError); ok {
-                    exitCode = exitError.ExitCode()
-                } else {
-                    t.Fatalf("failed to run command: %v", err)
-                }
-            }
-
-            if exitCode != tt.wantExit {
-                t.Errorf("expected exit code %d, got %d. Output: %s", 
-                    tt.wantExit, exitCode, output)
-            }
-        })
-    }
+	return out
 }

@@ -4,416 +4,201 @@ package scraper
 import (
 	"context"
 	"fmt"
-	"strings"
-	"sync"
+	"net/http"
 	"time"
 
-	"github.com/valpere/DataScrapexter/internal/pipeline"
+	"github.com/PuerkitoBio/goquery"
 )
 
-// EngineConfig defines the configuration for the scraping engine
-type EngineConfig struct {
-	UserAgents       []string          `yaml:"user_agents" json:"user_agents"`
-	RequestTimeout   time.Duration     `yaml:"request_timeout" json:"request_timeout"`
-	RetryAttempts    int               `yaml:"retry_attempts" json:"retry_attempts"`
-	MaxConcurrency   int               `yaml:"max_concurrency" json:"max_concurrency"`
-	Fields           []FieldConfig     `yaml:"fields" json:"fields"`
-	ExtractionConfig ExtractionConfig  `yaml:"extraction_config" json:"extraction_config"`
-	RateLimit        time.Duration     `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
-	Headers          map[string]string `yaml:"headers,omitempty" json:"headers,omitempty"`
-	Cookies          map[string]string `yaml:"cookies,omitempty" json:"cookies,omitempty"`
-}
-
-// FieldConfig defines field extraction and transformation configuration
-type FieldConfig struct {
-	Name      string                   `yaml:"name" json:"name"`
-	Selector  string                   `yaml:"selector" json:"selector"`
-	Type      string                   `yaml:"type" json:"type"`
-	Required  bool                     `yaml:"required,omitempty" json:"required,omitempty"`
-	Transform []pipeline.TransformRule `yaml:"transform,omitempty" json:"transform,omitempty"`
-	Default   interface{}              `yaml:"default,omitempty" json:"default,omitempty"`
-	Attribute string                   `yaml:"attribute,omitempty" json:"attribute,omitempty"`
-}
-
-// ExtractionConfig defines configuration for the extraction engine
-type ExtractionConfig struct {
-	StrictMode         bool                     `json:"strict_mode" yaml:"strict_mode"`
-	ContinueOnError    bool                     `json:"continue_on_error" yaml:"continue_on_error"`
-	DefaultTransforms  []pipeline.TransformRule `json:"default_transforms,omitempty" yaml:"default_transforms,omitempty"`
-	ValidationRules    []ValidationRule         `json:"validation_rules,omitempty" yaml:"validation_rules,omitempty"`
-	MaxFieldErrors     int                      `json:"max_field_errors,omitempty" yaml:"max_field_errors,omitempty"`
-	RequiredFieldsMode string                   `json:"required_fields_mode,omitempty" yaml:"required_fields_mode,omitempty"`
-	Fields             []FieldConfig            `json:"fields,omitempty" yaml:"fields,omitempty"`
-}
-
-// ValidationRule defines field validation configuration
-type ValidationRule struct {
-	FieldName    string      `json:"field_name" yaml:"field_name"`
-	Required     bool        `json:"required" yaml:"required"`
-	MinLength    *int        `json:"min_length,omitempty" yaml:"min_length,omitempty"`
-	MaxLength    *int        `json:"max_length,omitempty" yaml:"max_length,omitempty"`
-	Pattern      string      `json:"pattern,omitempty" yaml:"pattern,omitempty"`
-	MinValue     interface{} `json:"min_value,omitempty" yaml:"min_value,omitempty"`
-	MaxValue     interface{} `json:"max_value,omitempty" yaml:"max_value,omitempty"`
-	AllowedTypes []string    `json:"allowed_types,omitempty" yaml:"allowed_types,omitempty"`
-}
-
-// ScrapingResult represents the result of a scraping operation
-type ScrapingResult struct {
-	Success    bool                   `json:"success"`
-	Data       map[string]interface{} `json:"data"`
-	Errors     []string               `json:"errors,omitempty"`
-	StatusCode int                    `json:"status_code"`
-	URL        string                 `json:"url"`
-	Metadata   ScrapingMetadata       `json:"metadata"`
-}
-
-// ScrapingMetadata contains metadata about the scraping operation
-type ScrapingMetadata struct {
-	RequestDuration    time.Duration `json:"request_duration"`
-	ExtractionDuration time.Duration `json:"extraction_duration"`
-	TotalFields        int           `json:"total_fields"`
-	ExtractedFields    int           `json:"extracted_fields"`
-	ResponseSize       int64         `json:"response_size"`
-	UserAgent          string        `json:"user_agent"`
-	Timestamp          time.Time     `json:"timestamp"`
-}
-
-// ErrorCollector collects and manages errors during scraping
-type ErrorCollector struct {
-	errors []string
-	mutex  sync.RWMutex
-}
-
-// Add adds an error to the collector
-func (ec *ErrorCollector) Add(err error) {
-	ec.mutex.Lock()
-	defer ec.mutex.Unlock()
-	ec.errors = append(ec.errors, err.Error())
-}
-
-// GetErrors returns all collected errors
-func (ec *ErrorCollector) GetErrors() []string {
-	ec.mutex.RLock()
-	defer ec.mutex.RUnlock()
-	result := make([]string, len(ec.errors))
-	copy(result, ec.errors)
-	return result
-}
-
-// HasErrors returns true if there are any errors
-func (ec *ErrorCollector) HasErrors() bool {
-	ec.mutex.RLock()
-	defer ec.mutex.RUnlock()
-	return len(ec.errors) > 0
-}
-
-// Clear removes all errors
-func (ec *ErrorCollector) Clear() {
-	ec.mutex.Lock()
-	defer ec.mutex.Unlock()
-	ec.errors = ec.errors[:0]
-}
-
-// ScrapingEngine represents the main scraping engine
+// ScrapingEngine is the main scraping engine
 type ScrapingEngine struct {
-	config         *EngineConfig
-	httpClient     *HTTPClient
-	errorCollector *ErrorCollector
-	userAgentIndex int
-	mutex          sync.RWMutex
+	config     *EngineConfig
+	httpClient *http.Client
 }
 
-// NewScrapingEngine creates a new scraping engine with the given configuration
+// NewScrapingEngine creates a new scraping engine
 func NewScrapingEngine(config *EngineConfig) (*ScrapingEngine, error) {
-	if err := validateEngineConfig(config); err != nil {
-		return nil, fmt.Errorf("invalid engine configuration: %w", err)
+	if config == nil {
+		return nil, fmt.Errorf("engine configuration is required")
 	}
 
-	// Create HTTP client configuration from engine config
-	httpConfig := &HTTPClientConfig{
-		Timeout:             config.RequestTimeout,
-		RetryAttempts:       config.RetryAttempts,
-		RetryBackoffBase:    1 * time.Second,
-		RetryBackoffMax:     30 * time.Second,
-		UserAgents:          config.UserAgents,
-		Headers:             config.Headers,
-		Cookies:             config.Cookies,
-		RateLimit:           config.RateLimit,
-		FollowRedirects:     true,
-		MaxRedirects:        10,
-		MaxIdleConns:        100,
-		MaxIdleConnsPerHost: 10,
-		IdleConnTimeout:     90 * time.Second,
+	// Apply default configuration values
+	if config.RequestTimeout == 0 {
+		config.RequestTimeout = 30 * time.Second
+	}
+	if config.RetryAttempts == 0 {
+		config.RetryAttempts = 3
+	}
+	if config.MaxConcurrency == 0 {
+		config.MaxConcurrency = 5
+	}
+	if len(config.UserAgents) == 0 {
+		config.UserAgents = []string{"DataScrapexter/1.0"}
 	}
 
 	// Create HTTP client
-	httpClient := NewHTTPClient(httpConfig)
+	client := &http.Client{
+		Timeout: config.RequestTimeout,
+	}
 
 	return &ScrapingEngine{
-		config:         config,
-		httpClient:     httpClient,
-		errorCollector: &ErrorCollector{},
-		userAgentIndex: 0,
+		config:     config,
+		httpClient: client,
 	}, nil
 }
 
-// Scrape performs scraping on the given URL
+// Scrape performs the scraping operation
 func (se *ScrapingEngine) Scrape(ctx context.Context, url string) (*ScrapingResult, error) {
-	startTime := time.Now()
+	start := time.Now()
 
-	// Create result structure
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set user agent
+	if len(se.config.UserAgents) > 0 {
+		req.Header.Set("User-Agent", se.config.UserAgents[0])
+	}
+
+	// Perform HTTP request
+	resp, err := se.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("HTTP request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Parse HTML
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse HTML: %w", err)
+	}
+
+	// Extract fields
+	data := make(map[string]interface{})
+	var errors []string
+	var warnings []string
+
+	for _, field := range se.config.Fields {
+		value, err := se.extractField(doc, field)
+		if err != nil {
+			if field.Required {
+				errors = append(errors, fmt.Sprintf("required field '%s': %v", field.Name, err))
+			} else {
+				warnings = append(warnings, fmt.Sprintf("optional field '%s': %v", field.Name, err))
+				data[field.Name] = se.getDefaultValue(field)
+			}
+		} else {
+			data[field.Name] = value
+		}
+	}
+
+	// Create result
 	result := &ScrapingResult{
-		URL:  url,
-		Data: make(map[string]interface{}),
+		URL:        url,
+		StatusCode: resp.StatusCode,
+		Data:       data,
+		Success:    len(errors) == 0,
+		Errors:     errors,
+		Warnings:   warnings,
 		Metadata: ScrapingMetadata{
-			Timestamp:   startTime,
-			TotalFields: len(se.config.Fields),
+			RequestDuration: time.Since(start).String(),
+			URL:             url,
+			StatusCode:      resp.StatusCode,
+			Timestamp:       time.Now().Format(time.RFC3339),
 		},
 	}
-
-	// Clear previous errors
-	se.errorCollector.Clear()
-
-	// Perform HTTP request using the new HTTP client
-	requestStart := time.Now()
-	httpResp, err := se.httpClient.Get(ctx, url)
-	result.Metadata.RequestDuration = time.Since(requestStart)
-
-	if err != nil {
-		se.errorCollector.Add(err)
-		result.Errors = se.errorCollector.GetErrors()
-		return result, fmt.Errorf("HTTP request failed: %w", err)
-	}
-	defer httpResp.Body.Close()
-
-	result.StatusCode = httpResp.StatusCode
-	result.Metadata.ResponseSize = httpResp.BodySize
-	result.Metadata.UserAgent = se.httpClient.GetCurrentUserAgent()
-
-	// Check status code
-	if httpResp.StatusCode >= 400 {
-		err := fmt.Errorf("HTTP error: %d %s", httpResp.StatusCode, httpResp.Status)
-		se.errorCollector.Add(err)
-		result.Errors = se.errorCollector.GetErrors()
-		return result, err
-	}
-
-	// Extract data using the body bytes
-	extractionStart := time.Now()
-	extractedData, extractionErr := se.extractData(ctx, string(httpResp.BodyBytes))
-	result.Metadata.ExtractionDuration = time.Since(extractionStart)
-
-	if extractionErr != nil {
-		se.errorCollector.Add(extractionErr)
-	}
-
-	if extractedData != nil {
-		result.Data = extractedData
-		result.Metadata.ExtractedFields = len(extractedData)
-	}
-
-	// Set success status
-	result.Success = !se.errorCollector.HasErrors()
-	result.Errors = se.errorCollector.GetErrors()
 
 	return result, nil
 }
 
-// extractData extracts data from HTML content using GoQuery parser
-func (se *ScrapingEngine) extractData(ctx context.Context, html string) (map[string]interface{}, error) {
-	// Create HTML parser
-	parser, err := NewHTMLParser(html)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create HTML parser: %w", err)
+// extractField extracts a single field from the document
+func (se *ScrapingEngine) extractField(doc *goquery.Document, field FieldConfig) (interface{}, error) {
+	selection := doc.Find(field.Selector)
+	if selection.Length() == 0 {
+		return nil, fmt.Errorf("selector '%s' not found", field.Selector)
 	}
 
-	data := make(map[string]interface{})
-
-	// Extract each configured field
-	for _, field := range se.config.Fields {
-		// Extract raw value using GoQuery
-		value, err := parser.ExtractField(field)
+	switch field.Type {
+	case "text":
+		return selection.First().Text(), nil
+	case "html":
+		html, err := selection.First().Html()
 		if err != nil {
-			if field.Required {
-				return nil, fmt.Errorf("failed to extract required field '%s': %w", field.Name, err)
-			}
-			// Skip optional fields that fail extraction
-			continue
+			return nil, fmt.Errorf("failed to extract HTML: %w", err)
 		}
-
-		// Apply transformations if configured
-		if len(field.Transform) > 0 {
-			if stringValue, ok := value.(string); ok {
-				transformList := pipeline.TransformList(field.Transform)
-				transformed, err := transformList.Apply(ctx, stringValue)
-				if err != nil {
-					return nil, fmt.Errorf("transformation failed for field %s: %w", field.Name, err)
-				}
-
-				// Handle type conversions for numeric transformations
-				for _, rule := range field.Transform {
-					if rule.Type == "parse_int" {
-						if intVal, err := pipeline.ParseInt(transformed); err == nil {
-							value = intVal
-							break
-						}
-					} else if rule.Type == "parse_float" {
-						if floatVal, err := pipeline.ParseFloat(transformed); err == nil {
-							value = floatVal
-							break
-						}
-					}
-				}
-
-				// If no type conversion applied, use transformed string
-				if _, isNumeric := value.(int); !isNumeric {
-					if _, isFloat := value.(float64); !isFloat {
-						value = transformed
-					}
-				}
-			}
+		return html, nil
+	case "attr":
+		if field.Attribute == "" {
+			return nil, fmt.Errorf("attribute name required for attr type")
 		}
+		value, exists := selection.First().Attr(field.Attribute)
+		if !exists {
+			return nil, fmt.Errorf("attribute '%s' not found", field.Attribute)
+		}
+		return value, nil
+	case "list":
+		var items []string
+		selection.Each(func(i int, s *goquery.Selection) {
+			items = append(items, s.Text())
+		})
+		return items, nil
+	default:
+		return nil, fmt.Errorf("unsupported field type: %s", field.Type)
+	}
+}
 
-		data[field.Name] = value
+// getDefaultValue returns the default value for a field
+func (se *ScrapingEngine) getDefaultValue(field FieldConfig) interface{} {
+	if field.Default != nil {
+		return field.Default
 	}
 
-	return data, nil
+	switch field.Type {
+	case "text", "html", "attr":
+		return ""
+	case "list":
+		return []string{}
+	default:
+		return ""
+	}
 }
 
 // Close closes the scraping engine and cleans up resources
 func (se *ScrapingEngine) Close() error {
-	return se.httpClient.Close()
-}
-
-// GetStats returns statistics about the scraping engine
-func (se *ScrapingEngine) GetStats() map[string]interface{} {
-	stats := map[string]interface{}{
-		"total_fields":    len(se.config.Fields),
-		"user_agents":     len(se.config.UserAgents),
-		"request_timeout": se.config.RequestTimeout.String(),
-		"retry_attempts":  se.config.RetryAttempts,
-		"max_concurrency": se.config.MaxConcurrency,
+	// Close HTTP client if needed
+	if se.httpClient != nil {
+		// HTTP client doesn't need explicit closing in Go
+		se.httpClient = nil
 	}
-
-	// Add HTTP client stats
-	if httpStats := se.httpClient.GetStats(); httpStats != nil {
-		stats["http_total_requests"] = httpStats.TotalRequests
-		stats["http_successful_requests"] = httpStats.SuccessfulReqs
-		stats["http_failed_requests"] = httpStats.FailedRequests
-		stats["http_retry_count"] = httpStats.RetryCount
-		stats["http_average_latency"] = httpStats.AverageLatency.String()
-		stats["http_last_request"] = httpStats.LastRequestTime
-		stats["http_errors_by_code"] = httpStats.ErrorsByCode
-	}
-
-	return stats
+	return nil
 }
 
 // validateEngineConfig validates the engine configuration
 func validateEngineConfig(config *EngineConfig) error {
 	if config == nil {
-		return fmt.Errorf("config cannot be nil")
+		return fmt.Errorf("configuration cannot be nil")
 	}
 
 	if len(config.Fields) == 0 {
 		return fmt.Errorf("at least one field must be configured")
 	}
 
-	// Validate individual field configurations
-	for i, field := range config.Fields {
-		if err := validateFieldConfig(field); err != nil {
-			return fmt.Errorf("field %d validation failed: %w", i, err)
+	for _, field := range config.Fields {
+		if field.Name == "" {
+			return fmt.Errorf("field name cannot be empty")
 		}
-	}
-
-	// Set defaults if not provided
-	if config.RequestTimeout <= 0 {
-		config.RequestTimeout = 30 * time.Second
-	}
-
-	if config.RetryAttempts < 0 {
-		config.RetryAttempts = 3
-	}
-
-	if config.MaxConcurrency <= 0 {
-		config.MaxConcurrency = 5
-	}
-
-	if len(config.UserAgents) == 0 {
-		config.UserAgents = []string{
-			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+		if field.Selector == "" {
+			return fmt.Errorf("field selector cannot be empty for field '%s'", field.Name)
+		}
+		if field.Type == "" {
+			field.Type = "text" // default type
+		}
+		if field.Type == "attr" && field.Attribute == "" {
+			return fmt.Errorf("attribute name required for attr type field '%s'", field.Name)
 		}
 	}
 
 	return nil
-}
-
-// validateFieldConfig validates a single field configuration
-func validateFieldConfig(field FieldConfig) error {
-	if strings.TrimSpace(field.Name) == "" {
-		return fmt.Errorf("field name cannot be empty")
-	}
-
-	if strings.TrimSpace(field.Selector) == "" {
-		return fmt.Errorf("field selector cannot be empty")
-	}
-
-	validTypes := []string{"text", "html", "attribute", "href", "src", "int", "number", "float", "bool", "boolean", "date", "array"}
-	typeValid := false
-	for _, validType := range validTypes {
-		if field.Type == validType {
-			typeValid = true
-			break
-		}
-	}
-
-	if !typeValid {
-		return fmt.Errorf("invalid field type: %s", field.Type)
-	}
-
-	// Validate transform rules
-	if len(field.Transform) > 0 {
-		for i, rule := range field.Transform {
-			if err := validateTransformRule(rule, i); err != nil {
-				return fmt.Errorf("transform rule %d invalid: %w", i, err)
-			}
-		}
-	}
-
-	return nil
-}
-
-// validateTransformRule validates a single transform rule
-func validateTransformRule(rule pipeline.TransformRule, index int) error {
-	switch rule.Type {
-	case "trim", "normalize_spaces", "lowercase", "uppercase", "title", "remove_html", "extract_number", "parse_float", "parse_int":
-		// These transforms require no additional parameters
-		return nil
-	case "regex":
-		if rule.Pattern == "" {
-			return fmt.Errorf("invalid transform type 'regex': pattern is required")
-		}
-		return nil
-	case "parse_date":
-		if rule.Format != "" {
-			_, err := time.Parse(rule.Format, rule.Format)
-			if err != nil {
-				return fmt.Errorf("invalid transform type 'parse_date': invalid date format: %w", err)
-			}
-		}
-		return nil
-	case "prefix", "suffix":
-		if rule.Params == nil || rule.Params["value"] == nil {
-			return fmt.Errorf("invalid transform type '%s': requires value parameter", rule.Type)
-		}
-		return nil
-	case "replace":
-		if rule.Params == nil || rule.Params["old"] == nil || rule.Params["new"] == nil {
-			return fmt.Errorf("invalid transform type 'replace': requires old and new parameters")
-		}
-		return nil
-	default:
-		return fmt.Errorf("invalid transform type '%s'", rule.Type)
-	}
 }
