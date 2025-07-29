@@ -17,6 +17,7 @@ type ScraperConfig struct {
 	RateLimit  string             `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
 	Timeout    string             `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	MaxRetries int                `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
+	Retries    int                `yaml:"retries,omitempty" json:"retries,omitempty"` // Added missing field
 	Headers    map[string]string  `yaml:"headers,omitempty" json:"headers,omitempty"`
 	Cookies    map[string]string  `yaml:"cookies,omitempty" json:"cookies,omitempty"`
 	Proxy      *ProxyConfig       `yaml:"proxy,omitempty" json:"proxy,omitempty"`
@@ -96,8 +97,8 @@ func LoadFromBytes(data []byte) (*ScraperConfig, error) {
 	return &config, nil
 }
 
-// Validate validates the configuration
-func (c *ScraperConfig) Validate() error {
+// SimpleValidate provides basic validation (kept for backward compatibility)
+func (c *ScraperConfig) SimpleValidate() error {
 	if c.Name == "" {
 		return fmt.Errorf("name is required")
 	}
