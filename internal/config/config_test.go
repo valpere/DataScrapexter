@@ -139,6 +139,10 @@ func TestScraperConfigValidation(t *testing.T) {
 						Attribute: "src",
 					},
 				},
+				Output: OutputConfig{
+					Format: "json",
+					File:   "output.json",
+				},
 			},
 			expectError: false,
 		},

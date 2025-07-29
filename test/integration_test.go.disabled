@@ -58,7 +58,7 @@ func TestBasicScraping(t *testing.T) {
 	}
 
 	// Create scraping engine
-	engine, err := scraper.NewScrapingEngine(config)
+	engine, err := scraper.NewEngine(config)
 	if err != nil {
 		t.Fatalf("Failed to create scraping engine: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestEcommerceScraping(t *testing.T) {
 	}
 
 	// Create scraping engine
-	engine, err := scraper.NewScrapingEngine(config)
+	engine, err := scraper.NewEngine(config)
 	if err != nil {
 		t.Fatalf("Failed to create scraping engine: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestScrapingWithErrors(t *testing.T) {
 	}
 
 	// Create scraping engine
-	engine, err := scraper.NewScrapingEngine(config)
+	engine, err := scraper.NewEngine(config)
 	if err != nil {
 		t.Fatalf("Failed to create scraping engine: %v", err)
 	}
@@ -299,7 +299,7 @@ func TestScrapingTimeout(t *testing.T) {
 	}
 
 	// Create scraping engine
-	engine, err := scraper.NewScrapingEngine(config)
+	engine, err := scraper.NewEngine(config)
 	if err != nil {
 		t.Fatalf("Failed to create scraping engine: %v", err)
 	}
@@ -394,7 +394,7 @@ func TestMultipleFieldTypes(t *testing.T) {
 	}
 
 	// Create scraping engine
-	engine, err := scraper.NewScrapingEngine(config)
+	engine, err := scraper.NewEngine(config)
 	if err != nil {
 		t.Fatalf("Failed to create scraping engine: %v", err)
 	}
