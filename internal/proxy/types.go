@@ -40,6 +40,27 @@ type ProxyConfig struct {
 	Authentication   *ProxyAuth       `yaml:"authentication,omitempty" json:"authentication,omitempty"`
 	FailureThreshold int              `yaml:"failure_threshold" json:"failure_threshold"`
 	RecoveryTime     time.Duration    `yaml:"recovery_time" json:"recovery_time"`
+	TLS              *TLSConfig       `yaml:"tls,omitempty" json:"tls,omitempty"`
+}
+
+// TLSConfig defines TLS/SSL configuration for proxy connections
+type TLSConfig struct {
+	// InsecureSkipVerify controls whether the proxy manager skips verification of server certificates.
+	// WARNING: Setting this to true is dangerous and makes connections vulnerable to man-in-the-middle attacks.
+	// Only use this for testing or when connecting to internal services with self-signed certificates.
+	InsecureSkipVerify bool `yaml:"insecure_skip_verify" json:"insecure_skip_verify"`
+	
+	// ServerName is used to verify the hostname on the returned certificates unless InsecureSkipVerify is true.
+	// It is also included in the client's handshake to support virtual hosting.
+	ServerName string `yaml:"server_name,omitempty" json:"server_name,omitempty"`
+	
+	// RootCAs defines the set of root certificate authorities that clients use when verifying server certificates.
+	// If RootCAs is nil, TLS uses the host's root CA set.
+	RootCAs []string `yaml:"root_cas,omitempty" json:"root_cas,omitempty"`
+	
+	// ClientCert and ClientKey define the client certificate and key for mutual TLS authentication.
+	ClientCert string `yaml:"client_cert,omitempty" json:"client_cert,omitempty"`
+	ClientKey  string `yaml:"client_key,omitempty" json:"client_key,omitempty"`
 }
 
 // ProxyProvider represents a proxy provider configuration

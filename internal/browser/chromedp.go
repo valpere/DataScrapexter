@@ -53,10 +53,8 @@ func NewChromeClient(config *BrowserConfig) (*ChromeClient, error) {
 	}
 
 	// Create allocator context
-	allocCtx, err := chromedp.NewExecAllocator(context.Background(), opts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create exec allocator: %w", err)
-	}
+	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
+	defer cancel()
 
 	// Create context with timeout
 	ctx, cancel := chromedp.NewContext(allocCtx)
@@ -72,8 +70,7 @@ func NewChromeClient(config *BrowserConfig) (*ChromeClient, error) {
 	}
 
 	// Initialize browser with viewport
-	err := client.initialize()
-	if err != nil {
+	if err := client.initialize(); err != nil {
 		client.Close()
 		return nil, fmt.Errorf("failed to initialize browser: %w", err)
 	}

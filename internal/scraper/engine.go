@@ -137,6 +137,17 @@ func NewEngine(config *Config) (*Engine, error) {
 			}
 		}
 		
+		// Convert TLS configuration if present
+		if config.Proxy.TLS != nil {
+			proxyConfig.TLS = &proxy.TLSConfig{
+				InsecureSkipVerify: config.Proxy.TLS.InsecureSkipVerify,
+				ServerName:         config.Proxy.TLS.ServerName,
+				RootCAs:            config.Proxy.TLS.RootCAs,
+				ClientCert:         config.Proxy.TLS.ClientCert,
+				ClientKey:          config.Proxy.TLS.ClientKey,
+			}
+		}
+		
 		pm := proxy.NewProxyManager(proxyConfig)
 		if err := pm.Start(); err != nil {
 			return nil, fmt.Errorf("failed to start proxy manager: %w", err)

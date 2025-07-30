@@ -1,0 +1,40 @@
+name: "proxy_insecure_testing"
+base_url: "https://httpbin.org/ip"
+
+# DANGER: Proxy configuration with insecure TLS settings for testing only
+proxy:
+  enabled: true
+  rotation: "round_robin"
+  health_check: false  # Disabled for testing
+  timeout: "15s"
+  
+  # WARNING: INSECURE TLS Configuration - FOR TESTING ONLY!
+  tls:
+    # DANGER: This skips TLS certificate verification!
+    # This makes connections vulnerable to man-in-the-middle attacks!
+    # Only use this for testing with self-signed certificates or internal proxies!
+    insecure_skip_verify: true
+  
+  providers:
+    - name: "test_proxy"
+      type: "http"
+      host: "test-proxy.local"
+      port: 8080
+      enabled: false  # Disabled for demo
+
+# Basic configuration
+rate_limit: "1s"
+timeout: "15s"
+max_retries: 2
+
+# Fields to extract
+fields:
+  - name: "ip_info"
+    selector: "body"
+    type: "text"
+    required: true
+
+# Output configuration
+output:
+  format: "json"
+  file: "insecure_proxy_test.json"

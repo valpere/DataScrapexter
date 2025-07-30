@@ -2,7 +2,6 @@
 package proxy
 
 import (
-	"crypto/tls"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -40,9 +39,16 @@ func NewProxyManager(config *ProxyConfig) *ProxyManager {
 		}
 	}
 
-	// Create HTTP client with custom transport
+	// Create HTTP client with configurable TLS settings
+	tlsConfig, err := BuildTLSConfig(config.TLS)
+	if err != nil {
+		// Fall back to default secure configuration
+		fmt.Printf("Warning: Failed to build TLS config, using defaults: %v\n", err)
+		tlsConfig = GetDefaultTLSConfig()
+	}
+	
 	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: tlsConfig,
 	}
 
 	client := &http.Client{
@@ -501,11 +507,17 @@ func (pm *ProxyManager) HealthCheck() error {
 
 // checkProxyHealth checks if a single proxy is healthy
 func (pm *ProxyManager) checkProxyHealth(proxy *ProxyInstance, url string) error {
+	// Build TLS config
+	tlsConfig, err := BuildTLSConfig(pm.config.TLS)
+	if err != nil {
+		tlsConfig = GetDefaultTLSConfig()
+	}
+
 	// Create a client with the proxy
 	proxyURL := proxy.URL
 	transport := &http.Transport{
 		Proxy:           http.ProxyURL(proxyURL),
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: tlsConfig,
 	}
 
 	client := &http.Client{

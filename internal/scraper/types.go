@@ -157,6 +157,7 @@ type ProxyConfig struct {
 	Providers        []ProxyProvider  `yaml:"providers" json:"providers"`
 	FailureThreshold int              `yaml:"failure_threshold" json:"failure_threshold"`
 	RecoveryTime     time.Duration    `yaml:"recovery_time" json:"recovery_time"`
+	TLS              *ProxyTLSConfig  `yaml:"tls,omitempty" json:"tls,omitempty"`
 }
 
 // ProxyProvider represents a proxy provider configuration
@@ -169,6 +170,17 @@ type ProxyProvider struct {
 	Password string `yaml:"password,omitempty" json:"password,omitempty"`
 	Weight   int    `yaml:"weight,omitempty" json:"weight,omitempty"`
 	Enabled  bool   `yaml:"enabled" json:"enabled"`
+}
+
+// ProxyTLSConfig represents TLS configuration for proxy connections
+type ProxyTLSConfig struct {
+	// InsecureSkipVerify controls whether certificate verification is skipped.
+	// WARNING: Setting this to true is dangerous and makes connections vulnerable to attacks.
+	InsecureSkipVerify bool     `yaml:"insecure_skip_verify" json:"insecure_skip_verify"`
+	ServerName         string   `yaml:"server_name,omitempty" json:"server_name,omitempty"`
+	RootCAs            []string `yaml:"root_cas,omitempty" json:"root_cas,omitempty"`
+	ClientCert         string   `yaml:"client_cert,omitempty" json:"client_cert,omitempty"`
+	ClientKey          string   `yaml:"client_key,omitempty" json:"client_key,omitempty"`
 }
 
 // BrowserConfig represents browser-specific configuration for the scraper

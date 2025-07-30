@@ -70,11 +70,30 @@ type ProxyConfig struct {
 	Providers        []ProxyProvider  `yaml:"providers,omitempty" json:"providers,omitempty"`
 	FailureThreshold int              `yaml:"failure_threshold,omitempty" json:"failure_threshold,omitempty"`
 	RecoveryTime     string           `yaml:"recovery_time,omitempty" json:"recovery_time,omitempty"`
+	TLS              *TLSConfig       `yaml:"tls,omitempty" json:"tls,omitempty"`
 	
 	// Legacy support for single proxy URL
 	URL      string `yaml:"url,omitempty" json:"url,omitempty"`
 	Username string `yaml:"username,omitempty" json:"username,omitempty"`
 	Password string `yaml:"password,omitempty" json:"password,omitempty"`
+}
+
+// TLSConfig defines TLS/SSL configuration
+type TLSConfig struct {
+	// InsecureSkipVerify controls whether certificate verification is skipped.
+	// WARNING: Setting this to true is dangerous and makes connections vulnerable to attacks.
+	// Only use this for testing or with trusted internal services.
+	InsecureSkipVerify bool `yaml:"insecure_skip_verify" json:"insecure_skip_verify"`
+	
+	// ServerName is used to verify the hostname on returned certificates.
+	ServerName string `yaml:"server_name,omitempty" json:"server_name,omitempty"`
+	
+	// RootCAs defines the set of root certificate authorities.
+	RootCAs []string `yaml:"root_cas,omitempty" json:"root_cas,omitempty"`
+	
+	// ClientCert and ClientKey define the client certificate and key for mutual TLS.
+	ClientCert string `yaml:"client_cert,omitempty" json:"client_cert,omitempty"`
+	ClientKey  string `yaml:"client_key,omitempty" json:"client_key,omitempty"`
 }
 
 // ProxyProvider represents a proxy provider configuration

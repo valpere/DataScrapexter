@@ -271,6 +271,17 @@ func convertToEngineConfig(cfg *config.ScraperConfig) *scraper.Config {
 			}
 		}
 
+		// Convert TLS configuration if present
+		if cfg.Proxy.TLS != nil {
+			proxyConfig.TLS = &scraper.ProxyTLSConfig{
+				InsecureSkipVerify: cfg.Proxy.TLS.InsecureSkipVerify,
+				ServerName:         cfg.Proxy.TLS.ServerName,
+				RootCAs:            cfg.Proxy.TLS.RootCAs,
+				ClientCert:         cfg.Proxy.TLS.ClientCert,
+				ClientKey:          cfg.Proxy.TLS.ClientKey,
+			}
+		}
+
 		engineConfig.Proxy = proxyConfig
 	}
 

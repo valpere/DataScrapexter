@@ -2,7 +2,6 @@
 package proxy
 
 import (
-	"crypto/tls"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -18,8 +17,9 @@ type DefaultHealthChecker struct {
 
 // NewDefaultHealthChecker creates a new default health checker
 func NewDefaultHealthChecker(timeout time.Duration) *DefaultHealthChecker {
+	// Use secure TLS configuration by default
 	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: GetDefaultTLSConfig(),
 	}
 
 	client := &http.Client{
@@ -40,10 +40,10 @@ func (hc *DefaultHealthChecker) Check(proxy *ProxyInstance) error {
 		return fmt.Errorf("invalid proxy instance")
 	}
 
-	// Create transport with proxy
+	// Create transport with proxy using secure TLS by default
 	transport := &http.Transport{
 		Proxy:           http.ProxyURL(proxy.URL),
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: GetDefaultTLSConfig(),
 	}
 
 	// Create client with proxy transport
@@ -228,10 +228,10 @@ func TestProxy(provider *ProxyProvider, testURL string, timeout time.Duration) e
 		return fmt.Errorf("invalid proxy URL: %v", err)
 	}
 
-	// Create HTTP client with proxy
+	// Create HTTP client with proxy using secure TLS by default
 	transport := &http.Transport{
 		Proxy:           http.ProxyURL(proxyURL),
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: GetDefaultTLSConfig(),
 	}
 
 	client := &http.Client{
