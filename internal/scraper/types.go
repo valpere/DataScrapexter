@@ -256,7 +256,7 @@ type PaginationConfig struct {
 	NextButtonText   string        `yaml:"next_button_text,omitempty" json:"next_button_text,omitempty"`
 	WaitAfterClick   time.Duration `yaml:"wait_after_click,omitempty" json:"wait_after_click,omitempty"`
 	
-	// Page numbers pagination  
+	// Page numbers pagination
 	PageSelector     string `yaml:"page_selector,omitempty" json:"page_selector,omitempty"`
 	PageURLPattern   string `yaml:"page_url_pattern,omitempty" json:"page_url_pattern,omitempty"`
 	
