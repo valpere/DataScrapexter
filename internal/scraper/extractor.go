@@ -20,6 +20,15 @@ import (
 
 var extractorLogger = utils.NewComponentLogger("field-extractor")
 
+// Pre-compiled regular expressions for performance
+var (
+	numberCleanRegex = regexp.MustCompile(`[^\d.-]`)
+	integerRegex     = regexp.MustCompile(`-?\d+`)
+	emailRegex       = regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
+	phoneRegex       = regexp.MustCompile(`[\+]?[1-9][\d\s\-\(\)\.]{7,15}`)
+	phoneCleanRegex  = regexp.MustCompile(`[^\d\+]`)
+)
+
 // FieldExtractor handles extraction and transformation of individual fields
 type FieldExtractor struct {
 	config   FieldConfig
@@ -179,18 +188,18 @@ func (fe *FieldExtractor) extractRawValue() (interface{}, error) {
 	switch fe.config.Type {
 	case "text":
 		return strings.TrimSpace(selection.First().Text()), nil
-		
+
 	case "html":
 		html, err := selection.First().Html()
 		return html, err
-		
+
 	case "attr":
 		attr, exists := selection.First().Attr(fe.config.Attribute)
 		if !exists {
 			return nil, nil
 		}
 		return attr, nil
-		
+
 	case "list":
 		var items []string
 		selection.Each(func(i int, s *goquery.Selection) {
@@ -201,7 +210,7 @@ func (fe *FieldExtractor) extractRawValue() (interface{}, error) {
 	// Numeric types
 	case "number", "float":
 		return fe.extractNumber(selection.First())
-		
+
 	case "integer":
 		return fe.extractInteger(selection.First())
 
@@ -212,37 +221,37 @@ func (fe *FieldExtractor) extractRawValue() (interface{}, error) {
 	// Date/time types
 	case "date":
 		return fe.extractDate(selection.First())
-		
+
 	case "datetime":
 		return fe.extractDateTime(selection.First())
-		
+
 	case "time":
 		return fe.extractTime(selection.First())
 
 	// URL and communication types
 	case "url":
 		return fe.extractURL(selection.First())
-		
+
 	case "email":
 		return fe.extractEmail(selection.First())
-		
+
 	case "phone":
 		return fe.extractPhone(selection.First())
 
 	// Structured data types
 	case "json":
 		return fe.extractJSON(selection.First())
-		
+
 	case "csv":
 		return fe.extractCSV(selection.First())
-		
+
 	case "table":
 		return fe.extractTable(selection)
 
 	// Utility types
 	case "count":
 		return selection.Length(), nil
-		
+
 	case "exists":
 		return selection.Length() > 0, nil
 
@@ -283,7 +292,7 @@ func (fe *FieldExtractor) extractNumber(selection *goquery.Selection) (float64, 
 	}
 
 	// Clean common number formatting
-	cleaned := nonNumericRegex.ReplaceAllString(text, "")
+	cleaned := numberCleanRegex.ReplaceAllString(text, "")
 	if cleaned == "" {
 		return 0.0, fmt.Errorf("no numeric value found in: %s", text)
 	}
@@ -304,8 +313,7 @@ func (fe *FieldExtractor) extractInteger(selection *goquery.Selection) (int64, e
 	}
 
 	// Extract first integer from text
-	re := regexp.MustCompile(`-?\d+`)
-	match := re.FindString(text)
+	match := integerRegex.FindString(text)
 	if match == "" {
 		return 0, fmt.Errorf("no integer value found in: %s", text)
 	}
@@ -321,7 +329,7 @@ func (fe *FieldExtractor) extractInteger(selection *goquery.Selection) (int64, e
 // extractBoolean extracts and parses a boolean value
 func (fe *FieldExtractor) extractBoolean(selection *goquery.Selection) (bool, error) {
 	text := strings.ToLower(strings.TrimSpace(selection.Text()))
-	
+
 	// Check for common boolean representations
 	switch text {
 	case "true", "yes", "1", "on", "enabled", "active", "available":
@@ -346,7 +354,7 @@ func (fe *FieldExtractor) extractBoolean(selection *goquery.Selection) (bool, er
 // extractDate extracts and parses a date
 func (fe *FieldExtractor) extractDate(selection *goquery.Selection) (string, error) {
 	var text string
-	
+
 	// First check for datetime attribute
 	if datetime, exists := selection.Attr("datetime"); exists {
 		text = datetime
@@ -383,7 +391,7 @@ func (fe *FieldExtractor) extractDate(selection *goquery.Selection) (string, err
 // extractDateTime extracts and parses a datetime
 func (fe *FieldExtractor) extractDateTime(selection *goquery.Selection) (string, error) {
 	var text string
-	
+
 	// First check for datetime attribute
 	if datetime, exists := selection.Attr("datetime"); exists {
 		text = datetime
@@ -478,7 +486,7 @@ func (fe *FieldExtractor) extractURL(selection *goquery.Selection) (string, erro
 // extractEmail extracts and validates an email address
 func (fe *FieldExtractor) extractEmail(selection *goquery.Selection) (string, error) {
 	text := strings.TrimSpace(selection.Text())
-	
+
 	// Also check href attribute for mailto links
 	if href, exists := selection.Attr("href"); exists && strings.HasPrefix(href, "mailto:") {
 		text = strings.TrimPrefix(href, "mailto:")
@@ -489,7 +497,6 @@ func (fe *FieldExtractor) extractEmail(selection *goquery.Selection) (string, er
 	}
 
 	// Extract email pattern from text
-	emailRegex := regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
 	match := emailRegex.FindString(text)
 	if match == "" {
 		return "", fmt.Errorf("no valid email found in: %s", text)
@@ -506,7 +513,7 @@ func (fe *FieldExtractor) extractEmail(selection *goquery.Selection) (string, er
 // extractPhone extracts and formats a phone number
 func (fe *FieldExtractor) extractPhone(selection *goquery.Selection) (string, error) {
 	text := strings.TrimSpace(selection.Text())
-	
+
 	// Also check href attribute for tel links
 	if href, exists := selection.Attr("href"); exists && strings.HasPrefix(href, "tel:") {
 		text = strings.TrimPrefix(href, "tel:")
@@ -517,14 +524,13 @@ func (fe *FieldExtractor) extractPhone(selection *goquery.Selection) (string, er
 	}
 
 	// Extract phone number pattern (basic international format)
-	phoneRegex := regexp.MustCompile(`[\+]?[1-9][\d\s\-\(\)\.]{7,15}`)
 	match := phoneRegex.FindString(text)
 	if match == "" {
 		return "", fmt.Errorf("no valid phone number found in: %s", text)
 	}
 
 	// Clean up the phone number
-	cleaned := regexp.MustCompile(`[^\d\+]`).ReplaceAllString(match, "")
+	cleaned := phoneCleanRegex.ReplaceAllString(match, "")
 	return cleaned, nil
 }
 

@@ -10,6 +10,15 @@ import (
 	"strings"
 )
 
+// Pre-compiled regular expressions for performance
+var (
+	spacesRegex        = regexp.MustCompile(`\s+`)
+	htmlTagsRegex      = regexp.MustCompile(`<[^>]*>`)
+	intCleanRegex      = regexp.MustCompile(`[^0-9-]`)
+	numberExtractRegex = regexp.MustCompile(`\d+(?:\.\d+)?`)
+	currencyCleanRegex = regexp.MustCompile(`[^\d.-]`)
+)
+
 // TransformRule defines a single transformation rule
 type TransformRule struct {
 	Type        string                 `yaml:"type" json:"type"`
@@ -40,11 +49,9 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 	case "uppercase":
 		return strings.ToUpper(input), nil
 	case "normalize_spaces":
-		re := regexp.MustCompile(`\s+`)
-		return re.ReplaceAllString(strings.TrimSpace(input), " "), nil
+		return spacesRegex.ReplaceAllString(strings.TrimSpace(input), " "), nil
 	case "remove_html":
-		re := regexp.MustCompile(`<[^>]*>`)
-		return strings.TrimSpace(re.ReplaceAllString(input, "")), nil
+		return strings.TrimSpace(htmlTagsRegex.ReplaceAllString(input, "")), nil
 	case "regex":
 		if tr.Pattern == "" {
 			return "", fmt.Errorf("regex pattern is required")
@@ -63,8 +70,7 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 		}
 		return cleaned, nil
 	case "parse_int":
-		re := regexp.MustCompile(`[^0-9-]`)
-		cleaned := re.ReplaceAllString(input, "")
+		cleaned := intCleanRegex.ReplaceAllString(input, "")
 		if cleaned == "" {
 			return "0", nil
 		}
@@ -73,8 +79,7 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 		}
 		return cleaned, nil
 	case "extract_numbers":
-		re := regexp.MustCompile(`\d+(?:\.\d+)?`)
-		match := re.FindString(input)
+		match := numberExtractRegex.FindString(input)
 		if match == "" {
 			return "0", nil
 		}
@@ -157,7 +162,7 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 		
 	case "format_currency":
 		// Clean the number first
-		cleaned := regexp.MustCompile(`[^\d.-]`).ReplaceAllString(input, "")
+		cleaned := currencyCleanRegex.ReplaceAllString(input, "")
 		if cleaned == "" {
 			return input, nil
 		}
