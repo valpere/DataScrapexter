@@ -96,8 +96,8 @@ func (p *BrowserPool) Put(browser BrowserClient) error {
 		// Pool is full, close the browser
 		browser.Close()
 		p.mu.Lock()
+		defer p.mu.Unlock()
 		p.currentSize--
-		p.mu.Unlock()
 		return nil
 	}
 }
