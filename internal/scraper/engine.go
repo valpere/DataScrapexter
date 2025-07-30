@@ -23,7 +23,7 @@ type Engine struct {
 	config         *Config
 	rateLimiter    *RateLimiter
 	
-	// Enhanced features
+	// Enhanced features: error handling, browser automation, and proxy management
 	errorService   *errors.Service
 	browserManager *browser.BrowserManager
 	proxyManager   proxy.Manager
