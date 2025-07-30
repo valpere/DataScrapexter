@@ -1,0 +1,55 @@
+name: "proxy_with_tls_configuration"
+base_url: "https://httpbin.org/ip"
+
+# Proxy configuration with TLS settings
+proxy:
+  enabled: true
+  rotation: "round_robin"
+  health_check: true
+  health_check_rate: "5m"
+  timeout: "30s"
+  failure_threshold: 3
+  recovery_time: "10m"
+  
+  # TLS Configuration
+  tls:
+    # WARNING: Only set insecure_skip_verify to true for testing!
+    # This makes connections vulnerable to man-in-the-middle attacks
+    insecure_skip_verify: false  # Default: false (secure)
+    
+    # Optional: Specify server name for certificate verification
+    # server_name: "proxy.example.com"
+    
+    # Optional: Custom root CA certificates
+    # root_cas:
+    #   - "/path/to/ca-cert.pem"
+    
+    # Optional: Client certificate for mutual TLS
+    # client_cert: "/path/to/client-cert.pem"
+    # client_key: "/path/to/client-key.pem"
+  
+  providers:
+    - name: "secure_proxy"
+      type: "https"
+      host: "secure-proxy.example.com"
+      port: 8080
+      username: "user"
+      password: "pass"
+      enabled: false  # Disabled for demo
+
+# Rate limiting
+rate_limit: "2s"
+timeout: "30s"
+max_retries: 3
+
+# Fields to extract
+fields:
+  - name: "ip_info"
+    selector: "body"
+    type: "text"
+    required: true
+
+# Output configuration
+output:
+  format: "json"
+  file: "proxy_tls_test.json"

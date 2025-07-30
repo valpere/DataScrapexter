@@ -338,7 +338,15 @@ func (nps *NumberedPagesStrategy) GetNextURL(ctx context.Context, currentURL str
 		baseURL = currentURL
 	}
 
-	// Parse the base URL
+	// Check if baseURL contains template patterns like {page} or {PAGE}
+	if strings.Contains(baseURL, "{page}") || strings.Contains(baseURL, "{PAGE}") {
+		// Handle URL template pattern
+		pageURL := strings.ReplaceAll(baseURL, "{page}", strconv.Itoa(nextPageNum))
+		pageURL = strings.ReplaceAll(pageURL, "{PAGE}", strconv.Itoa(nextPageNum))
+		return pageURL, nil
+	}
+
+	// Parse the base URL for query parameter approach
 	u, err := url.Parse(baseURL)
 	if err != nil {
 		return "", fmt.Errorf("invalid base URL: %w", err)
@@ -369,25 +377,46 @@ func (nps *NumberedPagesStrategy) GetName() string {
 // CreatePaginationStrategy creates a pagination strategy from config
 func CreatePaginationStrategy(config PaginationConfig) (PaginationStrategy, error) {
 	switch config.Type {
-	case "offset":
-		strategy := &OffsetStrategy{}
-		// TODO: Implement config mapping
-		return strategy, nil
+	case PaginationTypeOffset:
+		return &OffsetStrategy{
+			BaseURL:     "",
+			OffsetParam: config.OffsetParam,
+			LimitParam:  config.LimitParam,
+			Limit:       config.PageSize,
+			MaxOffset:   config.MaxPages * config.PageSize,
+		}, nil
+		
+	case PaginationTypePages, "numbered":
+		return &NumberedPagesStrategy{
+			BaseURL:   "",
+			PageParam: config.PageParam,
+			StartPage: config.StartPage,
+			MaxPages:  config.MaxPages,
+		}, nil
+		
+	case PaginationTypeNextButton:
+		return &NextButtonStrategy{
+			Selector: config.NextSelector,
+			MaxPages: config.MaxPages,
+		}, nil
+		
+	case PaginationTypeURLPattern:
+		return &NumberedPagesStrategy{
+			BaseURL:   config.URLTemplate,
+			PageParam: "page",
+			StartPage: config.StartPage,
+			MaxPages:  config.MaxPages,
+		}, nil
 		
 	case "cursor":
-		strategy := &CursorStrategy{}
-		// TODO: Implement config mapping
-		return strategy, nil
-		
-	case "next_button":
-		strategy := &NextButtonStrategy{}
-		// TODO: Implement config mapping
-		return strategy, nil
-		
-	case "numbered":
-		strategy := &NumberedPagesStrategy{}
-		// TODO: Implement config mapping
-		return strategy, nil
+		return &CursorStrategy{
+			BaseURL:        "",
+			CursorParam:    config.PageParam,
+			LimitParam:     config.LimitParam,
+			Limit:          config.PageSize,
+			MaxPages:       config.MaxPages,
+			CursorSelector: config.ScrollSelector,
+		}, nil
 		
 	default:
 		return nil, fmt.Errorf("unknown pagination strategy: %s", config.Type)

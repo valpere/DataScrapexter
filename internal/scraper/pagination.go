@@ -10,21 +10,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-// PaginationConfig defines pagination configuration
-type PaginationConfig struct {
-	Type        string `yaml:"type" json:"type"`
-	Selector    string `yaml:"selector,omitempty" json:"selector,omitempty"`
-	MaxPages    int    `yaml:"max_pages,omitempty" json:"max_pages,omitempty"`
-	
-	// For offset pagination
-	OffsetParam string `yaml:"offset_param,omitempty" json:"offset_param,omitempty"`
-	LimitParam  string `yaml:"limit_param,omitempty" json:"limit_param,omitempty"`
-	Limit       int    `yaml:"limit,omitempty" json:"limit,omitempty"`
-	
-	// For cursor pagination  
-	CursorParam    string `yaml:"cursor_param,omitempty" json:"cursor_param,omitempty"`
-	CursorSelector string `yaml:"cursor_selector,omitempty" json:"cursor_selector,omitempty"`
-}
+// Note: PaginationConfig is now defined in types.go to avoid conflicts
 
 // PaginationManager manages pagination across different strategies
 type PaginationManager struct {
@@ -32,14 +18,7 @@ type PaginationManager struct {
 	strategy PaginationStrategy
 }
 
-// PaginationResult holds the result of a pagination operation
-type PaginationResult struct {
-	NextURL     string `json:"next_url"`
-	CurrentPage int    `json:"current_page"`
-	IsComplete  bool   `json:"is_complete"`
-	Strategy    string `json:"strategy"`
-	Error       string `json:"error,omitempty"`
-}
+// Note: PaginationResult is now defined in types.go to avoid conflicts
 
 // NewPaginationManager creates a new pagination manager
 func NewPaginationManager(config PaginationConfig) (*PaginationManager, error) {
@@ -60,35 +39,46 @@ func NewPaginationManager(config PaginationConfig) (*PaginationManager, error) {
 // createStrategy creates the appropriate pagination strategy
 func (pm *PaginationManager) createStrategy() (PaginationStrategy, error) {
 	switch pm.config.Type {
-	case "offset":
+	case PaginationTypeOffset:
 		return &OffsetStrategy{
 			BaseURL:     "",
 			OffsetParam: pm.config.OffsetParam,
 			LimitParam:  pm.config.LimitParam,
-			Limit:       pm.config.Limit,
-			MaxOffset:   pm.config.MaxPages * pm.config.Limit,
+			Limit:       pm.config.PageSize,
+			MaxOffset:   pm.config.MaxPages * pm.config.PageSize,
+		}, nil
+		
+	case PaginationTypePages, "numbered":
+		return &NumberedPagesStrategy{
+			BaseURL:   "",
+			PageParam: pm.config.PageParam,
+			StartPage: pm.config.StartPage,
+			MaxPages:  pm.config.MaxPages,
+		}, nil
+		
+	case PaginationTypeNextButton:
+		return &NextButtonStrategy{
+			Selector: pm.config.NextSelector,
+			MaxPages: pm.config.MaxPages,
+		}, nil
+		
+	case PaginationTypeURLPattern:
+		// For URL pattern, we'll use NumberedPagesStrategy but with URL template handling
+		return &NumberedPagesStrategy{
+			BaseURL:   pm.config.URLTemplate,
+			PageParam: "page", // Will be replaced in URL template
+			StartPage: pm.config.StartPage,
+			MaxPages:  pm.config.MaxPages,
 		}, nil
 		
 	case "cursor":
 		return &CursorStrategy{
 			BaseURL:        "",
-			CursorParam:    pm.config.CursorParam,
+			CursorParam:    pm.config.PageParam, // Reuse page param for cursor
 			LimitParam:     pm.config.LimitParam,
-			Limit:          pm.config.Limit,
+			Limit:          pm.config.PageSize,
 			MaxPages:       pm.config.MaxPages,
-			CursorSelector: pm.config.CursorSelector,
-		}, nil
-		
-	case "next_button":
-		return &NextButtonStrategy{
-			Selector: pm.config.Selector,
-			MaxPages: pm.config.MaxPages,
-		}, nil
-		
-	case "numbered":
-		return &NumberedPagesStrategy{
-			BaseURL:  "",
-			MaxPages: pm.config.MaxPages,
+			CursorSelector: pm.config.ScrollSelector, // Reuse scroll selector for cursor
 		}, nil
 		
 	default:
@@ -124,29 +114,42 @@ func (pm *PaginationManager) GetStrategyName() string {
 }
 
 // ValidatePaginationConfig validates pagination configuration
-func ValidatePaginationConfig(config PaginationConfig) error {
+func ValidatePaginationConfig(config *PaginationConfig) error {
 	if config.Type == "" {
 		return fmt.Errorf("pagination type is required")
 	}
 	
 	switch config.Type {
-	case "offset":
-		if config.Limit <= 0 {
-			return fmt.Errorf("limit must be greater than 0 for offset pagination")
+	case PaginationTypeOffset:
+		if config.PageSize <= 0 {
+			return fmt.Errorf("page_size must be greater than 0 for offset pagination")
+		}
+		if config.OffsetParam == "" {
+			config.OffsetParam = "offset"
+		}
+		if config.LimitParam == "" {
+			config.LimitParam = "limit"
 		}
 		
-	case "cursor":
-		if config.CursorSelector == "" {
-			return fmt.Errorf("cursor_selector is required for cursor pagination")
+	case PaginationTypeNextButton:
+		if config.NextSelector == "" {
+			return fmt.Errorf("next_selector is required for next_button pagination")
 		}
 		
-	case "next_button":
-		if config.Selector == "" {
-			return fmt.Errorf("selector is required for next_button pagination")
+	case PaginationTypeURLPattern:
+		if config.URLTemplate == "" {
+			return fmt.Errorf("url_template is required for url_pattern pagination")
 		}
 		
-	case "numbered":
-		// No additional validation needed for numbered pagination
+	case PaginationTypePages:
+		if config.PageParam == "" {
+			config.PageParam = "page"
+		}
+		
+	case PaginationTypeScrolling:
+		if config.ScrollSelector == "" && config.LoadMoreSelector == "" {
+			return fmt.Errorf("either scroll_selector or load_more_selector is required for scrolling pagination")
+		}
 		
 	default:
 		return fmt.Errorf("unsupported pagination type: %s", config.Type)
@@ -154,6 +157,10 @@ func ValidatePaginationConfig(config PaginationConfig) error {
 	
 	if config.MaxPages < 0 {
 		return fmt.Errorf("max_pages cannot be negative")
+	}
+	
+	if config.StartPage <= 0 {
+		config.StartPage = 1
 	}
 	
 	return nil

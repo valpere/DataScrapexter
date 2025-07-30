@@ -98,7 +98,7 @@ func TestNextButtonStrategy_GetNextURL(t *testing.T) {
 
 func TestCreatePaginationStrategy(t *testing.T) {
 	config := PaginationConfig{
-		Type: "offset",
+		Type: PaginationTypeOffset,
 	}
 	
 	strategy, err := CreatePaginationStrategy(config)
@@ -118,21 +118,29 @@ func TestCreatePaginationStrategy(t *testing.T) {
 func TestValidatePaginationConfig(t *testing.T) {
 	// Valid config
 	config := PaginationConfig{
-		Type:  "offset",
-		Limit: 10,
+		Type:     PaginationTypeOffset,
+		PageSize: 10,
 	}
 	
-	err := ValidatePaginationConfig(config)
+	err := ValidatePaginationConfig(&config)
 	if err != nil {
 		t.Errorf("unexpected error for valid config: %v", err)
 	}
 	
-	// Invalid config - missing type
-	invalidConfig := PaginationConfig{
-		Limit: 10,
+	// Check that defaults were set
+	if config.OffsetParam != "offset" {
+		t.Errorf("expected OffsetParam default to be 'offset', got %q", config.OffsetParam)
+	}
+	if config.LimitParam != "limit" {
+		t.Errorf("expected LimitParam default to be 'limit', got %q", config.LimitParam)
 	}
 	
-	err = ValidatePaginationConfig(invalidConfig)
+	// Invalid config - missing type
+	invalidConfig := PaginationConfig{
+		PageSize: 10,
+	}
+	
+	err = ValidatePaginationConfig(&invalidConfig)
 	if err == nil {
 		t.Errorf("expected error for invalid config but got none")
 	}

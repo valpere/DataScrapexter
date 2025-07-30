@@ -1,0 +1,45 @@
+# Browser Automation Example
+# This configuration demonstrates JavaScript-heavy site scraping using Chrome automation
+
+name: "browser_automation_example"
+base_url: "https://quotes.toscrape.com/js/"
+
+# Rate limiting
+rate_limit: "2s"
+timeout: "30s"
+max_retries: 3
+
+# Browser automation configuration
+browser:
+  enabled: true
+  headless: true
+  timeout: "30s"
+  viewport_width: 1920
+  viewport_height: 1080
+  wait_for_element: ".quote"  # Wait for quotes to load via JavaScript
+  wait_delay: "3s"           # Additional wait after element appears
+  disable_images: true       # Faster loading
+  disable_css: false
+  disable_js: false          # Keep JavaScript enabled for dynamic content
+
+# Data extraction fields
+fields:
+  - name: "quote_text"
+    selector: ".quote .text"
+    type: "text"
+    required: true
+    
+  - name: "author"
+    selector: ".quote .author"
+    type: "text"
+    required: true
+    
+  - name: "tags"
+    selector: ".quote .tags .tag"
+    type: "list"
+    required: false
+
+# Output configuration
+output:
+  format: "json"
+  file: "browser_quotes.json"

@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/valpere/DataScrapexter/internal/browser"
 	"github.com/valpere/DataScrapexter/internal/errors"
+	"github.com/valpere/DataScrapexter/internal/proxy"
 )
 
 // Enhanced Engine struct (existing fields preserved, error service added)
@@ -21,8 +23,10 @@ type Engine struct {
 	config         *Config
 	rateLimiter    *RateLimiter
 	
-	// Error management service added
+	// Enhanced features: error handling, browser automation, and proxy management
 	errorService   *errors.Service
+	browserManager *browser.BrowserManager
+	proxyManager   proxy.Manager
 }
 
 // Enhanced Result struct (existing fields preserved, error info added)
@@ -64,11 +68,92 @@ func NewEngine(config *Config) (*Engine, error) {
 		},
 	}
 
-	// Enhanced with error service
+	// Enhanced with error service and browser manager
 	engine := &Engine{
 		httpClient:   client,
 		config:       config,
 		errorService: errors.NewService(),
+	}
+
+	// Setup browser automation if configured
+	if config.Browser != nil {
+		// Convert scraper BrowserConfig to browser package BrowserConfig
+		browserConfig := &browser.BrowserConfig{
+			Enabled:        config.Browser.Enabled,
+			Headless:       config.Browser.Headless,
+			UserDataDir:    config.Browser.UserDataDir,
+			Timeout:        config.Browser.Timeout,
+			ViewportWidth:  config.Browser.ViewportWidth,
+			ViewportHeight: config.Browser.ViewportHeight,
+			WaitForElement: config.Browser.WaitForElement,
+			WaitDelay:      config.Browser.WaitDelay,
+			UserAgent:      config.Browser.UserAgent,
+			DisableImages:  config.Browser.DisableImages,
+			DisableCSS:     config.Browser.DisableCSS,
+			DisableJS:      config.Browser.DisableJS,
+		}
+		
+		bm, err := browser.NewBrowserManager(browserConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create browser manager (enabled=%t, headless=%t, timeout=%v): %w", 
+				config.Browser.Enabled, config.Browser.Headless, config.Browser.Timeout, err)
+		}
+		engine.browserManager = bm
+	}
+
+	// Setup proxy manager if configured
+	if config.Proxy != nil {
+		// Convert scraper ProxyConfig to proxy package ProxyConfig
+		// Parse rotation strategy
+		rotation, err := ParseRotationStrategy(config.Proxy.Rotation)
+		if err != nil {
+			return nil, fmt.Errorf("invalid rotation strategy: %w", err)
+		}
+		
+		proxyConfig := &proxy.ProxyConfig{
+			Enabled:          config.Proxy.Enabled,
+			Rotation:         rotation,
+			HealthCheck:      config.Proxy.HealthCheck,
+			HealthCheckURL:   config.Proxy.HealthCheckURL,
+			HealthCheckRate:  config.Proxy.HealthCheckRate,
+			Timeout:          config.Proxy.Timeout,
+			MaxRetries:       config.Proxy.MaxRetries,
+			RetryDelay:       config.Proxy.RetryDelay,
+			FailureThreshold: config.Proxy.FailureThreshold,
+			RecoveryTime:     config.Proxy.RecoveryTime,
+			Providers:        make([]proxy.ProxyProvider, len(config.Proxy.Providers)),
+		}
+		
+		// Convert providers
+		for i, provider := range config.Proxy.Providers {
+			proxyConfig.Providers[i] = proxy.ProxyProvider{
+				Name:     provider.Name,
+				Type:     proxy.ProxyType(provider.Type),
+				Host:     provider.Host,
+				Port:     provider.Port,
+				Username: provider.Username,
+				Password: provider.Password,
+				Weight:   provider.Weight,
+				Enabled:  provider.Enabled,
+			}
+		}
+		
+		// Convert TLS configuration if present
+		if config.Proxy.TLS != nil {
+			proxyConfig.TLS = &proxy.TLSConfig{
+				InsecureSkipVerify: config.Proxy.TLS.InsecureSkipVerify,
+				ServerName:         config.Proxy.TLS.ServerName,
+				RootCAs:            config.Proxy.TLS.RootCAs,
+				ClientCert:         config.Proxy.TLS.ClientCert,
+				ClientKey:          config.Proxy.TLS.ClientKey,
+			}
+		}
+		
+		pm := proxy.NewProxyManager(proxyConfig)
+		if err := pm.Start(); err != nil {
+			return nil, fmt.Errorf("failed to start proxy manager: %w", err)
+		}
+		engine.proxyManager = pm
 	}
 
 	// Existing rate limiter setup preserved
@@ -135,11 +220,59 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 	return result, nil
 }
 
-// Enhanced fetchDocument method (existing logic preserved, error handling improved)
+// Enhanced fetchDocument method (existing logic preserved, browser automation added)
 func (e *Engine) fetchDocument(ctx context.Context, url string) (*goquery.Document, error) {
 	// Existing rate limiting preserved
 	if e.rateLimiter != nil {
 		e.rateLimiter.Wait()
+	}
+
+	// Use browser automation if enabled
+	if e.browserManager != nil && e.browserManager.IsEnabled() {
+		return e.fetchDocumentWithBrowser(ctx, url)
+	}
+
+	// Fallback to existing HTTP client logic
+	return e.fetchDocumentWithHTTP(ctx, url)
+}
+
+// fetchDocumentWithBrowser uses browser automation to fetch the document
+func (e *Engine) fetchDocumentWithBrowser(ctx context.Context, url string) (*goquery.Document, error) {
+	html, err := e.browserManager.FetchHTML(ctx, url)
+	if err != nil {
+		return nil, fmt.Errorf("browser fetch failed: %w", err)
+	}
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse HTML from browser: %w", err)
+	}
+
+	return doc, nil
+}
+
+// fetchDocumentWithHTTP uses HTTP client to fetch the document (existing logic preserved)
+func (e *Engine) fetchDocumentWithHTTP(ctx context.Context, url string) (*goquery.Document, error) {
+	// Get proxy if proxy manager is enabled
+	var proxyInstance *proxy.ProxyInstance
+	if e.proxyManager != nil && e.proxyManager.IsEnabled() {
+		var err error
+		proxyInstance, err = e.proxyManager.GetProxy()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get proxy: %w", err)
+		}
+	}
+
+	// Create HTTP client with proxy if available
+	client := e.httpClient
+	if proxyInstance != nil {
+		transport := &http.Transport{
+			Proxy: http.ProxyURL(proxyInstance.URL),
+		}
+		client = &http.Client{
+			Transport: transport,
+			Timeout:   e.config.Timeout,
+		}
 	}
 
 	// Existing request creation preserved
@@ -154,16 +287,30 @@ func (e *Engine) fetchDocument(ctx context.Context, url string) (*goquery.Docume
 		req.Header.Set(key, value)
 	}
 
-	// Execute request with existing client
-	resp, err := e.httpClient.Do(req)
+	// Execute request with proxy-aware client
+	resp, err := client.Do(req)
 	if err != nil {
+		// Report proxy failure if proxy was used
+		if proxyInstance != nil {
+			e.proxyManager.ReportFailure(proxyInstance, err)
+		}
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Existing status code handling preserved
 	if resp.StatusCode >= 400 {
+		// Report proxy failure for client errors when using proxy
+		if proxyInstance != nil {
+			httpErr := fmt.Errorf("HTTP error %d: %s", resp.StatusCode, resp.Status)
+			e.proxyManager.ReportFailure(proxyInstance, httpErr)
+		}
 		return nil, fmt.Errorf("HTTP error %d: %s", resp.StatusCode, resp.Status)
+	}
+
+	// Report proxy success if proxy was used
+	if proxyInstance != nil {
+		e.proxyManager.ReportSuccess(proxyInstance)
 	}
 
 	// Existing document parsing preserved
@@ -256,4 +403,146 @@ func (e *Engine) GetErrorSummary(result *Result) string {
 // GetUserFriendlyError converts engine errors to user-friendly format
 func (e *Engine) GetUserFriendlyError(err error) (title, message string, suggestions []string) {
 	return e.errorService.GetUserFriendlyError(err)
+}
+
+// Close closes the scraper engine and releases resources
+func (e *Engine) Close() error {
+	if e.browserManager != nil {
+		return e.browserManager.Close()
+	}
+	return nil
+}
+
+// IsBrowserEnabled returns whether browser automation is enabled
+func (e *Engine) IsBrowserEnabled() bool {
+	return e.browserManager != nil && e.browserManager.IsEnabled()
+}
+
+// ScrapeWithPagination scrapes multiple pages based on pagination configuration
+func (e *Engine) ScrapeWithPagination(ctx context.Context, baseURL string, extractors []FieldConfig) (*PaginationResult, error) {
+	if e.config.Pagination == nil || !e.config.Pagination.Enabled {
+		// If pagination is disabled, just scrape the single page
+		result, err := e.Scrape(ctx, baseURL, extractors)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scrape single page: %w", err)
+		}
+		
+		return &PaginationResult{
+			Pages: []ScrapingResult{{
+				URL:        baseURL,
+				StatusCode: 200,
+				Data:       result.Data,
+				Success:    result.Success,
+				Errors:     result.Errors,
+			}},
+			TotalPages:     1,
+			ProcessedPages: 1,
+			Success:        result.Success,
+			Duration:       0,
+			StartTime:      time.Now(),
+			EndTime:        time.Now(),
+		}, nil
+	}
+
+	// Create pagination manager
+	paginationManager, err := NewPaginationManager(*e.config.Pagination)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create pagination manager: %w", err)
+	}
+
+	startTime := time.Now()
+	results := make([]ScrapingResult, 0)
+	errors := make([]string, 0)
+	
+	currentURL := baseURL
+	pageNum := 0  // Start from 0 for offset-based pagination
+	maxPages := e.config.Pagination.MaxPages
+	if maxPages <= 0 {
+		maxPages = 10 // Default safety limit
+	}
+
+	for pageNum < maxPages {
+		// Handle offset-based pagination separately
+		if e.config.Pagination.Type == PaginationTypeOffset {
+			// Calculate the next URL directly using the offset
+			offset := pageNum * e.config.Pagination.PageSize
+			offsetParam := e.config.Pagination.OffsetParam
+			limitParam := e.config.Pagination.LimitParam
+			if offsetParam == "" {
+				offsetParam = "offset"
+			}
+			if limitParam == "" {
+				limitParam = "limit"
+			}
+			currentURL = fmt.Sprintf("%s?%s=%d&%s=%d", baseURL, offsetParam, offset, limitParam, e.config.Pagination.PageSize)
+		} else if pageNum > 0 {
+			// For other pagination types, fetch the document to determine the next URL
+			doc, err := e.fetchDocument(ctx, currentURL)
+			if err != nil {
+				errorMsg := fmt.Sprintf("Failed to fetch document for pagination on page %d: %v", pageNum+1, err)
+				errors = append(errors, errorMsg)
+				break
+			}
+
+			// Check if pagination is complete
+			if paginationManager.IsComplete(ctx, currentURL, doc, pageNum) {
+				break
+			}
+
+			// Get next URL
+			nextURL, err := paginationManager.GetNextURL(ctx, currentURL, doc, pageNum)
+			if err != nil {
+				errorMsg := fmt.Sprintf("Failed to get next URL on page %d: %v", pageNum+1, err)
+				errors = append(errors, errorMsg)
+				break
+			}
+			
+			if nextURL == "" {
+				break // No more pages
+			}
+
+			currentURL = nextURL
+		}
+
+		// Scrape current page
+		result, err := e.Scrape(ctx, currentURL, extractors)
+		if err != nil {
+			errorMsg := fmt.Sprintf("Page %d failed: %v", pageNum+1, err)
+			errors = append(errors, errorMsg)
+			
+			if !e.config.Pagination.ContinueOnError {
+				break
+			}
+			pageNum++
+			continue
+		}
+
+		// Convert to ScrapingResult format
+		scrapingResult := ScrapingResult{
+			URL:        currentURL,
+			StatusCode: 200,
+			Data:       result.Data,
+			Success:    result.Success,
+			Errors:     result.Errors,
+		}
+		results = append(results, scrapingResult)
+
+		pageNum++
+
+		// Add delay between pages if configured
+		if e.config.Pagination.DelayBetweenPages > 0 {
+			time.Sleep(e.config.Pagination.DelayBetweenPages)
+		}
+	}
+
+	return &PaginationResult{
+		Pages:          results,
+		TotalPages:     len(results),
+		ProcessedPages: len(results),
+		Success:        len(results) > 0,
+		Errors:         errors,
+		Duration:       time.Since(startTime),
+		StartTime:      startTime,
+		EndTime:        time.Now(),
+	}, nil
 }
