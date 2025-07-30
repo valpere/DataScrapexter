@@ -283,7 +283,7 @@ func (fe *FieldExtractor) extractNumber(selection *goquery.Selection) (float64, 
 	}
 
 	// Clean common number formatting
-	cleaned := regexp.MustCompile(`[^\d.-]`).ReplaceAllString(text, "")
+	cleaned := nonNumericRegex.ReplaceAllString(text, "")
 	if cleaned == "" {
 		return 0.0, fmt.Errorf("no numeric value found in: %s", text)
 	}
