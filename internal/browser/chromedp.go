@@ -53,7 +53,10 @@ func NewChromeClient(config *BrowserConfig) (*ChromeClient, error) {
 	}
 
 	// Create allocator context
-	allocCtx, _ := chromedp.NewExecAllocator(context.Background(), opts...)
+	allocCtx, err := chromedp.NewExecAllocator(context.Background(), opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create exec allocator: %w", err)
+	}
 
 	// Create context with timeout
 	ctx, cancel := chromedp.NewContext(allocCtx)
