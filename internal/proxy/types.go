@@ -46,10 +46,12 @@ type ProxyConfig struct {
 // TLSConfig defines TLS/SSL configuration for proxy connections
 type TLSConfig struct {
 	// InsecureSkipVerify controls whether the proxy manager skips verification of server certificates.
-	// WARNING: Setting this to true is dangerous and makes connections vulnerable to man-in-the-middle attacks.
-	// Only use this for testing or when connecting to internal services with self-signed certificates.
+	// 
+	// ⚠️  SECURITY WARNING: Setting this to true is DANGEROUS and makes connections vulnerable to attacks.
+	// ⚠️  This bypasses ALL certificate verification including hostname validation.
+	// ⚠️  NEVER use this in production environments or with untrusted networks.
+	// ⚠️  Only use for testing with self-signed certificates in controlled environments.
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" json:"insecure_skip_verify"`
-	
 	// ServerName is used to verify the hostname on the returned certificates unless InsecureSkipVerify is true.
 	// It is also included in the client's handshake to support virtual hosting.
 	ServerName string `yaml:"server_name,omitempty" json:"server_name,omitempty"`
