@@ -4,6 +4,7 @@ package pipeline
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -97,6 +98,153 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 			return input, nil
 		}
 		return strings.ReplaceAll(input, old, new), nil
+		
+	// Advanced transformations
+	case "split":
+		if tr.Pattern == "" {
+			return input, nil
+		}
+		parts := strings.Split(input, tr.Pattern)
+		if tr.Params != nil {
+			if index, ok := tr.Params["index"].(int); ok && index < len(parts) {
+				return parts[index], nil
+			}
+		}
+		return strings.Join(parts, ","), nil
+		
+	case "substring":
+		if tr.Params == nil {
+			return input, nil
+		}
+		start, hasStart := tr.Params["start"].(int)
+		end, hasEnd := tr.Params["end"].(int)
+		if hasStart && start >= 0 && start < len(input) {
+			if hasEnd && end > start && end <= len(input) {
+				return input[start:end], nil
+			}
+			return input[start:], nil
+		}
+		return input, nil
+		
+	case "truncate":
+		if tr.Params == nil {
+			return input, nil
+		}
+		if maxLen, ok := tr.Params["length"].(int); ok && maxLen > 0 && len(input) > maxLen {
+			suffix := "..."
+			if s, ok := tr.Params["suffix"].(string); ok {
+				suffix = s
+			}
+			if maxLen <= len(suffix) {
+				return input[:maxLen], nil
+			}
+			return input[:maxLen-len(suffix)] + suffix, nil
+		}
+		return input, nil
+		
+	case "title_case":
+		return strings.Title(strings.ToLower(input)), nil
+		
+	case "reverse":
+		runes := []rune(input)
+		for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+			runes[i], runes[j] = runes[j], runes[i]
+		}
+		return string(runes), nil
+		
+	case "remove_commas":
+		return strings.ReplaceAll(input, ",", ""), nil
+		
+	case "format_currency":
+		// Clean the number first
+		cleaned := regexp.MustCompile(`[^\d.-]`).ReplaceAllString(input, "")
+		if cleaned == "" {
+			return input, nil
+		}
+		if value, err := strconv.ParseFloat(cleaned, 64); err == nil {
+			currency := "$"
+			if tr.Params != nil && tr.Params["symbol"] != nil {
+				currency = fmt.Sprintf("%v", tr.Params["symbol"])
+			}
+			return fmt.Sprintf("%s%.2f", currency, value), nil
+		}
+		return input, nil
+		
+	case "extract_domain":
+		if u, err := url.Parse(input); err == nil && u.Host != "" {
+			return u.Host, nil
+		}
+		return input, nil
+		
+	case "extract_filename":
+		if u, err := url.Parse(input); err == nil {
+			parts := strings.Split(u.Path, "/")
+			if len(parts) > 0 && parts[len(parts)-1] != "" {
+				return parts[len(parts)-1], nil
+			}
+		}
+		// Fallback to simple path extraction
+		parts := strings.Split(input, "/")
+		if len(parts) > 0 && parts[len(parts)-1] != "" {
+			return parts[len(parts)-1], nil
+		}
+		return input, nil
+		
+	case "capitalize_words":
+		words := strings.Fields(input)
+		for i, word := range words {
+			if len(word) > 0 {
+				words[i] = strings.ToUpper(string(word[0])) + strings.ToLower(word[1:])
+			}
+		}
+		return strings.Join(words, " "), nil
+		
+	case "remove_duplicates":
+		// For comma-separated values
+		delimiter := ","
+		if tr.Params != nil && tr.Params["delimiter"] != nil {
+			delimiter = fmt.Sprintf("%v", tr.Params["delimiter"])
+		}
+		parts := strings.Split(input, delimiter)
+		seen := make(map[string]bool)
+		var unique []string
+		for _, part := range parts {
+			trimmed := strings.TrimSpace(part)
+			if trimmed != "" && !seen[trimmed] {
+				seen[trimmed] = true
+				unique = append(unique, trimmed)
+			}
+		}
+		return strings.Join(unique, delimiter), nil
+		
+	case "pad_left":
+		if tr.Params == nil {
+			return input, nil
+		}
+		if length, ok := tr.Params["length"].(int); ok && length > len(input) {
+			padChar := " "
+			if char, ok := tr.Params["char"].(string); ok && char != "" {
+				padChar = char
+			}
+			padding := strings.Repeat(padChar, length-len(input))
+			return padding + input, nil
+		}
+		return input, nil
+		
+	case "pad_right":
+		if tr.Params == nil {
+			return input, nil
+		}
+		if length, ok := tr.Params["length"].(int); ok && length > len(input) {
+			padChar := " "
+			if char, ok := tr.Params["char"].(string); ok && char != "" {
+				padChar = char
+			}
+			padding := strings.Repeat(padChar, length-len(input))
+			return input + padding, nil
+		}
+		return input, nil
+
 	default:
 		return "", fmt.Errorf("unknown transform type: %s", tr.Type)
 	}
@@ -122,6 +270,11 @@ func ValidateTransformRules(rules TransformList) error {
 		"normalize_spaces": true, "remove_html": true, "regex": true,
 		"parse_float": true, "parse_int": true, "extract_numbers": true,
 		"prefix": true, "suffix": true, "replace": true,
+		// Advanced transformations
+		"split": true, "substring": true, "truncate": true, "title_case": true,
+		"reverse": true, "remove_commas": true, "format_currency": true,
+		"extract_domain": true, "extract_filename": true, "capitalize_words": true,
+		"remove_duplicates": true, "pad_left": true, "pad_right": true,
 	}
 
 	for i, rule := range rules {
@@ -137,6 +290,14 @@ func ValidateTransformRules(rules TransformList) error {
 		case "prefix", "suffix":
 			if rule.Params == nil || rule.Params["value"] == nil {
 				return fmt.Errorf("rule %d: 'value' parameter is required for transform type %s", i, rule.Type)
+			}
+		case "split":
+			if rule.Pattern == "" {
+				return fmt.Errorf("rule %d: pattern is required for transform type %s", i, rule.Type)
+			}
+		case "substring", "truncate", "pad_left", "pad_right":
+			if rule.Params == nil {
+				return fmt.Errorf("rule %d: parameters are required for transform type %s", i, rule.Type)
 			}
 		}
 

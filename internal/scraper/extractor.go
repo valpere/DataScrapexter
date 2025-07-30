@@ -3,13 +3,22 @@ package scraper
 
 import (
 	"context"
+	"encoding/csv"
+	"encoding/json"
 	"fmt"
+	"net/mail"
+	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/valpere/DataScrapexter/internal/pipeline"
+	"github.com/valpere/DataScrapexter/internal/utils"
 )
+
+var extractorLogger = utils.NewComponentLogger("field-extractor")
 
 // FieldExtractor handles extraction and transformation of individual fields
 type FieldExtractor struct {
@@ -142,6 +151,12 @@ func (fe *FieldExtractor) validateConfig() error {
 
 	validTypes := map[string]bool{
 		"text": true, "html": true, "attr": true, "list": true,
+		// Enhanced field types
+		"number": true, "float": true, "integer": true, "boolean": true,
+		"date": true, "datetime": true, "time": true,
+		"url": true, "email": true, "phone": true,
+		"json": true, "csv": true, "table": true,
+		"count": true, "exists": true,
 	}
 	if !validTypes[fe.config.Type] {
 		return fmt.Errorf("invalid field type: %s", fe.config.Type)
@@ -164,21 +179,73 @@ func (fe *FieldExtractor) extractRawValue() (interface{}, error) {
 	switch fe.config.Type {
 	case "text":
 		return strings.TrimSpace(selection.First().Text()), nil
+		
 	case "html":
 		html, err := selection.First().Html()
 		return html, err
+		
 	case "attr":
 		attr, exists := selection.First().Attr(fe.config.Attribute)
 		if !exists {
 			return nil, nil
 		}
 		return attr, nil
+		
 	case "list":
 		var items []string
 		selection.Each(func(i int, s *goquery.Selection) {
 			items = append(items, strings.TrimSpace(s.Text()))
 		})
 		return items, nil
+
+	// Numeric types
+	case "number", "float":
+		return fe.extractNumber(selection.First())
+		
+	case "integer":
+		return fe.extractInteger(selection.First())
+
+	// Boolean type
+	case "boolean":
+		return fe.extractBoolean(selection.First())
+
+	// Date/time types
+	case "date":
+		return fe.extractDate(selection.First())
+		
+	case "datetime":
+		return fe.extractDateTime(selection.First())
+		
+	case "time":
+		return fe.extractTime(selection.First())
+
+	// URL and communication types
+	case "url":
+		return fe.extractURL(selection.First())
+		
+	case "email":
+		return fe.extractEmail(selection.First())
+		
+	case "phone":
+		return fe.extractPhone(selection.First())
+
+	// Structured data types
+	case "json":
+		return fe.extractJSON(selection.First())
+		
+	case "csv":
+		return fe.extractCSV(selection.First())
+		
+	case "table":
+		return fe.extractTable(selection)
+
+	// Utility types
+	case "count":
+		return selection.Length(), nil
+		
+	case "exists":
+		return selection.Length() > 0, nil
+
 	default:
 		return nil, fmt.Errorf("unsupported field type: %s", fe.config.Type)
 	}
@@ -191,13 +258,381 @@ func (fe *FieldExtractor) getDefaultValue() interface{} {
 	}
 
 	switch fe.config.Type {
-	case "text", "html", "attr":
+	case "text", "html", "attr", "url", "email", "phone", "date", "datetime", "time":
 		return ""
-	case "list":
+	case "list", "csv":
 		return []string{}
+	case "number", "float":
+		return 0.0
+	case "integer", "count":
+		return 0
+	case "boolean", "exists":
+		return false
+	case "json", "table":
+		return make(map[string]interface{})
 	default:
 		return ""
 	}
+}
+
+// extractNumber extracts and parses a floating-point number
+func (fe *FieldExtractor) extractNumber(selection *goquery.Selection) (float64, error) {
+	text := strings.TrimSpace(selection.Text())
+	if text == "" {
+		return 0.0, nil
+	}
+
+	// Clean common number formatting
+	cleaned := regexp.MustCompile(`[^\d.-]`).ReplaceAllString(text, "")
+	if cleaned == "" {
+		return 0.0, fmt.Errorf("no numeric value found in: %s", text)
+	}
+
+	value, err := strconv.ParseFloat(cleaned, 64)
+	if err != nil {
+		return 0.0, fmt.Errorf("failed to parse number '%s': %w", cleaned, err)
+	}
+
+	return value, nil
+}
+
+// extractInteger extracts and parses an integer
+func (fe *FieldExtractor) extractInteger(selection *goquery.Selection) (int64, error) {
+	text := strings.TrimSpace(selection.Text())
+	if text == "" {
+		return 0, nil
+	}
+
+	// Extract first integer from text
+	re := regexp.MustCompile(`-?\d+`)
+	match := re.FindString(text)
+	if match == "" {
+		return 0, fmt.Errorf("no integer value found in: %s", text)
+	}
+
+	value, err := strconv.ParseInt(match, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse integer '%s': %w", match, err)
+	}
+
+	return value, nil
+}
+
+// extractBoolean extracts and parses a boolean value
+func (fe *FieldExtractor) extractBoolean(selection *goquery.Selection) (bool, error) {
+	text := strings.ToLower(strings.TrimSpace(selection.Text()))
+	
+	// Check for common boolean representations
+	switch text {
+	case "true", "yes", "1", "on", "enabled", "active", "available":
+		return true, nil
+	case "false", "no", "0", "off", "disabled", "inactive", "unavailable":
+		return false, nil
+	case "":
+		// Check for presence of certain attributes or classes
+		if selection.HasClass("active") || selection.HasClass("enabled") {
+			return true, nil
+		}
+		if selection.HasClass("disabled") || selection.HasClass("inactive") {
+			return false, nil
+		}
+		return false, nil
+	default:
+		// If it contains any text, consider it true
+		return len(text) > 0, nil
+	}
+}
+
+// extractDate extracts and parses a date
+func (fe *FieldExtractor) extractDate(selection *goquery.Selection) (string, error) {
+	var text string
+	
+	// First check for datetime attribute
+	if datetime, exists := selection.Attr("datetime"); exists {
+		text = datetime
+	} else {
+		// Fall back to text content
+		text = strings.TrimSpace(selection.Text())
+	}
+
+	if text == "" {
+		return "", nil
+	}
+
+	// Try to parse various date formats
+	dateFormats := []string{
+		"2006-01-02",
+		"01/02/2006",
+		"02/01/2006",
+		"January 2, 2006",
+		"Jan 2, 2006",
+		"2006-01-02T15:04:05Z",
+		"2006-01-02T15:04:05-07:00",
+	}
+
+	for _, format := range dateFormats {
+		if parsed, err := time.Parse(format, text); err == nil {
+			return parsed.Format("2006-01-02"), nil
+		}
+	}
+
+	extractorLogger.Warn(fmt.Sprintf("Could not parse date '%s', returning as-is", text))
+	return text, nil
+}
+
+// extractDateTime extracts and parses a datetime
+func (fe *FieldExtractor) extractDateTime(selection *goquery.Selection) (string, error) {
+	var text string
+	
+	// First check for datetime attribute
+	if datetime, exists := selection.Attr("datetime"); exists {
+		text = datetime
+	} else {
+		// Fall back to text content
+		text = strings.TrimSpace(selection.Text())
+	}
+
+	if text == "" {
+		return "", nil
+	}
+
+	// Try to parse various datetime formats
+	datetimeFormats := []string{
+		"2006-01-02T15:04:05Z",
+		"2006-01-02T15:04:05-07:00",
+		"2006-01-02 15:04:05",
+		"01/02/2006 15:04:05",
+		"January 2, 2006 3:04 PM",
+		"Jan 2, 2006 3:04 PM",
+		"2006-01-02",
+	}
+
+	for _, format := range datetimeFormats {
+		if parsed, err := time.Parse(format, text); err == nil {
+			return parsed.Format("2006-01-02T15:04:05Z"), nil
+		}
+	}
+
+	extractorLogger.Warn(fmt.Sprintf("Could not parse datetime '%s', returning as-is", text))
+	return text, nil
+}
+
+// extractTime extracts and parses a time
+func (fe *FieldExtractor) extractTime(selection *goquery.Selection) (string, error) {
+	text := strings.TrimSpace(selection.Text())
+	if text == "" {
+		return "", nil
+	}
+
+	// Try to parse various time formats
+	timeFormats := []string{
+		"15:04:05",
+		"15:04",
+		"3:04 PM",
+		"3:04:05 PM",
+	}
+
+	for _, format := range timeFormats {
+		if parsed, err := time.Parse(format, text); err == nil {
+			return parsed.Format("15:04:05"), nil
+		}
+	}
+
+	extractorLogger.Warn(fmt.Sprintf("Could not parse time '%s', returning as-is", text))
+	return text, nil
+}
+
+// extractURL extracts and validates a URL
+func (fe *FieldExtractor) extractURL(selection *goquery.Selection) (string, error) {
+	var urlStr string
+
+	// First try to get URL from href attribute
+	if href, exists := selection.Attr("href"); exists {
+		urlStr = href
+	} else if src, exists := selection.Attr("src"); exists {
+		// Try src attribute for images, etc.
+		urlStr = src
+	} else {
+		// Fall back to text content
+		urlStr = strings.TrimSpace(selection.Text())
+	}
+
+	if urlStr == "" {
+		return "", nil
+	}
+
+	// Validate URL
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL '%s': %w", urlStr, err)
+	}
+
+	// Convert relative URLs to absolute if possible
+	if parsedURL.Scheme == "" {
+		extractorLogger.Warn(fmt.Sprintf("Relative URL found: %s", urlStr))
+	}
+
+	return parsedURL.String(), nil
+}
+
+// extractEmail extracts and validates an email address
+func (fe *FieldExtractor) extractEmail(selection *goquery.Selection) (string, error) {
+	text := strings.TrimSpace(selection.Text())
+	
+	// Also check href attribute for mailto links
+	if href, exists := selection.Attr("href"); exists && strings.HasPrefix(href, "mailto:") {
+		text = strings.TrimPrefix(href, "mailto:")
+	}
+
+	if text == "" {
+		return "", nil
+	}
+
+	// Extract email pattern from text
+	emailRegex := regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
+	match := emailRegex.FindString(text)
+	if match == "" {
+		return "", fmt.Errorf("no valid email found in: %s", text)
+	}
+
+	// Validate email
+	if _, err := mail.ParseAddress(match); err != nil {
+		return "", fmt.Errorf("invalid email '%s': %w", match, err)
+	}
+
+	return match, nil
+}
+
+// extractPhone extracts and formats a phone number
+func (fe *FieldExtractor) extractPhone(selection *goquery.Selection) (string, error) {
+	text := strings.TrimSpace(selection.Text())
+	
+	// Also check href attribute for tel links
+	if href, exists := selection.Attr("href"); exists && strings.HasPrefix(href, "tel:") {
+		text = strings.TrimPrefix(href, "tel:")
+	}
+
+	if text == "" {
+		return "", nil
+	}
+
+	// Extract phone number pattern (basic international format)
+	phoneRegex := regexp.MustCompile(`[\+]?[1-9][\d\s\-\(\)\.]{7,15}`)
+	match := phoneRegex.FindString(text)
+	if match == "" {
+		return "", fmt.Errorf("no valid phone number found in: %s", text)
+	}
+
+	// Clean up the phone number
+	cleaned := regexp.MustCompile(`[^\d\+]`).ReplaceAllString(match, "")
+	return cleaned, nil
+}
+
+// extractJSON extracts and parses JSON data
+func (fe *FieldExtractor) extractJSON(selection *goquery.Selection) (interface{}, error) {
+	text := strings.TrimSpace(selection.Text())
+	if text == "" {
+		return nil, nil
+	}
+
+	var result interface{}
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	return result, nil
+}
+
+// extractCSV extracts and parses CSV data
+func (fe *FieldExtractor) extractCSV(selection *goquery.Selection) ([][]string, error) {
+	text := strings.TrimSpace(selection.Text())
+	if text == "" {
+		return nil, nil
+	}
+
+	reader := csv.NewReader(strings.NewReader(text))
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse CSV: %w", err)
+	}
+
+	return records, nil
+}
+
+// extractTable extracts table data into a structured format
+func (fe *FieldExtractor) extractTable(selection *goquery.Selection) (interface{}, error) {
+	// Find the table element
+	table := selection.Filter("table").First()
+	if table.Length() == 0 {
+		table = selection.Find("table").First()
+	}
+
+	if table.Length() == 0 {
+		return nil, fmt.Errorf("no table found")
+	}
+
+	var headers []string
+	var rows []map[string]interface{}
+
+	// Extract headers
+	table.Find("thead tr th, tbody tr:first-child th, tr:first-child th").Each(func(i int, s *goquery.Selection) {
+		headers = append(headers, strings.TrimSpace(s.Text()))
+	})
+
+	// If no headers found, create generic ones
+	if len(headers) == 0 {
+		// Count columns from first row
+		firstRow := table.Find("tbody tr, tr").First()
+		if firstRow.Length() > 0 {
+			firstRow.Find("td, th").Each(func(i int, s *goquery.Selection) {
+				headers = append(headers, fmt.Sprintf("column_%d", i+1))
+			})
+		}
+	}
+
+	// Extract data rows
+	if table.Find("tbody").Length() > 0 {
+		// If there's a tbody, only extract from tbody
+		table.Find("tbody tr").Each(func(i int, row *goquery.Selection) {
+			rowData := make(map[string]interface{})
+			row.Find("td").Each(func(j int, cell *goquery.Selection) {
+				if j < len(headers) {
+					cellText := strings.TrimSpace(cell.Text())
+					rowData[headers[j]] = cellText
+				}
+			})
+
+			if len(rowData) > 0 {
+				rows = append(rows, rowData)
+			}
+		})
+	} else {
+		// If no tbody, extract from all tr but skip header row
+		table.Find("tr").Each(func(i int, row *goquery.Selection) {
+			// Skip first row if it contains th elements (header row)
+			if i == 0 && row.Find("th").Length() > 0 {
+				return
+			}
+
+			rowData := make(map[string]interface{})
+			row.Find("td").Each(func(j int, cell *goquery.Selection) {
+				if j < len(headers) {
+					cellText := strings.TrimSpace(cell.Text())
+					rowData[headers[j]] = cellText
+				}
+			})
+
+			if len(rowData) > 0 {
+				rows = append(rows, rowData)
+			}
+		})
+	}
+
+	return map[string]interface{}{
+		"headers": headers,
+		"rows":    rows,
+		"count":   len(rows),
+	}, nil
 }
 
 // buildMetadata constructs extraction metadata from processing results
