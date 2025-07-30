@@ -15,12 +15,19 @@ import (
 
 var managerLogger = utils.NewComponentLogger("proxy-manager")
 
+// Default health check URLs
+const (
+	DefaultHealthCheckURL = "http://httpbin.org/ip"
+)
+
 // ProxyManager implements the Manager interface
 type ProxyManager struct {
 	config       *ProxyConfig
 	proxies      []*ProxyInstance
 	currentIndex int
 	mu           sync.RWMutex
+	rng          *rand.Rand
+	rngMu        sync.Mutex
 	stats        ManagerStats
 	healthTicker *time.Ticker
 	stopChan     chan struct{}
@@ -65,6 +72,7 @@ func NewProxyManager(config *ProxyConfig) *ProxyManager {
 		proxies:  make([]*ProxyInstance, 0),
 		client:   client,
 		stopChan: make(chan struct{}),
+		rng:      rand.New(rand.NewSource(time.Now().UnixNano())),
 		stats: ManagerStats{
 			ProxyStats: make(map[string]*ProxyInstanceStat),
 		},
@@ -221,7 +229,10 @@ func (pm *ProxyManager) getRandomProxy() (*ProxyInstance, error) {
 		return nil, fmt.Errorf("no healthy proxies available")
 	}
 
-	index := rand.Intn(len(availableProxies))
+	pm.rngMu.Lock()
+	index := pm.rng.Intn(len(availableProxies))
+	pm.rngMu.Unlock()
+	
 	return availableProxies[index], nil
 }
 
@@ -247,7 +258,10 @@ func (pm *ProxyManager) getWeightedProxy() (*ProxyInstance, error) {
 	}
 
 	// Select proxy based on weight
-	random := rand.Intn(totalWeight)
+	pm.rngMu.Lock()
+	random := pm.rng.Intn(totalWeight)
+	pm.rngMu.Unlock()
+	
 	currentWeight := 0
 
 	for _, proxy := range availableProxies {
@@ -468,7 +482,7 @@ func (pm *ProxyManager) HealthCheck() error {
 
 	checkURL := pm.config.HealthCheckURL
 	if checkURL == "" {
-		checkURL = "http://httpbin.org/ip"
+		checkURL = DefaultHealthCheckURL
 	}
 
 	var wg sync.WaitGroup

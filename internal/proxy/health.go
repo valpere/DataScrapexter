@@ -16,7 +16,10 @@ type DefaultHealthChecker struct {
 }
 
 // NewDefaultHealthChecker creates a new default health checker
-func NewDefaultHealthChecker(timeout time.Duration) *DefaultHealthChecker {
+func NewDefaultHealthChecker(timeout time.Duration, healthCheckURL string) *DefaultHealthChecker {
+	if healthCheckURL == "" {
+		healthCheckURL = DefaultHealthCheckURL
+	}
 	// Use secure TLS configuration by default
 	transport := &http.Transport{
 		TLSClientConfig: GetDefaultTLSConfig(),
@@ -29,7 +32,7 @@ func NewDefaultHealthChecker(timeout time.Duration) *DefaultHealthChecker {
 
 	return &DefaultHealthChecker{
 		client:         client,
-		healthCheckURL: "http://httpbin.org/ip",
+		healthCheckURL: healthCheckURL,
 		timeout:        timeout,
 	}
 }

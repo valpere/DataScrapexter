@@ -4,6 +4,7 @@ package browser
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/chromedp/chromedp"
@@ -17,6 +18,7 @@ type ChromeClient struct {
 	config            *BrowserConfig
 	stats             *BrowserStats
 	navigationSuccess bool
+	navMu             sync.RWMutex
 }
 
 // NewChromeClient creates a new Chrome browser client
@@ -118,12 +120,16 @@ func (c *ChromeClient) Navigate(ctx context.Context, url string) error {
 	
 	if err != nil {
 		c.stats.Errors++
+		c.navMu.Lock()
 		c.navigationSuccess = false
+		c.navMu.Unlock()
 		return fmt.Errorf("navigation failed: %w", err)
 	}
 
 	// Update stats and state only after successful navigation
+	c.navMu.Lock()
 	c.navigationSuccess = true
+	c.navMu.Unlock()
 	c.stats.PagesLoaded++
 	if c.stats.PagesLoaded == 1 {
 		c.stats.AverageLoadTime = loadTime
@@ -136,7 +142,11 @@ func (c *ChromeClient) Navigate(ctx context.Context, url string) error {
 
 // GetHTML returns the current page HTML
 func (c *ChromeClient) GetHTML(ctx context.Context) (string, error) {
-	if !c.navigationSuccess {
+	c.navMu.RLock()
+	navSuccess := c.navigationSuccess
+	c.navMu.RUnlock()
+	
+	if !navSuccess {
 		return "", fmt.Errorf("cannot extract HTML: navigation has not completed successfully")
 	}
 	
