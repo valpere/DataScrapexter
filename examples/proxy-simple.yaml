@@ -1,0 +1,44 @@
+name: "simple_proxy_test"
+base_url: "https://httpbin.org/ip"
+
+# Simple proxy configuration for testing
+proxy:
+  enabled: true
+  rotation: "round_robin"
+  health_check: false  # Disabled for testing with potentially unreliable free proxies
+  timeout: "15s"
+  max_retries: 2
+  retry_delay: "1s"
+  failure_threshold: 3
+  recovery_time: "5m"
+  
+  # Note: Replace with actual working proxy servers for testing
+  providers:
+    - name: "test_proxy_1"
+      type: "http"
+      host: "proxy.example.com"  # Replace with real proxy
+      port: 8080
+      enabled: false  # Disabled until real proxy is configured
+    
+    - name: "test_proxy_2"
+      type: "http"
+      host: "proxy2.example.com"  # Replace with real proxy
+      port: 3128
+      enabled: false  # Disabled until real proxy is configured
+
+# Basic configuration
+rate_limit: "1s"
+timeout: "15s"
+max_retries: 2
+
+# Fields to extract (should show the IP address of the proxy)
+fields:
+  - name: "ip_info"
+    selector: "body"
+    type: "text"
+    required: true
+
+# Output configuration
+output:
+  format: "json"
+  file: "simple_proxy_test.json"

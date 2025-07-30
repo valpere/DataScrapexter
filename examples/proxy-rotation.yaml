@@ -1,0 +1,65 @@
+name: "proxy_rotation_example"
+base_url: "https://httpbin.org"
+
+# Proxy configuration with rotation
+proxy:
+  enabled: true
+  rotation: "round_robin"  # Options: round_robin, random, weighted, healthy
+  health_check: true
+  health_check_url: "http://httpbin.org/ip"
+  health_check_rate: "5m"
+  timeout: "30s"
+  max_retries: 3
+  retry_delay: "2s"
+  failure_threshold: 5
+  recovery_time: "10m"
+  
+  providers:
+    - name: "primary_proxy"
+      type: "http"
+      host: "proxy1.example.com"
+      port: 8080
+      username: "user1"
+      password: "pass1"
+      weight: 3
+      enabled: true
+    
+    - name: "backup_proxy"
+      type: "http"
+      host: "proxy2.example.com"
+      port: 8080
+      username: "user2"
+      password: "pass2"
+      weight: 1
+      enabled: true
+    
+    - name: "socks_proxy"
+      type: "socks5"
+      host: "socks.example.com"
+      port: 1080
+      weight: 2
+      enabled: true
+
+# Rate limiting to work with proxies
+rate_limit: "2s"
+timeout: "30s"
+max_retries: 3
+
+# User agent rotation
+user_agents:
+  - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+  - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+  - "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+
+# Fields to extract
+fields:
+  - name: "origin_ip"
+    selector: "body"
+    type: "text"
+    required: true
+
+# Output configuration
+output:
+  format: "json"
+  file: "proxy_test_results.json"
+  enable_metrics: true

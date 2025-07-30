@@ -182,7 +182,7 @@ func executeValidation(configFile string, verbose bool) error {
 
 // convertToEngineConfig converts config to engine format (existing function enhanced)
 func convertToEngineConfig(cfg *config.ScraperConfig) *scraper.Config {
-	return &scraper.Config{
+	engineConfig := &scraper.Config{
 		MaxRetries:      cfg.MaxRetries,
 		Timeout:         30 * time.Second,
 		FollowRedirects: true,
@@ -192,6 +192,89 @@ func convertToEngineConfig(cfg *config.ScraperConfig) *scraper.Config {
 		Headers:         cfg.Headers,
 		UserAgents:      cfg.UserAgents,
 	}
+
+	// Convert browser configuration if present
+	if cfg.Browser != nil {
+		browserConfig := &scraper.BrowserConfig{
+			Enabled:        cfg.Browser.Enabled,
+			Headless:       cfg.Browser.Headless,
+			UserDataDir:    cfg.Browser.UserDataDir,
+			ViewportWidth:  cfg.Browser.ViewportWidth,
+			ViewportHeight: cfg.Browser.ViewportHeight,
+			WaitForElement: cfg.Browser.WaitForElement,
+			UserAgent:      cfg.Browser.UserAgent,
+			DisableImages:  cfg.Browser.DisableImages,
+			DisableCSS:     cfg.Browser.DisableCSS,
+			DisableJS:      cfg.Browser.DisableJS,
+		}
+
+		// Parse timeout strings
+		if cfg.Browser.Timeout != "" {
+			if duration, err := time.ParseDuration(cfg.Browser.Timeout); err == nil {
+				browserConfig.Timeout = duration
+			}
+		}
+		if cfg.Browser.WaitDelay != "" {
+			if duration, err := time.ParseDuration(cfg.Browser.WaitDelay); err == nil {
+				browserConfig.WaitDelay = duration
+			}
+		}
+
+		engineConfig.Browser = browserConfig
+	}
+
+	// Convert proxy configuration if present
+	if cfg.Proxy != nil {
+		proxyConfig := &scraper.ProxyConfig{
+			Enabled:          cfg.Proxy.Enabled,
+			Rotation:         cfg.Proxy.Rotation,
+			HealthCheck:      cfg.Proxy.HealthCheck,
+			HealthCheckURL:   cfg.Proxy.HealthCheckURL,
+			MaxRetries:       cfg.Proxy.MaxRetries,
+			FailureThreshold: cfg.Proxy.FailureThreshold,
+			Providers:        make([]scraper.ProxyProvider, len(cfg.Proxy.Providers)),
+		}
+
+		// Parse timeout strings
+		if cfg.Proxy.Timeout != "" {
+			if duration, err := time.ParseDuration(cfg.Proxy.Timeout); err == nil {
+				proxyConfig.Timeout = duration
+			}
+		}
+		if cfg.Proxy.RetryDelay != "" {
+			if duration, err := time.ParseDuration(cfg.Proxy.RetryDelay); err == nil {
+				proxyConfig.RetryDelay = duration
+			}
+		}
+		if cfg.Proxy.HealthCheckRate != "" {
+			if duration, err := time.ParseDuration(cfg.Proxy.HealthCheckRate); err == nil {
+				proxyConfig.HealthCheckRate = duration
+			}
+		}
+		if cfg.Proxy.RecoveryTime != "" {
+			if duration, err := time.ParseDuration(cfg.Proxy.RecoveryTime); err == nil {
+				proxyConfig.RecoveryTime = duration
+			}
+		}
+
+		// Convert providers
+		for i, provider := range cfg.Proxy.Providers {
+			proxyConfig.Providers[i] = scraper.ProxyProvider{
+				Name:     provider.Name,
+				Type:     provider.Type,
+				Host:     provider.Host,
+				Port:     provider.Port,
+				Username: provider.Username,
+				Password: provider.Password,
+				Weight:   provider.Weight,
+				Enabled:  provider.Enabled,
+			}
+		}
+
+		engineConfig.Proxy = proxyConfig
+	}
+
+	return engineConfig
 }
 
 // hasFlag checks if a flag is present in command line arguments

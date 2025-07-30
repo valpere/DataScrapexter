@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/valpere/DataScrapexter/internal/browser"
 	"github.com/valpere/DataScrapexter/internal/errors"
+	"github.com/valpere/DataScrapexter/internal/proxy"
 )
 
 // Enhanced Engine struct (existing fields preserved, error service added)
@@ -21,8 +23,10 @@ type Engine struct {
 	config         *Config
 	rateLimiter    *RateLimiter
 	
-	// Error management service added
+	// Enhanced features
 	errorService   *errors.Service
+	browserManager *browser.BrowserManager
+	proxyManager   proxy.Manager
 }
 
 // Enhanced Result struct (existing fields preserved, error info added)
@@ -64,11 +68,74 @@ func NewEngine(config *Config) (*Engine, error) {
 		},
 	}
 
-	// Enhanced with error service
+	// Enhanced with error service and browser manager
 	engine := &Engine{
 		httpClient:   client,
 		config:       config,
 		errorService: errors.NewService(),
+	}
+
+	// Setup browser automation if configured
+	if config.Browser != nil {
+		// Convert scraper BrowserConfig to browser package BrowserConfig
+		browserConfig := &browser.BrowserConfig{
+			Enabled:        config.Browser.Enabled,
+			Headless:       config.Browser.Headless,
+			UserDataDir:    config.Browser.UserDataDir,
+			Timeout:        config.Browser.Timeout,
+			ViewportWidth:  config.Browser.ViewportWidth,
+			ViewportHeight: config.Browser.ViewportHeight,
+			WaitForElement: config.Browser.WaitForElement,
+			WaitDelay:      config.Browser.WaitDelay,
+			UserAgent:      config.Browser.UserAgent,
+			DisableImages:  config.Browser.DisableImages,
+			DisableCSS:     config.Browser.DisableCSS,
+			DisableJS:      config.Browser.DisableJS,
+		}
+		
+		bm, err := browser.NewBrowserManager(browserConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create browser manager: %w", err)
+		}
+		engine.browserManager = bm
+	}
+
+	// Setup proxy manager if configured
+	if config.Proxy != nil {
+		// Convert scraper ProxyConfig to proxy package ProxyConfig
+		proxyConfig := &proxy.ProxyConfig{
+			Enabled:          config.Proxy.Enabled,
+			Rotation:         proxy.RotationStrategy(config.Proxy.Rotation),
+			HealthCheck:      config.Proxy.HealthCheck,
+			HealthCheckURL:   config.Proxy.HealthCheckURL,
+			HealthCheckRate:  config.Proxy.HealthCheckRate,
+			Timeout:          config.Proxy.Timeout,
+			MaxRetries:       config.Proxy.MaxRetries,
+			RetryDelay:       config.Proxy.RetryDelay,
+			FailureThreshold: config.Proxy.FailureThreshold,
+			RecoveryTime:     config.Proxy.RecoveryTime,
+			Providers:        make([]proxy.ProxyProvider, len(config.Proxy.Providers)),
+		}
+		
+		// Convert providers
+		for i, provider := range config.Proxy.Providers {
+			proxyConfig.Providers[i] = proxy.ProxyProvider{
+				Name:     provider.Name,
+				Type:     proxy.ProxyType(provider.Type),
+				Host:     provider.Host,
+				Port:     provider.Port,
+				Username: provider.Username,
+				Password: provider.Password,
+				Weight:   provider.Weight,
+				Enabled:  provider.Enabled,
+			}
+		}
+		
+		pm := proxy.NewProxyManager(proxyConfig)
+		if err := pm.Start(); err != nil {
+			return nil, fmt.Errorf("failed to start proxy manager: %w", err)
+		}
+		engine.proxyManager = pm
 	}
 
 	// Existing rate limiter setup preserved
@@ -135,11 +202,59 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 	return result, nil
 }
 
-// Enhanced fetchDocument method (existing logic preserved, error handling improved)
+// Enhanced fetchDocument method (existing logic preserved, browser automation added)
 func (e *Engine) fetchDocument(ctx context.Context, url string) (*goquery.Document, error) {
 	// Existing rate limiting preserved
 	if e.rateLimiter != nil {
 		e.rateLimiter.Wait()
+	}
+
+	// Use browser automation if enabled
+	if e.browserManager != nil && e.browserManager.IsEnabled() {
+		return e.fetchDocumentWithBrowser(ctx, url)
+	}
+
+	// Fallback to existing HTTP client logic
+	return e.fetchDocumentWithHTTP(ctx, url)
+}
+
+// fetchDocumentWithBrowser uses browser automation to fetch the document
+func (e *Engine) fetchDocumentWithBrowser(ctx context.Context, url string) (*goquery.Document, error) {
+	html, err := e.browserManager.FetchHTML(ctx, url)
+	if err != nil {
+		return nil, fmt.Errorf("browser fetch failed: %w", err)
+	}
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse HTML from browser: %w", err)
+	}
+
+	return doc, nil
+}
+
+// fetchDocumentWithHTTP uses HTTP client to fetch the document (existing logic preserved)
+func (e *Engine) fetchDocumentWithHTTP(ctx context.Context, url string) (*goquery.Document, error) {
+	// Get proxy if proxy manager is enabled
+	var proxyInstance *proxy.ProxyInstance
+	if e.proxyManager != nil && e.proxyManager.IsEnabled() {
+		var err error
+		proxyInstance, err = e.proxyManager.GetProxy()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get proxy: %w", err)
+		}
+	}
+
+	// Create HTTP client with proxy if available
+	client := e.httpClient
+	if proxyInstance != nil {
+		transport := &http.Transport{
+			Proxy: http.ProxyURL(proxyInstance.URL),
+		}
+		client = &http.Client{
+			Transport: transport,
+			Timeout:   e.config.Timeout,
+		}
 	}
 
 	// Existing request creation preserved
@@ -154,16 +269,30 @@ func (e *Engine) fetchDocument(ctx context.Context, url string) (*goquery.Docume
 		req.Header.Set(key, value)
 	}
 
-	// Execute request with existing client
-	resp, err := e.httpClient.Do(req)
+	// Execute request with proxy-aware client
+	resp, err := client.Do(req)
 	if err != nil {
+		// Report proxy failure if proxy was used
+		if proxyInstance != nil {
+			e.proxyManager.ReportFailure(proxyInstance, err)
+		}
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Existing status code handling preserved
 	if resp.StatusCode >= 400 {
+		// Report proxy failure for client errors when using proxy
+		if proxyInstance != nil {
+			httpErr := fmt.Errorf("HTTP error %d: %s", resp.StatusCode, resp.Status)
+			e.proxyManager.ReportFailure(proxyInstance, httpErr)
+		}
 		return nil, fmt.Errorf("HTTP error %d: %s", resp.StatusCode, resp.Status)
+	}
+
+	// Report proxy success if proxy was used
+	if proxyInstance != nil {
+		e.proxyManager.ReportSuccess(proxyInstance)
 	}
 
 	// Existing document parsing preserved
@@ -256,4 +385,17 @@ func (e *Engine) GetErrorSummary(result *Result) string {
 // GetUserFriendlyError converts engine errors to user-friendly format
 func (e *Engine) GetUserFriendlyError(err error) (title, message string, suggestions []string) {
 	return e.errorService.GetUserFriendlyError(err)
+}
+
+// Close closes the scraper engine and releases resources
+func (e *Engine) Close() error {
+	if e.browserManager != nil {
+		return e.browserManager.Close()
+	}
+	return nil
+}
+
+// IsBrowserEnabled returns whether browser automation is enabled
+func (e *Engine) IsBrowserEnabled() bool {
+	return e.browserManager != nil && e.browserManager.IsEnabled()
 }

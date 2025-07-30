@@ -21,6 +21,7 @@ type ScraperConfig struct {
 	Headers    map[string]string  `yaml:"headers,omitempty" json:"headers,omitempty"`
 	Cookies    map[string]string  `yaml:"cookies,omitempty" json:"cookies,omitempty"`
 	Proxy      *ProxyConfig       `yaml:"proxy,omitempty" json:"proxy,omitempty"`
+	Browser    *BrowserConfig     `yaml:"browser,omitempty" json:"browser,omitempty"`
 	Fields     []Field            `yaml:"fields" json:"fields"`
 	Pagination *PaginationConfig  `yaml:"pagination,omitempty" json:"pagination,omitempty"`
 	Output     OutputConfig       `yaml:"output" json:"output"`
@@ -58,9 +59,34 @@ type OutputConfig struct {
 
 // ProxyConfig represents proxy configuration
 type ProxyConfig struct {
-	URL      string `yaml:"url" json:"url"`
+	Enabled          bool             `yaml:"enabled" json:"enabled"`
+	Rotation         string           `yaml:"rotation,omitempty" json:"rotation,omitempty"`
+	HealthCheck      bool             `yaml:"health_check,omitempty" json:"health_check,omitempty"`
+	HealthCheckURL   string           `yaml:"health_check_url,omitempty" json:"health_check_url,omitempty"`
+	HealthCheckRate  string           `yaml:"health_check_rate,omitempty" json:"health_check_rate,omitempty"`
+	Timeout          string           `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	MaxRetries       int              `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
+	RetryDelay       string           `yaml:"retry_delay,omitempty" json:"retry_delay,omitempty"`
+	Providers        []ProxyProvider  `yaml:"providers,omitempty" json:"providers,omitempty"`
+	FailureThreshold int              `yaml:"failure_threshold,omitempty" json:"failure_threshold,omitempty"`
+	RecoveryTime     string           `yaml:"recovery_time,omitempty" json:"recovery_time,omitempty"`
+	
+	// Legacy support for single proxy URL
+	URL      string `yaml:"url,omitempty" json:"url,omitempty"`
 	Username string `yaml:"username,omitempty" json:"username,omitempty"`
 	Password string `yaml:"password,omitempty" json:"password,omitempty"`
+}
+
+// ProxyProvider represents a proxy provider configuration
+type ProxyProvider struct {
+	Name     string `yaml:"name" json:"name"`
+	Type     string `yaml:"type" json:"type"`
+	Host     string `yaml:"host" json:"host"`
+	Port     int    `yaml:"port" json:"port"`
+	Username string `yaml:"username,omitempty" json:"username,omitempty"`
+	Password string `yaml:"password,omitempty" json:"password,omitempty"`
+	Weight   int    `yaml:"weight,omitempty" json:"weight,omitempty"`
+	Enabled  bool   `yaml:"enabled" json:"enabled"`
 }
 
 // TransformRule represents a data transformation rule
@@ -70,6 +96,22 @@ type TransformRule struct {
 	Replacement string                 `yaml:"replacement,omitempty" json:"replacement,omitempty"`
 	Format      string                 `yaml:"format,omitempty" json:"format,omitempty"`
 	Params      map[string]interface{} `yaml:"params,omitempty" json:"params,omitempty"`
+}
+
+// BrowserConfig represents browser automation configuration
+type BrowserConfig struct {
+	Enabled        bool   `yaml:"enabled" json:"enabled"`
+	Headless       bool   `yaml:"headless" json:"headless"`
+	UserDataDir    string `yaml:"user_data_dir,omitempty" json:"user_data_dir,omitempty"`
+	Timeout        string `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	ViewportWidth  int    `yaml:"viewport_width,omitempty" json:"viewport_width,omitempty"`
+	ViewportHeight int    `yaml:"viewport_height,omitempty" json:"viewport_height,omitempty"`
+	WaitForElement string `yaml:"wait_for_element,omitempty" json:"wait_for_element,omitempty"`
+	WaitDelay      string `yaml:"wait_delay,omitempty" json:"wait_delay,omitempty"`
+	UserAgent      string `yaml:"user_agent,omitempty" json:"user_agent,omitempty"`
+	DisableImages  bool   `yaml:"disable_images" json:"disable_images"`
+	DisableCSS     bool   `yaml:"disable_css" json:"disable_css"`
+	DisableJS      bool   `yaml:"disable_js" json:"disable_js"`
 }
 
 // LoadFromFile loads configuration from a YAML file

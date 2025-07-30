@@ -140,6 +140,51 @@ type Config struct {
 	BurstSize       int                `yaml:"burst_size" json:"burst_size"`
 	Headers         map[string]string  `yaml:"headers" json:"headers"`
 	UserAgents      []string           `yaml:"user_agents" json:"user_agents"`
+	Browser         *BrowserConfig     `yaml:"browser" json:"browser"`
+	Proxy           *ProxyConfig       `yaml:"proxy" json:"proxy"`
+}
+
+// ProxyConfig represents proxy configuration for the scraper
+type ProxyConfig struct {
+	Enabled          bool             `yaml:"enabled" json:"enabled"`
+	Rotation         string           `yaml:"rotation" json:"rotation"`
+	HealthCheck      bool             `yaml:"health_check" json:"health_check"`
+	HealthCheckURL   string           `yaml:"health_check_url,omitempty" json:"health_check_url,omitempty"`
+	HealthCheckRate  time.Duration    `yaml:"health_check_rate" json:"health_check_rate"`
+	Timeout          time.Duration    `yaml:"timeout" json:"timeout"`
+	MaxRetries       int              `yaml:"max_retries" json:"max_retries"`
+	RetryDelay       time.Duration    `yaml:"retry_delay" json:"retry_delay"`
+	Providers        []ProxyProvider  `yaml:"providers" json:"providers"`
+	FailureThreshold int              `yaml:"failure_threshold" json:"failure_threshold"`
+	RecoveryTime     time.Duration    `yaml:"recovery_time" json:"recovery_time"`
+}
+
+// ProxyProvider represents a proxy provider configuration
+type ProxyProvider struct {
+	Name     string `yaml:"name" json:"name"`
+	Type     string `yaml:"type" json:"type"`
+	Host     string `yaml:"host" json:"host"`
+	Port     int    `yaml:"port" json:"port"`
+	Username string `yaml:"username,omitempty" json:"username,omitempty"`
+	Password string `yaml:"password,omitempty" json:"password,omitempty"`
+	Weight   int    `yaml:"weight,omitempty" json:"weight,omitempty"`
+	Enabled  bool   `yaml:"enabled" json:"enabled"`
+}
+
+// BrowserConfig represents browser-specific configuration for the scraper
+type BrowserConfig struct {
+	Enabled        bool          `yaml:"enabled" json:"enabled"`
+	Headless       bool          `yaml:"headless" json:"headless"`
+	UserDataDir    string        `yaml:"user_data_dir,omitempty" json:"user_data_dir,omitempty"`
+	Timeout        time.Duration `yaml:"timeout" json:"timeout"`
+	ViewportWidth  int           `yaml:"viewport_width" json:"viewport_width"`
+	ViewportHeight int           `yaml:"viewport_height" json:"viewport_height"`
+	WaitForElement string        `yaml:"wait_for_element,omitempty" json:"wait_for_element,omitempty"`
+	WaitDelay      time.Duration `yaml:"wait_delay,omitempty" json:"wait_delay,omitempty"`
+	UserAgent      string        `yaml:"user_agent,omitempty" json:"user_agent,omitempty"`
+	DisableImages  bool          `yaml:"disable_images" json:"disable_images"`
+	DisableCSS     bool          `yaml:"disable_css" json:"disable_css"`
+	DisableJS      bool          `yaml:"disable_js" json:"disable_js"`
 }
 
 // RateLimiter provides rate limiting functionality
