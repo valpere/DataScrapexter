@@ -22,7 +22,7 @@ var extractorLogger = utils.NewComponentLogger("field-extractor")
 
 // Pre-compiled regular expressions for performance
 var (
-	numberCleanRegex = regexp.MustCompile(`[^\d.+-]`)                    // Remove non-numeric characters except digits, decimal points, plus and minus signs
+	numberCleanRegex = regexp.MustCompile(`[+-]?\d+(\.\d+)?`)            // Match valid numeric formats with optional sign and decimal point
 	integerRegex     = regexp.MustCompile(`[+-]?\d+`)                   // Allow optional plus/minus prefix
 	emailRegex       = regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
 	phoneRegex       = regexp.MustCompile(`[\+]?[0-9][\d\s\-\(\)\.]{7,15}`) // Allow phone numbers starting with any digit (0-9) after an optional plus sign
