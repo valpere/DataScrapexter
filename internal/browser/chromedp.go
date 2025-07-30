@@ -60,16 +60,24 @@ func NewChromeClient(config *BrowserConfig) (*ChromeClient, error) {
 	defer cancel()
 
 	// Create context with timeout
-	ctx, cancel := chromedp.NewContext(allocCtx)
+	ctx, baseCancel := chromedp.NewContext(allocCtx)
 	if config.Timeout > 0 {
-		ctx, cancel = context.WithTimeout(ctx, config.Timeout)
-	}
-
-	client := &ChromeClient{
-		ctx:    ctx,
-		cancel: cancel,
-		config: config,
-		stats:  &BrowserStats{},
+		ctx, cancel := context.WithTimeout(ctx, config.Timeout)
+		client := &ChromeClient{
+			ctx:        ctx,
+			cancel:     cancel,
+			baseCancel: baseCancel,
+			config:     config,
+			stats:      &BrowserStats{},
+		}
+	} else {
+		client := &ChromeClient{
+			ctx:        ctx,
+			cancel:     baseCancel,
+			baseCancel: nil,
+			config:     config,
+			stats:      &BrowserStats{},
+		}
 	}
 	
 	// Initialize navigation state with proper synchronization
