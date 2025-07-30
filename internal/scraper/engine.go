@@ -105,7 +105,13 @@ func NewEngine(config *Config) (*Engine, error) {
 		// Convert scraper ProxyConfig to proxy package ProxyConfig
 		proxyConfig := &proxy.ProxyConfig{
 			Enabled:          config.Proxy.Enabled,
-			Rotation:         proxy.RotationStrategy(config.Proxy.Rotation),
+			Rotation: func() proxy.RotationStrategy {
+				rotation, err := ParseRotationStrategy(config.Proxy.Rotation)
+				if err != nil {
+					panic(fmt.Sprintf("invalid rotation strategy: %s", err)) // Replace panic with proper error handling if needed
+				}
+				return rotation
+			}(),
 			HealthCheck:      config.Proxy.HealthCheck,
 			HealthCheckURL:   config.Proxy.HealthCheckURL,
 			HealthCheckRate:  config.Proxy.HealthCheckRate,
