@@ -152,7 +152,11 @@ func (pm *ProxyManager) buildProxyURL(provider *ProxyProvider) (*url.URL, error)
 	if provider.Username != "" && provider.Password != "" {
 		proxyURL.User = url.UserPassword(provider.Username, provider.Password)
 	} else if pm.config.Authentication != nil {
-		proxyURL.User = url.UserPassword(pm.config.Authentication.Username, pm.config.Authentication.Password)
+		if pm.config.Authentication.Username != "" && pm.config.Authentication.Password != "" {
+			proxyURL.User = url.UserPassword(pm.config.Authentication.Username, pm.config.Authentication.Password)
+		} else {
+			managerLogger.Warn("Authentication is configured but missing username or password")
+		}
 	}
 
 	return proxyURL, nil
