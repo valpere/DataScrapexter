@@ -181,6 +181,7 @@ type ProxyTLSConfig struct {
 	RootCAs            []string `yaml:"root_cas,omitempty" json:"root_cas,omitempty"`
 	ClientCert         string   `yaml:"client_cert,omitempty" json:"client_cert,omitempty"`
 	ClientKey          string   `yaml:"client_key,omitempty" json:"client_key,omitempty"`
+	SuppressWarnings   bool     `yaml:"suppress_warnings,omitempty" json:"suppress_warnings,omitempty"`
 }
 
 // BrowserConfig represents browser-specific configuration for the scraper

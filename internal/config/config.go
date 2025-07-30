@@ -94,6 +94,9 @@ type TLSConfig struct {
 	// ClientCert and ClientKey define the client certificate and key for mutual TLS.
 	ClientCert string `yaml:"client_cert,omitempty" json:"client_cert,omitempty"`
 	ClientKey  string `yaml:"client_key,omitempty" json:"client_key,omitempty"`
+	
+	// SuppressWarnings controls whether security warnings are logged when insecure settings are used.
+	SuppressWarnings bool `yaml:"suppress_warnings,omitempty" json:"suppress_warnings,omitempty"`
 }
 
 // ProxyProvider represents a proxy provider configuration

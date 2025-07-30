@@ -6,12 +6,17 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+
+	"github.com/valpere/DataScrapexter/internal/utils"
 )
+
+var logger = utils.NewComponentLogger("proxy-tls")
 
 // BuildTLSConfig creates a tls.Config from TLS configuration
 func BuildTLSConfig(config *TLSConfig) (*tls.Config, error) {
 	if config == nil {
 		// Default secure configuration
+		logger.Debug("Using default secure TLS configuration")
 		return &tls.Config{
 			InsecureSkipVerify: false,
 		}, nil
@@ -22,36 +27,43 @@ func BuildTLSConfig(config *TLSConfig) (*tls.Config, error) {
 		ServerName:         config.ServerName,
 	}
 
-	// Warn about insecure configuration
-	if config.InsecureSkipVerify {
-		fmt.Fprintf(os.Stderr, "WARNING: TLS certificate verification is disabled (insecure_skip_verify: true)\n")
-		fmt.Fprintf(os.Stderr, "This makes connections vulnerable to man-in-the-middle attacks!\n")
-		fmt.Fprintf(os.Stderr, "Only use this setting for testing or with trusted internal services.\n")
+	// Log security warning about insecure configuration
+	if config.InsecureSkipVerify && !config.SuppressWarnings {
+		logger.Warn("TLS certificate verification is disabled (insecure_skip_verify: true)")
+		logger.Warn("This makes connections vulnerable to man-in-the-middle attacks!")
+		logger.Warn("Only use this setting for testing or with trusted internal services")
 	}
 
 	// Set up custom root CAs if provided
 	if len(config.RootCAs) > 0 {
+		logger.Debug(fmt.Sprintf("Loading %d custom root CA certificates", len(config.RootCAs)))
 		rootCAs := x509.NewCertPool()
 		for _, caFile := range config.RootCAs {
 			caCert, err := os.ReadFile(caFile)
 			if err != nil {
+				logger.Error(fmt.Sprintf("Failed to read root CA file %s: %v", caFile, err))
 				return nil, fmt.Errorf("failed to read root CA file %s: %v", caFile, err)
 			}
 			
 			if !rootCAs.AppendCertsFromPEM(caCert) {
+				logger.Error(fmt.Sprintf("Failed to parse root CA certificate from %s", caFile))
 				return nil, fmt.Errorf("failed to parse root CA certificate from %s", caFile)
 			}
+			logger.Debug(fmt.Sprintf("Successfully loaded root CA certificate from %s", caFile))
 		}
 		tlsConfig.RootCAs = rootCAs
 	}
 
 	// Set up client certificate for mutual TLS if provided
 	if config.ClientCert != "" && config.ClientKey != "" {
+		logger.Debug("Loading client certificate for mutual TLS authentication")
 		cert, err := tls.LoadX509KeyPair(config.ClientCert, config.ClientKey)
 		if err != nil {
+			logger.Error(fmt.Sprintf("Failed to load client certificate: %v", err))
 			return nil, fmt.Errorf("failed to load client certificate: %v", err)
 		}
 		tlsConfig.Certificates = []tls.Certificate{cert}
+		logger.Debug("Successfully loaded client certificate for mutual TLS")
 	}
 
 	return tlsConfig, nil
@@ -103,7 +115,7 @@ func GetDefaultTLSConfig() *tls.Config {
 // GetInsecureTLSConfig returns an insecure TLS configuration for testing
 // WARNING: This should only be used for testing purposes
 func GetInsecureTLSConfig() *tls.Config {
-	fmt.Fprintf(os.Stderr, "WARNING: Using insecure TLS configuration for testing\n")
+	logger.Warn("Using insecure TLS configuration for testing")
 	return &tls.Config{
 		InsecureSkipVerify: true,
 	}

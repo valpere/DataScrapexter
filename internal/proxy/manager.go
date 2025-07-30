@@ -9,7 +9,11 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/valpere/DataScrapexter/internal/utils"
 )
+
+var managerLogger = utils.NewComponentLogger("proxy-manager")
 
 // ProxyManager implements the Manager interface
 type ProxyManager struct {
@@ -43,7 +47,7 @@ func NewProxyManager(config *ProxyConfig) *ProxyManager {
 	tlsConfig, err := BuildTLSConfig(config.TLS)
 	if err != nil {
 		// Fall back to default secure configuration
-		fmt.Printf("Warning: Failed to build TLS config, using defaults: %v\n", err)
+		managerLogger.Warn(fmt.Sprintf("Failed to build TLS config, using defaults: %v", err))
 		tlsConfig = GetDefaultTLSConfig()
 	}
 	
@@ -69,7 +73,7 @@ func NewProxyManager(config *ProxyConfig) *ProxyManager {
 	// Initialize proxies from configuration
 	if err := manager.initializeProxies(); err != nil {
 		// Log error but don't fail - manager can still work without proxies
-		fmt.Printf("Warning: Failed to initialize proxies: %v\n", err)
+		managerLogger.Warn(fmt.Sprintf("Failed to initialize proxies: %v", err))
 	}
 
 	return manager

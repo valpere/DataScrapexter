@@ -279,6 +279,7 @@ func convertToEngineConfig(cfg *config.ScraperConfig) *scraper.Config {
 				RootCAs:            cfg.Proxy.TLS.RootCAs,
 				ClientCert:         cfg.Proxy.TLS.ClientCert,
 				ClientKey:          cfg.Proxy.TLS.ClientKey,
+				SuppressWarnings:   cfg.Proxy.TLS.SuppressWarnings,
 			}
 		}
 

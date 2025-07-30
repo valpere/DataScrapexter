@@ -12,10 +12,11 @@ import (
 
 // ChromeClient implements BrowserClient using chromedp
 type ChromeClient struct {
-	ctx      context.Context
-	cancel   context.CancelFunc
-	config   *BrowserConfig
-	stats    *BrowserStats
+	ctx               context.Context
+	cancel            context.CancelFunc
+	config            *BrowserConfig
+	stats             *BrowserStats
+	navigationSuccess bool
 }
 
 // NewChromeClient creates a new Chrome browser client
@@ -63,10 +64,11 @@ func NewChromeClient(config *BrowserConfig) (*ChromeClient, error) {
 	}
 
 	client := &ChromeClient{
-		ctx:    ctx,
-		cancel: cancel,
-		config: config,
-		stats:  &BrowserStats{},
+		ctx:               ctx,
+		cancel:            cancel,
+		config:            config,
+		stats:             &BrowserStats{},
+		navigationSuccess: false,
 	}
 
 	// Initialize browser with viewport
@@ -112,19 +114,21 @@ func (c *ChromeClient) Navigate(ctx context.Context, url string) error {
 	}
 
 	err := chromedp.Run(c.ctx, tasks...)
-	
-	// Update stats
-	c.stats.PagesLoaded++
 	loadTime := time.Since(start)
+	
+	if err != nil {
+		c.stats.Errors++
+		c.navigationSuccess = false
+		return fmt.Errorf("navigation failed: %w", err)
+	}
+
+	// Update stats and state only after successful navigation
+	c.navigationSuccess = true
+	c.stats.PagesLoaded++
 	if c.stats.PagesLoaded == 1 {
 		c.stats.AverageLoadTime = loadTime
 	} else {
 		c.stats.AverageLoadTime = (c.stats.AverageLoadTime + loadTime) / 2
-	}
-
-	if err != nil {
-		c.stats.Errors++
-		return fmt.Errorf("navigation failed: %w", err)
 	}
 
 	return nil
@@ -132,6 +136,10 @@ func (c *ChromeClient) Navigate(ctx context.Context, url string) error {
 
 // GetHTML returns the current page HTML
 func (c *ChromeClient) GetHTML(ctx context.Context) (string, error) {
+	if !c.navigationSuccess {
+		return "", fmt.Errorf("cannot extract HTML: navigation has not completed successfully")
+	}
+	
 	var html string
 	err := chromedp.Run(c.ctx, chromedp.OuterHTML("html", &html))
 	if err != nil {
