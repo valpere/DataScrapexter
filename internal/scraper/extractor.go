@@ -387,10 +387,9 @@ func (fe *FieldExtractor) extractBoolean(selection *goquery.Selection) (bool, er
 		return false, nil
 	}
 
-	// For any other non-empty text, we need to be explicit about the behavior
-	// Default: treat non-empty unrecognized text as true (document this behavior)
-	extractorLogger.Warn(fmt.Sprintf("Boolean extraction: unrecognized text '%s' treated as true", text))
-	return true, nil
+	// For any other non-empty text, return an error for unrecognized text
+	extractorLogger.Warn(fmt.Sprintf("Boolean extraction: unrecognized text '%s' cannot be interpreted as a boolean", text))
+	return false, fmt.Errorf("unrecognized boolean text: '%s'", text)
 }
 
 // extractDate extracts and parses a date
