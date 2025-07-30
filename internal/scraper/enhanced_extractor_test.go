@@ -88,14 +88,14 @@ func TestFieldExtractor_EnhancedTypes(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name: "Extract Boolean Unrecognized Text",
+			name: "Extract Boolean Out of Stock",
 			html: `<div class="status">Out of Stock</div>`,
 			config: FieldConfig{
 				Name:     "available",
 				Selector: ".status",
 				Type:     "boolean",
 			},
-			expected: true, // Unrecognized text defaults to true (with warning)
+			expected: false, // Common negative phrase recognized as false
 			wantErr:  false,
 		},
 		{
@@ -107,6 +107,61 @@ func TestFieldExtractor_EnhancedTypes(t *testing.T) {
 				Type:     "boolean",
 			},
 			expected: true,
+			wantErr:  false,
+		},
+		{
+			name: "Extract Boolean Sold Out",
+			html: `<div class="availability">Sold Out</div>`,
+			config: FieldConfig{
+				Name:     "in_stock",
+				Selector: ".availability",
+				Type:     "boolean",
+			},
+			expected: false, // Common negative phrase
+			wantErr:  false,
+		},
+		{
+			name: "Extract Boolean Coming Soon",
+			html: `<div class="status">Coming Soon</div>`,
+			config: FieldConfig{
+				Name:     "available_now",
+				Selector: ".status",
+				Type:     "boolean",
+			},
+			expected: false, // Future availability is false for current availability
+			wantErr:  false,
+		},
+		{
+			name: "Extract Boolean Unrecognized Text with Warning",
+			html: `<div class="custom">Custom Status Message</div>`,
+			config: FieldConfig{
+				Name:     "status",
+				Selector: ".custom",
+				Type:     "boolean",
+			},
+			expected: true, // Truly unrecognized text defaults to true (with warning)
+			wantErr:  false,
+		},
+		{
+			name: "Extract Boolean from Disabled Attribute",
+			html: `<input type="checkbox" disabled>`,
+			config: FieldConfig{
+				Name:     "enabled",
+				Selector: "input",
+				Type:     "boolean",
+			},
+			expected: false, // Disabled attribute indicates false
+			wantErr:  false,
+		},
+		{
+			name: "Extract Boolean from Checked Attribute",
+			html: `<input type="checkbox" checked>`,
+			config: FieldConfig{
+				Name:     "selected",
+				Selector: "input",
+				Type:     "boolean",
+			},
+			expected: true, // Checked attribute indicates true
 			wantErr:  false,
 		},
 		
@@ -155,6 +210,28 @@ func TestFieldExtractor_EnhancedTypes(t *testing.T) {
 				Type:     "url",
 			},
 			expected: "https://example.com/image.jpg",
+			wantErr:  false,
+		},
+		{
+			name: "Extract Relative URL with Base Tag",
+			html: `<base href="https://example.com/"><a href="/page">Link</a>`,
+			config: FieldConfig{
+				Name:     "page_url",
+				Selector: "a",
+				Type:     "url",
+			},
+			expected: "https://example.com/page",
+			wantErr:  false,
+		},
+		{
+			name: "Extract Relative URL with Canonical",
+			html: `<link rel="canonical" href="https://example.com/current"><a href="relative/page">Link</a>`,
+			config: FieldConfig{
+				Name:     "page_url",
+				Selector: "a",
+				Type:     "url",
+			},
+			expected: "https://example.com/relative/page",
 			wantErr:  false,
 		},
 		
@@ -417,6 +494,35 @@ func TestAdvancedTransformations(t *testing.T) {
 				},
 			},
 			expected: "€1234.56",
+			wantErr:  false,
+		},
+		{
+			name:  "Format Currency with Spaces",
+			input: "1 234.56 USD",
+			rules: []pipeline.TransformRule{
+				{
+					Type:   "format_currency",
+					Params: map[string]interface{}{"symbol": "$"},
+				},
+			},
+			expected: "$1234.56",
+			wantErr:  false,
+		},
+		{
+			name:  "Format Complex Currency",
+			input: "€ 1 500,75 EUR",
+			rules: []pipeline.TransformRule{
+				{
+					Type:        "regex",
+					Pattern:     ",",
+					Replacement: ".",
+				},
+				{
+					Type:   "format_currency",
+					Params: map[string]interface{}{"symbol": "€"},
+				},
+			},
+			expected: "€1500.75",
 			wantErr:  false,
 		},
 		

@@ -22,10 +22,10 @@ var extractorLogger = utils.NewComponentLogger("field-extractor")
 
 // Pre-compiled regular expressions for performance
 var (
-	numberCleanRegex = regexp.MustCompile(`[^\d.+-]`) // Allow digits, decimal points, plus and minus signs
-	integerRegex     = regexp.MustCompile(`[+-]?\d+`) // Allow optional plus/minus prefix
+	numberCleanRegex = regexp.MustCompile(`[^\d.+-]`)                    // Remove non-numeric characters except digits, decimal points, plus and minus signs
+	integerRegex     = regexp.MustCompile(`[+-]?\d+`)                   // Allow optional plus/minus prefix
 	emailRegex       = regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
-	phoneRegex       = regexp.MustCompile(`[\+]?[0-9][\d\s\-\(\)\.]{7,15}`) // Allow phone numbers starting with 0
+	phoneRegex       = regexp.MustCompile(`[\+]?[0-9][\d\s\-\(\)\.]{7,15}`) // Allow phone numbers starting with any digit (0-9) after an optional plus sign
 	phoneCleanRegex  = regexp.MustCompile(`[^\d\+]`)
 )
 
@@ -327,6 +327,14 @@ func (fe *FieldExtractor) extractInteger(selection *goquery.Selection) (int64, e
 }
 
 // extractBoolean extracts and parses a boolean value
+//
+// Boolean extraction logic:
+// 1. Explicit true values: "true", "yes", "1", "on", "enabled", "active", "available", "checked", "selected", "valid"
+// 2. Explicit false values: "false", "no", "0", "off", "disabled", "inactive", "unavailable", etc.
+// 3. Common negative phrases: "out of stock", "sold out", "not available", "coming soon", etc.
+// 4. CSS classes: "active", "enabled", "checked" → true; "disabled", "inactive", "unchecked" → false
+// 5. HTML attributes: "checked" → true; "disabled" → false
+// 6. Unrecognized text: defaults to true with warning log
 func (fe *FieldExtractor) extractBoolean(selection *goquery.Selection) (bool, error) {
 	text := strings.ToLower(strings.TrimSpace(selection.Text()))
 
@@ -343,6 +351,12 @@ func (fe *FieldExtractor) extractBoolean(selection *goquery.Selection) (bool, er
 		"disabled": true, "inactive": true, "unavailable": true,
 		"unchecked": true, "unselected": true, "invalid": true,
 		"null": true, "none": true, "empty": true,
+		// Common negative phrases
+		"out of stock": true, "sold out": true, "not available": true,
+		"not in stock": true, "temporarily unavailable": true,
+		"discontinued": true, "coming soon": true, "pre-order": true,
+		"pending": true, "suspended": true, "expired": true,
+		"closed": true, "locked": true, "blocked": true,
 	}
 
 	// Check explicit boolean text values
@@ -479,6 +493,13 @@ func (fe *FieldExtractor) extractTime(selection *goquery.Selection) (string, err
 }
 
 // extractURL extracts and validates a URL
+// 
+// URL extraction behavior:
+// 1. Attempts href attribute first (for links)
+// 2. Falls back to src attribute (for images, scripts)
+// 3. Falls back to text content
+// 4. Tries to resolve relative URLs using document base URL
+// 5. Returns relative URLs as-is if no base URL available (with warning)
 func (fe *FieldExtractor) extractURL(selection *goquery.Selection) (string, error) {
 	var urlStr string
 
@@ -503,12 +524,53 @@ func (fe *FieldExtractor) extractURL(selection *goquery.Selection) (string, erro
 		return "", fmt.Errorf("invalid URL '%s': %w", urlStr, err)
 	}
 
-	// Convert relative URLs to absolute if possible
+	// Handle relative URLs by attempting base URL resolution
 	if parsedURL.Scheme == "" {
-		extractorLogger.Warn(fmt.Sprintf("Relative URL found: %s", urlStr))
+		// Try to find a base URL from the document
+		baseURL := fe.findDocumentBaseURL()
+		if baseURL != nil {
+			// Resolve relative URL against base URL
+			absoluteURL := baseURL.ResolveReference(parsedURL)
+			extractorLogger.Info(fmt.Sprintf("Resolved relative URL '%s' to '%s'", urlStr, absoluteURL.String()))
+			return absoluteURL.String(), nil
+		} else {
+			// No base URL available, return relative URL with warning
+			extractorLogger.Warn(fmt.Sprintf("Relative URL found '%s' - no base URL available, returning as-is", urlStr))
+		}
 	}
 
 	return parsedURL.String(), nil
+}
+
+// findDocumentBaseURL attempts to find the base URL from the document
+func (fe *FieldExtractor) findDocumentBaseURL() *url.URL {
+	// Check for HTML <base> tag first
+	baseSelection := fe.document.Find("base[href]").First()
+	if baseSelection.Length() > 0 {
+		if href, exists := baseSelection.Attr("href"); exists {
+			if baseURL, err := url.Parse(href); err == nil && baseURL.Scheme != "" {
+				return baseURL
+			}
+		}
+	}
+
+	// Try to extract base URL from the document URL if available in meta tags
+	canonicalSelection := fe.document.Find("link[rel='canonical'][href]").First()
+	if canonicalSelection.Length() > 0 {
+		if href, exists := canonicalSelection.Attr("href"); exists {
+			if canonicalURL, err := url.Parse(href); err == nil && canonicalURL.Scheme != "" {
+				// Use the canonical URL's base (scheme + host)
+				baseURL := &url.URL{
+					Scheme: canonicalURL.Scheme,
+					Host:   canonicalURL.Host,
+				}
+				return baseURL
+			}
+		}
+	}
+
+	// Could not determine base URL
+	return nil
 }
 
 // extractEmail extracts and validates an email address

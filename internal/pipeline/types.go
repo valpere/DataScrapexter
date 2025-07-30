@@ -20,7 +20,7 @@ var (
 	intCleanRegex      = regexp.MustCompile(`[^0-9-]`)
 	numberExtractRegex = regexp.MustCompile(`\d+(?:\.\d+)?`)
 	currencyCleanRegex = regexp.MustCompile(`[^\d.-]`)
-	titleCaser         = cases.Title(language.English)  // Modern replacement for deprecated strings.Title
+	titleCaser         = cases.Title(language.English) // Modern replacement for deprecated strings.Title
 )
 
 // TransformRule defines a single transformation rule
@@ -107,7 +107,7 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 			return input, nil
 		}
 		return strings.ReplaceAll(input, old, new), nil
-		
+
 	// Advanced transformations
 	case "split":
 		if tr.Pattern == "" {
@@ -120,7 +120,7 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 			}
 		}
 		return strings.Join(parts, ","), nil
-		
+
 	case "substring":
 		if tr.Params == nil {
 			return input, nil
@@ -134,7 +134,7 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 			return input[start:], nil
 		}
 		return input, nil
-		
+
 	case "truncate":
 		if tr.Params == nil {
 			return input, nil
@@ -150,27 +150,32 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 			return input[:maxLen-len(suffix)] + suffix, nil
 		}
 		return input, nil
-		
+
 	case "title_case":
 		// Uses proper Unicode-aware title casing (modern replacement for deprecated strings.Title)
 		return titleCaser.String(strings.ToLower(input)), nil
-		
+
 	case "reverse":
 		runes := []rune(input)
 		for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
 			runes[i], runes[j] = runes[j], runes[i]
 		}
 		return string(runes), nil
-		
+
 	case "remove_commas":
 		return strings.ReplaceAll(input, ",", ""), nil
-		
+
 	case "format_currency":
-		// Clean the number first
-		cleaned := currencyCleanRegex.ReplaceAllString(input, "")
+		// Extract numeric value preserving spaces (e.g., "1 234.56" → "1234.56")
+		// Remove currency symbols but preserve digits, decimal points, spaces, and minus signs
+		numericPart := regexp.MustCompile(`[^\d\s.-]`).ReplaceAllString(input, "")
+		// Remove spaces to get clean number
+		cleaned := strings.ReplaceAll(numericPart, " ", "")
+
 		if cleaned == "" {
 			return input, nil
 		}
+
 		if value, err := strconv.ParseFloat(cleaned, 64); err == nil {
 			currency := "$"
 			if tr.Params != nil && tr.Params["symbol"] != nil {
@@ -179,13 +184,13 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 			return fmt.Sprintf("%s%.2f", currency, value), nil
 		}
 		return input, nil
-		
+
 	case "extract_domain":
 		if u, err := url.Parse(input); err == nil && u.Host != "" {
 			return u.Host, nil
 		}
 		return input, nil
-		
+
 	case "extract_filename":
 		if u, err := url.Parse(input); err == nil {
 			parts := strings.Split(u.Path, "/")
@@ -199,7 +204,7 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 			return parts[len(parts)-1], nil
 		}
 		return input, nil
-		
+
 	case "capitalize_words":
 		// Manual word-by-word capitalization (preserves original case of other letters)
 		// Different from title_case which uses proper linguistic title casing rules
@@ -210,7 +215,7 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 			}
 		}
 		return strings.Join(words, " "), nil
-		
+
 	case "remove_duplicates":
 		// For comma-separated values
 		delimiter := ","
@@ -228,7 +233,7 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 			}
 		}
 		return strings.Join(unique, delimiter), nil
-		
+
 	case "pad_left":
 		if tr.Params == nil {
 			return input, nil
@@ -242,7 +247,7 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 			return padding + input, nil
 		}
 		return input, nil
-		
+
 	case "pad_right":
 		if tr.Params == nil {
 			return input, nil
