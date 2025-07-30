@@ -281,14 +281,16 @@ func (pm *ProxyManager) getAvailableProxies() []*ProxyInstance {
 	for _, proxy := range pm.proxies {
 		proxy.mu.RLock()
 		isAvailable := proxy.Status.Available && proxy.Status.FailureCount < pm.config.FailureThreshold
+		proxy.mu.RUnlock()
 		
 		// Check if proxy is in recovery period
 		if !isAvailable && time.Since(proxy.Status.LastFailure) > pm.config.RecoveryTime {
+			proxy.mu.Lock()
 			proxy.Status.Available = true
 			proxy.Status.FailureCount = 0
+			proxy.mu.Unlock()
 			isAvailable = true
 		}
-		proxy.mu.RUnlock()
 
 		if isAvailable {
 			available = append(available, proxy)
