@@ -114,7 +114,7 @@ func (pm *PaginationManager) GetStrategyName() string {
 }
 
 // ValidatePaginationConfig validates pagination configuration
-func ValidatePaginationConfig(config PaginationConfig) error {
+func ValidatePaginationConfig(config *PaginationConfig) error {
 	if config.Type == "" {
 		return fmt.Errorf("pagination type is required")
 	}

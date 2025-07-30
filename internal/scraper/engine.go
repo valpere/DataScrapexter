@@ -465,7 +465,16 @@ func (e *Engine) ScrapeWithPagination(ctx context.Context, baseURL string, extra
 		// Handle offset-based pagination separately
 		if e.config.Pagination.Type == PaginationTypeOffset {
 			// Calculate the next URL directly using the offset
-			currentURL = fmt.Sprintf("%s?offset=%d", baseURL, pageNum*e.config.Pagination.OffsetStep)
+			offset := pageNum * e.config.Pagination.PageSize
+			offsetParam := e.config.Pagination.OffsetParam
+			limitParam := e.config.Pagination.LimitParam
+			if offsetParam == "" {
+				offsetParam = "offset"
+			}
+			if limitParam == "" {
+				limitParam = "limit"
+			}
+			currentURL = fmt.Sprintf("%s?%s=%d&%s=%d", baseURL, offsetParam, offset, limitParam, e.config.Pagination.PageSize)
 		} else if pageNum > 0 {
 			// For other pagination types, fetch the document to determine the next URL
 			doc, err := e.fetchDocument(ctx, currentURL)

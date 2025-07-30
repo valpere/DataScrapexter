@@ -122,9 +122,17 @@ func TestValidatePaginationConfig(t *testing.T) {
 		PageSize: 10,
 	}
 	
-	err := ValidatePaginationConfig(config)
+	err := ValidatePaginationConfig(&config)
 	if err != nil {
 		t.Errorf("unexpected error for valid config: %v", err)
+	}
+	
+	// Check that defaults were set
+	if config.OffsetParam != "offset" {
+		t.Errorf("expected OffsetParam default to be 'offset', got %q", config.OffsetParam)
+	}
+	if config.LimitParam != "limit" {
+		t.Errorf("expected LimitParam default to be 'limit', got %q", config.LimitParam)
 	}
 	
 	// Invalid config - missing type
@@ -132,7 +140,7 @@ func TestValidatePaginationConfig(t *testing.T) {
 		PageSize: 10,
 	}
 	
-	err = ValidatePaginationConfig(invalidConfig)
+	err = ValidatePaginationConfig(&invalidConfig)
 	if err == nil {
 		t.Errorf("expected error for invalid config but got none")
 	}

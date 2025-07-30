@@ -342,7 +342,8 @@ func TestPaginationValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidatePaginationConfig(tt.config)
+			configCopy := tt.config // Make a copy since we're passing a pointer
+			err := ValidatePaginationConfig(&configCopy)
 			
 			if tt.expectError {
 				if err == nil {
