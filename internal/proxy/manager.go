@@ -388,7 +388,23 @@ func (pm *ProxyManager) GetStats() ManagerStats {
 
 // IsEnabled returns whether proxy rotation is enabled
 func (pm *ProxyManager) IsEnabled() bool {
-	return pm.config.Enabled && len(pm.proxies) > 0
+	if !pm.config.Enabled {
+		return false
+	}
+
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+
+	for _, proxy := range pm.proxies {
+		proxy.mu.RLock()
+		if proxy.Status.Available {
+			proxy.mu.RUnlock()
+			return true
+		}
+		proxy.mu.RUnlock()
+	}
+
+	return false
 }
 
 // GetHealthyProxies returns list of healthy proxies
