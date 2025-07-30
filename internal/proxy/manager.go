@@ -96,6 +96,8 @@ func (pm *ProxyManager) initializeProxies() error {
 
 	for _, provider := range pm.config.Providers {
 		if !provider.Enabled {
+			managerLogger.Debug(fmt.Sprintf("Skipping disabled proxy provider: %s (%s:%d)", 
+				provider.Name, provider.Host, provider.Port))
 			continue
 		}
 
@@ -305,15 +307,19 @@ func (pm *ProxyManager) getAvailableProxies() []*ProxyInstance {
 	for _, proxy := range pm.proxies {
 		proxy.mu.RLock()
 		isAvailable := proxy.Status.Available && proxy.Status.FailureCount < pm.config.FailureThreshold
+		lastFailure := proxy.Status.LastFailure
 		proxy.mu.RUnlock()
 		
 		// Check if proxy is in recovery period
-		if !isAvailable && time.Since(proxy.Status.LastFailure) > pm.config.RecoveryTime {
+		if !isAvailable && time.Since(lastFailure) > pm.config.RecoveryTime {
 			proxy.mu.Lock()
-			proxy.Status.Available = true
-			proxy.Status.FailureCount = 0
+			// Double-check condition under write lock to avoid race conditions
+			if !proxy.Status.Available && time.Since(proxy.Status.LastFailure) > pm.config.RecoveryTime {
+				proxy.Status.Available = true
+				proxy.Status.FailureCount = 0
+				isAvailable = true
+			}
 			proxy.mu.Unlock()
-			isAvailable = true
 		}
 
 		if isAvailable {

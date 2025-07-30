@@ -66,12 +66,16 @@ func NewChromeClient(config *BrowserConfig) (*ChromeClient, error) {
 	}
 
 	client := &ChromeClient{
-		ctx:               ctx,
-		cancel:            cancel,
-		config:            config,
-		stats:             &BrowserStats{},
-		navigationSuccess: false,
+		ctx:    ctx,
+		cancel: cancel,
+		config: config,
+		stats:  &BrowserStats{},
 	}
+	
+	// Initialize navigation state with proper synchronization
+	client.navMu.Lock()
+	client.navigationSuccess = false
+	client.navMu.Unlock()
 
 	// Initialize browser with viewport
 	if err := client.initialize(); err != nil {

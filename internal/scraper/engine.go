@@ -95,7 +95,8 @@ func NewEngine(config *Config) (*Engine, error) {
 		
 		bm, err := browser.NewBrowserManager(browserConfig)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create browser manager: %w", err)
+			return nil, fmt.Errorf("failed to create browser manager (enabled=%t, headless=%t, timeout=%v): %w", 
+				config.Browser.Enabled, config.Browser.Headless, config.Browser.Timeout, err)
 		}
 		engine.browserManager = bm
 	}
@@ -415,4 +416,121 @@ func (e *Engine) Close() error {
 // IsBrowserEnabled returns whether browser automation is enabled
 func (e *Engine) IsBrowserEnabled() bool {
 	return e.browserManager != nil && e.browserManager.IsEnabled()
+}
+
+// ScrapeWithPagination scrapes multiple pages based on pagination configuration
+func (e *Engine) ScrapeWithPagination(ctx context.Context, baseURL string, extractors []FieldConfig) (*PaginationResult, error) {
+	if e.config.Pagination == nil || !e.config.Pagination.Enabled {
+		// If pagination is disabled, just scrape the single page
+		result, err := e.Scrape(ctx, baseURL, extractors)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scrape single page: %w", err)
+		}
+		
+		return &PaginationResult{
+			Pages: []ScrapingResult{{
+				URL:        baseURL,
+				StatusCode: 200,
+				Data:       result.Data,
+				Success:    result.Success,
+				Errors:     result.Errors,
+			}},
+			TotalPages:     1,
+			ProcessedPages: 1,
+			Success:        result.Success,
+			Duration:       0,
+			StartTime:      time.Now(),
+			EndTime:        time.Now(),
+		}, nil
+	}
+
+	// Create pagination manager
+	paginationManager, err := NewPaginationManager(*e.config.Pagination)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create pagination manager: %w", err)
+	}
+
+	startTime := time.Now()
+	results := make([]ScrapingResult, 0)
+	errors := make([]string, 0)
+	
+	currentURL := baseURL
+	pageNum := 0  // Start from 0 for offset-based pagination
+	maxPages := e.config.Pagination.MaxPages
+	if maxPages <= 0 {
+		maxPages = 10 // Default safety limit
+	}
+
+	for pageNum < maxPages {
+		// For URL pattern and offset pagination, get the correct URL first
+		if pageNum > 0 || e.config.Pagination.Type == PaginationTypeOffset {
+			// Get document for pagination strategy to calculate next URL
+			doc, err := e.fetchDocument(ctx, currentURL)
+			if err != nil {
+				errorMsg := fmt.Sprintf("Failed to fetch document for pagination on page %d: %v", pageNum+1, err)
+				errors = append(errors, errorMsg)
+				break
+			}
+
+			// Check if pagination is complete
+			if paginationManager.IsComplete(ctx, currentURL, doc, pageNum) {
+				break
+			}
+
+			// Get next URL
+			nextURL, err := paginationManager.GetNextURL(ctx, currentURL, doc, pageNum)
+			if err != nil {
+				errorMsg := fmt.Sprintf("Failed to get next URL on page %d: %v", pageNum+1, err)
+				errors = append(errors, errorMsg)
+				break
+			}
+			
+			if nextURL == "" {
+				break // No more pages
+			}
+
+			currentURL = nextURL
+		}
+
+		// Scrape current page
+		result, err := e.Scrape(ctx, currentURL, extractors)
+		if err != nil {
+			errorMsg := fmt.Sprintf("Page %d failed: %v", pageNum+1, err)
+			errors = append(errors, errorMsg)
+			
+			if !e.config.Pagination.ContinueOnError {
+				break
+			}
+			pageNum++
+			continue
+		}
+
+		// Convert to ScrapingResult format
+		scrapingResult := ScrapingResult{
+			URL:        currentURL,
+			StatusCode: 200,
+			Data:       result.Data,
+			Success:    result.Success,
+			Errors:     result.Errors,
+		}
+		results = append(results, scrapingResult)
+
+		pageNum++
+
+		// Add delay between pages if configured
+		if e.config.Pagination.DelayBetweenPages > 0 {
+			time.Sleep(e.config.Pagination.DelayBetweenPages)
+		}
+	}
+
+	return &PaginationResult{
+		Pages:          results,
+		TotalPages:     len(results),
+		ProcessedPages: len(results),
+		Success:        len(results) > 0,
+		Errors:         errors,
+		Duration:       time.Since(startTime),
+		StartTime:      startTime,
+		EndTime:        time.Now(),
+	}, nil
 }

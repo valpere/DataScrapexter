@@ -1,0 +1,280 @@
+# DataScrapexter Pagination Examples
+# This file demonstrates various pagination strategies
+
+# Example 1: URL Pattern Pagination (e.g., /page/1, /page/2, /page/3)  
+url_pattern_example:
+  name: "URL Pattern Pagination Example"
+  base_url: "https://example.com/products"
+  
+  # Pagination configuration
+  pagination:
+    enabled: true
+    type: "url_pattern"
+    url_template: "https://example.com/products/page/{page}"
+    max_pages: 10
+    start_page: 1
+    delay_between_pages: "2s"
+    continue_on_error: true
+    stop_condition: "no_results"
+  
+  # Fields to extract from each page
+  fields:
+    - name: "product_titles"
+      selector: ".product-title"
+      type: "array"
+      required: true
+    - name: "product_prices" 
+      selector: ".price"
+      type: "array"
+      required: false
+
+---
+
+# Example 2: Offset-based Pagination (e.g., ?offset=0&limit=20)
+offset_pagination_example:
+  name: "Offset Pagination Example"
+  base_url: "https://api.example.com/products"
+  
+  pagination:
+    enabled: true
+    type: "offset"
+    offset_param: "offset"
+    limit_param: "limit"
+    page_size: 20
+    max_pages: 5
+    delay_between_pages: "1s"
+    continue_on_error: true
+  
+  fields:
+    - name: "products"
+      selector: ".product"
+      type: "array"
+      required: true
+    - name: "total_count"
+      selector: ".total-results"
+      type: "text"
+      required: false
+
+---
+
+# Example 3: Next Button Pagination (requires browser automation)
+next_button_example:
+  name: "Next Button Pagination Example"
+  base_url: "https://example.com/catalog"
+  
+  # Browser automation required for next button pagination
+  browser:
+    enabled: true
+    headless: true
+    timeout: "30s"
+    viewport_width: 1920
+    viewport_height: 1080
+    wait_for_element: ".product-list"
+    wait_delay: "2s"
+  
+  pagination:
+    enabled: true
+    type: "next_button"
+    next_selector: ".pagination .next-page"
+    max_pages: 15
+    wait_after_click: "3s"
+    delay_between_pages: "2s"
+    continue_on_error: false
+    stop_condition: "has_errors"
+  
+  fields:
+    - name: "item_names"
+      selector: ".item-name"
+      type: "array"
+      required: true
+    - name: "item_links"
+      selector: ".item-link"
+      type: "array"
+      attribute: "href"
+      required: true
+
+---
+
+# Example 4: Numbered Pages Pagination (e.g., ?page=1, ?page=2)
+numbered_pages_example:
+  name: "Numbered Pages Pagination Example"
+  base_url: "https://example.com/blog"
+  
+  pagination:
+    enabled: true
+    type: "pages"
+    page_param: "page"
+    start_page: 1
+    max_pages: 8
+    delay_between_pages: "1.5s"
+    continue_on_error: true
+    stop_condition: "empty_data"
+  
+  fields:
+    - name: "article_titles"
+      selector: "h2.article-title"
+      type: "array"
+      required: true
+    - name: "article_dates"
+      selector: ".publish-date"
+      type: "array"
+      required: false
+    - name: "article_excerpts"
+      selector: ".article-excerpt"
+      type: "array"
+      required: false
+
+---
+
+# Example 5: Complex E-commerce Site with Multiple Features
+ecommerce_full_example:
+  name: "E-commerce Full-Featured Scraping"
+  base_url: "https://shop.example.com/search?q=laptops"
+  
+  # Rate limiting
+  rate_limit: "2s"
+  burst_size: 3
+  
+  # User agents for rotation
+  user_agents:
+    - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+  
+  # Browser configuration for dynamic content
+  browser:
+    enabled: true
+    headless: true
+    timeout: "45s"
+    viewport_width: 1366
+    viewport_height: 768
+    wait_for_element: ".search-results"
+    disable_images: true
+    disable_css: false
+  
+  # Proxy configuration for scale
+  proxy:
+    enabled: false  # Set to true if you have proxy providers
+    rotation: "random"
+    health_check: true
+    health_check_rate: "5m"
+    timeout: "30s"
+    max_retries: 3
+    providers: []
+  
+  # Pagination with URL pattern
+  pagination:
+    enabled: true
+    type: "url_pattern" 
+    url_template: "https://shop.example.com/search?q=laptops&page={page}"
+    max_pages: 20
+    start_page: 1
+    delay_between_pages: "3s"
+    continue_on_error: true 
+    stop_condition: "no_results"
+  
+  # Comprehensive field extraction
+  fields:
+    - name: "product_names"
+      selector: ".product-title a"
+      type: "array"
+      required: true
+      
+    - name: "product_prices"
+      selector: ".price-current"
+      type: "array"
+      required: true
+      transform:
+        - type: "regex"
+          pattern: "\\$([0-9,]+\\.?[0-9]*)"
+          replacement: "$1"
+        - type: "remove_commas"
+          
+    - name: "product_urls"
+      selector: ".product-title a"
+      type: "array"
+      attribute: "href"
+      required: true
+      
+    - name: "product_images"
+      selector: ".product-image img"
+      type: "array"
+      attribute: "src"
+      required: false
+      
+    - name: "product_ratings"
+      selector: ".rating-stars"
+      type: "array"
+      attribute: "data-rating"
+      required: false
+      
+    - name: "stock_status"
+      selector: ".stock-indicator"
+      type: "array"
+      required: false
+      default: "Unknown"
+      
+    - name: "page_info"
+      selector: ".results-info"
+      type: "text"
+      required: false
+  
+  # Output configuration
+  output:
+    format: "json"
+    file: "laptops_search_results.json"
+    pretty_print: true
+
+---
+
+# Example 6: News Site with Advanced Pagination
+news_advanced_example:
+  name: "News Site Advanced Pagination"
+  base_url: "https://news.example.com/technology"
+  
+  pagination:
+    enabled: true
+    type: "next_button"
+    next_selector: "a.next-page:not(.disabled)"
+    max_pages: 25
+    wait_after_click: "2s"
+    delay_between_pages: "3s"
+    continue_on_error: true
+    stop_condition: "empty_data"
+  
+  browser:
+    enabled: true
+    headless: true
+    timeout: "30s"
+    wait_for_element: ".article-list"
+  
+  fields:
+    - name: "headlines"
+      selector: "h2.headline a"
+      type: "array"
+      required: true
+      
+    - name: "article_links"
+      selector: "h2.headline a"
+      type: "array"
+      attribute: "href"
+      required: true
+      
+    - name: "publish_dates"
+      selector: ".publish-date"
+      type: "array"
+      required: false
+      
+    - name: "authors"
+      selector: ".author-name"
+      type: "array"
+      required: false
+      
+    - name: "categories"
+      selector: ".article-category"
+      type: "array"
+      required: false
+      
+    - name: "summary_text"
+      selector: ".article-summary"
+      type: "array"
+      required: false

@@ -98,7 +98,7 @@ func TestNextButtonStrategy_GetNextURL(t *testing.T) {
 
 func TestCreatePaginationStrategy(t *testing.T) {
 	config := PaginationConfig{
-		Type: "offset",
+		Type: PaginationTypeOffset,
 	}
 	
 	strategy, err := CreatePaginationStrategy(config)
@@ -118,8 +118,8 @@ func TestCreatePaginationStrategy(t *testing.T) {
 func TestValidatePaginationConfig(t *testing.T) {
 	// Valid config
 	config := PaginationConfig{
-		Type:  "offset",
-		Limit: 10,
+		Type:     PaginationTypeOffset,
+		PageSize: 10,
 	}
 	
 	err := ValidatePaginationConfig(config)
@@ -129,7 +129,7 @@ func TestValidatePaginationConfig(t *testing.T) {
 	
 	// Invalid config - missing type
 	invalidConfig := PaginationConfig{
-		Limit: 10,
+		PageSize: 10,
 	}
 	
 	err = ValidatePaginationConfig(invalidConfig)

@@ -338,7 +338,15 @@ func (nps *NumberedPagesStrategy) GetNextURL(ctx context.Context, currentURL str
 		baseURL = currentURL
 	}
 
-	// Parse the base URL
+	// Check if baseURL contains template patterns like {page} or {PAGE}
+	if strings.Contains(baseURL, "{page}") || strings.Contains(baseURL, "{PAGE}") {
+		// Handle URL template pattern
+		pageURL := strings.ReplaceAll(baseURL, "{page}", strconv.Itoa(nextPageNum))
+		pageURL = strings.ReplaceAll(pageURL, "{PAGE}", strconv.Itoa(nextPageNum))
+		return pageURL, nil
+	}
+
+	// Parse the base URL for query parameter approach
 	u, err := url.Parse(baseURL)
 	if err != nil {
 		return "", fmt.Errorf("invalid base URL: %w", err)
