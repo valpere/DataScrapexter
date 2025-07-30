@@ -22,10 +22,10 @@ var extractorLogger = utils.NewComponentLogger("field-extractor")
 
 // Pre-compiled regular expressions for performance
 var (
-	numberCleanRegex = regexp.MustCompile(`[^\d.-]`)
-	integerRegex     = regexp.MustCompile(`-?\d+`)
+	numberCleanRegex = regexp.MustCompile(`[^\d.+-]`) // Allow digits, decimal points, plus and minus signs
+	integerRegex     = regexp.MustCompile(`[+-]?\d+`) // Allow optional plus/minus prefix
 	emailRegex       = regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
-	phoneRegex       = regexp.MustCompile(`[\+]?[1-9][\d\s\-\(\)\.]{7,15}`)
+	phoneRegex       = regexp.MustCompile(`[\+]?[0-9][\d\s\-\(\)\.]{7,15}`) // Allow phone numbers starting with 0
 	phoneCleanRegex  = regexp.MustCompile(`[^\d\+]`)
 )
 
@@ -330,25 +330,53 @@ func (fe *FieldExtractor) extractInteger(selection *goquery.Selection) (int64, e
 func (fe *FieldExtractor) extractBoolean(selection *goquery.Selection) (bool, error) {
 	text := strings.ToLower(strings.TrimSpace(selection.Text()))
 
-	// Check for common boolean representations
-	switch text {
-	case "true", "yes", "1", "on", "enabled", "active", "available":
+	// Explicit true values
+	trueValues := map[string]bool{
+		"true": true, "yes": true, "1": true, "on": true,
+		"enabled": true, "active": true, "available": true,
+		"checked": true, "selected": true, "valid": true,
+	}
+
+	// Explicit false values
+	falseValues := map[string]bool{
+		"false": true, "no": true, "0": true, "off": true,
+		"disabled": true, "inactive": true, "unavailable": true,
+		"unchecked": true, "unselected": true, "invalid": true,
+		"null": true, "none": true, "empty": true,
+	}
+
+	// Check explicit boolean text values
+	if trueValues[text] {
 		return true, nil
-	case "false", "no", "0", "off", "disabled", "inactive", "unavailable":
+	}
+	if falseValues[text] {
 		return false, nil
-	case "":
-		// Check for presence of certain attributes or classes
-		if selection.HasClass("active") || selection.HasClass("enabled") {
+	}
+
+	// If no text content, check for boolean-indicating CSS classes or attributes
+	if text == "" {
+		// Check for positive indicators
+		if selection.HasClass("active") || selection.HasClass("enabled") || selection.HasClass("checked") {
 			return true, nil
 		}
-		if selection.HasClass("disabled") || selection.HasClass("inactive") {
+		// Check for negative indicators
+		if selection.HasClass("disabled") || selection.HasClass("inactive") || selection.HasClass("unchecked") {
+			return false, nil
+		}
+		// Check for boolean attributes
+		if _, exists := selection.Attr("checked"); exists {
+			return true, nil
+		}
+		if _, exists := selection.Attr("disabled"); exists {
 			return false, nil
 		}
 		return false, nil
-	default:
-		// If it contains any text, consider it true
-		return len(text) > 0, nil
 	}
+
+	// For any other non-empty text, we need to be explicit about the behavior
+	// Default: treat non-empty unrecognized text as true (document this behavior)
+	extractorLogger.Warn(fmt.Sprintf("Boolean extraction: unrecognized text '%s' treated as true", text))
+	return true, nil
 }
 
 // extractDate extracts and parses a date

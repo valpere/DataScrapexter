@@ -31,6 +31,28 @@ func TestFieldExtractor_EnhancedTypes(t *testing.T) {
 			wantErr:  false,
 		},
 		{
+			name: "Extract Positive Number",
+			html: `<div class="balance">+1500.75</div>`,
+			config: FieldConfig{
+				Name:     "balance",
+				Selector: ".balance",
+				Type:     "number",
+			},
+			expected: 1500.75,
+			wantErr:  false,
+		},
+		{
+			name: "Extract Negative Number",
+			html: `<div class="deficit">-250.50</div>`,
+			config: FieldConfig{
+				Name:     "deficit",
+				Selector: ".deficit",
+				Type:     "number",
+			},
+			expected: -250.50,
+			wantErr:  false,
+		},
+		{
 			name: "Extract Integer",
 			html: `<div class="count">42 items</div>`,
 			config: FieldConfig{
@@ -55,14 +77,25 @@ func TestFieldExtractor_EnhancedTypes(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name: "Extract Boolean False",
+			name: "Extract Boolean False from Text",
+			html: `<div class="status">false</div>`,
+			config: FieldConfig{
+				Name:     "available",
+				Selector: ".status",
+				Type:     "boolean",
+			},
+			expected: false, // Explicit false value
+			wantErr:  false,
+		},
+		{
+			name: "Extract Boolean Unrecognized Text",
 			html: `<div class="status">Out of Stock</div>`,
 			config: FieldConfig{
 				Name:     "available",
 				Selector: ".status",
 				Type:     "boolean",
 			},
-			expected: true, // Any text content is considered true
+			expected: true, // Unrecognized text defaults to true (with warning)
 			wantErr:  false,
 		},
 		{
@@ -159,6 +192,17 @@ func TestFieldExtractor_EnhancedTypes(t *testing.T) {
 				Type:     "phone",
 			},
 			expected: "+15551234567",
+			wantErr:  false,
+		},
+		{
+			name: "Extract Phone Starting with 0",
+			html: `<div class="phone">0123 456 789</div>`,
+			config: FieldConfig{
+				Name:     "phone",
+				Selector: ".phone",
+				Type:     "phone",
+			},
+			expected: "0123456789",
 			wantErr:  false,
 		},
 		

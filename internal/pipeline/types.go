@@ -8,15 +8,19 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
-// Pre-compiled regular expressions for performance
+// Pre-compiled regular expressions and text processors for performance
 var (
 	spacesRegex        = regexp.MustCompile(`\s+`)
 	htmlTagsRegex      = regexp.MustCompile(`<[^>]*>`)
 	intCleanRegex      = regexp.MustCompile(`[^0-9-]`)
 	numberExtractRegex = regexp.MustCompile(`\d+(?:\.\d+)?`)
 	currencyCleanRegex = regexp.MustCompile(`[^\d.-]`)
+	titleCaser         = cases.Title(language.English)  // Modern replacement for deprecated strings.Title
 )
 
 // TransformRule defines a single transformation rule
@@ -148,7 +152,8 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 		return input, nil
 		
 	case "title_case":
-		return strings.Title(strings.ToLower(input)), nil
+		// Uses proper Unicode-aware title casing (modern replacement for deprecated strings.Title)
+		return titleCaser.String(strings.ToLower(input)), nil
 		
 	case "reverse":
 		runes := []rune(input)
@@ -196,6 +201,8 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 		return input, nil
 		
 	case "capitalize_words":
+		// Manual word-by-word capitalization (preserves original case of other letters)
+		// Different from title_case which uses proper linguistic title casing rules
 		words := strings.Fields(input)
 		for i, word := range words {
 			if len(word) > 0 {
