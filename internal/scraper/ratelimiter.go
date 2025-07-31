@@ -298,7 +298,9 @@ func (rl *AdaptiveRateLimiter) ReportError() {
 	
 	// Implement memory protection: enforce maximum size
 	if len(rl.healthErrors) > MaxHealthErrors {
-		// Keep only the most recent entries based on retention ratio to avoid frequent re-truncation
+		// Keep only the most recent entries based on retention ratio. This approach minimizes 
+		// the need for frequent re-truncation, which can be computationally expensive, by 
+		// proactively retaining only the most relevant entries.
 		keepCount := int(float64(MaxHealthErrors) * HealthErrorsRetentionRatio)
 		copy(rl.healthErrors, rl.healthErrors[len(rl.healthErrors)-keepCount:])
 		rl.healthErrors = rl.healthErrors[:keepCount]
