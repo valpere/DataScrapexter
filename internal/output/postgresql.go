@@ -228,7 +228,7 @@ func (w *PostgreSQLWriter) inferColumnType(data []map[string]interface{}, column
 		return "TEXT"
 	}
 	if maxTextLength > 0 {
-		return "VARCHAR(" + strconv.Itoa(maxTextLength*2) + ")" // Give some extra space
+		return "VARCHAR(" + strconv.Itoa(maxTextLength*varcharLengthMultiplier) + ")" // Give some extra space
 	}
 
 	return "TEXT"
