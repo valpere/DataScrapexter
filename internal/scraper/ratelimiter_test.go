@@ -455,5 +455,62 @@ func TestAdaptiveRateLimiter_ResetMemoryManagement(t *testing.T) {
 	if rl.healthErrors != nil {
 		t.Error("Expected health errors slice to be nil after reset for memory efficiency")
 	}
+	if rl.healthErrorCount != 0 {
+		t.Errorf("Expected health error count to be 0 after reset, got %d", rl.healthErrorCount)
+	}
 	rl.healthMu.Unlock()
+}
+
+func TestAdaptiveRateLimiter_HealthErrorsMemoryProtection(t *testing.T) {
+	rl := NewAdaptiveRateLimiter(nil)
+	
+	// Report more errors than the maximum to test memory protection
+	errorCount := MaxHealthErrors + 100
+	for i := 0; i < errorCount; i++ {
+		rl.ReportError()
+	}
+	
+	rl.healthMu.Lock()
+	actualCount := len(rl.healthErrors)
+	rl.healthMu.Unlock()
+	
+	if actualCount > MaxHealthErrors {
+		t.Errorf("Expected health errors to be capped at %d, got %d", MaxHealthErrors, actualCount)
+	}
+	
+	// Should be around MaxHealthErrors/2 due to truncation logic
+	expectedCount := MaxHealthErrors / 2
+	if actualCount < expectedCount-10 || actualCount > MaxHealthErrors {
+		t.Errorf("Expected health errors count around %d, got %d", expectedCount, actualCount)
+	}
+}
+
+func TestAdaptiveRateLimiter_PeriodicCleanup(t *testing.T) {
+	config := &RateLimiterConfig{
+		BaseInterval: 100 * time.Millisecond,
+		HealthWindow: 50 * time.Millisecond, // Very short window for testing
+	}
+	rl := NewAdaptiveRateLimiter(config)
+	
+	// Add some errors
+	for i := 0; i < 50; i++ {
+		rl.ReportError()
+	}
+	
+	// Wait for errors to expire
+	time.Sleep(100 * time.Millisecond)
+	
+	// Add one more error to trigger cleanup (should hit cleanup interval)
+	for i := 0; i < HealthCleanupInterval; i++ {
+		rl.ReportError()
+	}
+	
+	rl.healthMu.Lock()
+	recentCount := len(rl.healthErrors)
+	rl.healthMu.Unlock()
+	
+	// Should only have recent errors (within the health window)
+	if recentCount > HealthCleanupInterval+10 { // Allow some tolerance
+		t.Errorf("Expected cleanup to remove old errors, still have %d errors", recentCount)
+	}
 }

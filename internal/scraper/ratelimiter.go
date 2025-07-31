@@ -36,6 +36,12 @@ const (
 	MaxConsecutiveMultiplier   = 10.0 // Maximum consecutive error multiplier
 )
 
+// Health tracking efficiency constants
+const (
+	MaxHealthErrors           = 1000  // Maximum health errors to track (memory protection)
+	HealthCleanupInterval     = 100   // Clean up after every N error reports
+)
+
 // AdaptiveRateLimiter provides enhanced rate limiting with burst control and adaptive delays
 type AdaptiveRateLimiter struct {
 	// Core rate limiting
@@ -72,6 +78,7 @@ type AdaptiveRateLimiter struct {
 	// Health tracking
 	healthWindow    time.Duration
 	healthErrors    []time.Time
+	healthErrorCount int  // Counter for cleanup efficiency
 	healthMu        sync.Mutex
 }
 
@@ -280,21 +287,49 @@ func (rl *AdaptiveRateLimiter) ReportError() {
 	rl.consecutiveErrs++
 	rl.mu.Unlock()
 	
-	// Track for health window
+	// Track for health window with efficient memory management
 	rl.healthMu.Lock()
 	now := time.Now()
-	rl.healthErrors = append(rl.healthErrors, now)
 	
-	// Clean old errors outside health window
+	// Add new error
+	rl.healthErrors = append(rl.healthErrors, now)
+	rl.healthErrorCount++
+	
+	// Implement memory protection: enforce maximum size
+	if len(rl.healthErrors) > MaxHealthErrors {
+		// Keep only the most recent MaxHealthErrors/2 entries to avoid frequent truncation
+		keepCount := MaxHealthErrors / 2
+		copy(rl.healthErrors, rl.healthErrors[len(rl.healthErrors)-keepCount:])
+		rl.healthErrors = rl.healthErrors[:keepCount]
+	}
+	
+	// Periodic cleanup based on counter (more efficient than every time)
+	if rl.healthErrorCount%HealthCleanupInterval == 0 {
+		rl.cleanupHealthErrors(now)
+	}
+	
+	rl.healthMu.Unlock()
+}
+
+// cleanupHealthErrors removes expired errors from the health tracking slice
+// Must be called with healthMu held
+func (rl *AdaptiveRateLimiter) cleanupHealthErrors(now time.Time) {
 	cutoff := now.Add(-rl.healthWindow)
-	validErrors := make([]time.Time, 0, len(rl.healthErrors))
-	for _, errTime := range rl.healthErrors {
-		if errTime.After(cutoff) {
-			validErrors = append(validErrors, errTime)
+	writeIndex := 0
+	
+	// Use in-place filtering to avoid slice allocation
+	for readIndex := 0; readIndex < len(rl.healthErrors); readIndex++ {
+		if rl.healthErrors[readIndex].After(cutoff) {
+			rl.healthErrors[writeIndex] = rl.healthErrors[readIndex]
+			writeIndex++
 		}
 	}
-	rl.healthErrors = validErrors
-	rl.healthMu.Unlock()
+	
+	// Truncate slice to new size and clear unused entries to prevent memory leaks
+	for i := writeIndex; i < len(rl.healthErrors); i++ {
+		rl.healthErrors[i] = time.Time{} // Zero value to help GC
+	}
+	rl.healthErrors = rl.healthErrors[:writeIndex]
 }
 
 // tryConsumeBurstTokens attempts to consume burst tokens
@@ -441,6 +476,7 @@ func (rl *AdaptiveRateLimiter) Reset() {
 	// Clear health errors - use nil to free memory since this is a reset operation
 	// and we don't expect frequent resets that would benefit from capacity retention
 	rl.healthErrors = nil
+	rl.healthErrorCount = 0
 	rl.healthMu.Unlock()
 }
 

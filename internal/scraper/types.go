@@ -141,6 +141,7 @@ type Config struct {
 	Proxy           *ProxyConfig           `yaml:"proxy" json:"proxy"`
 	Pagination      *PaginationConfig      `yaml:"pagination" json:"pagination"`
 	RateLimiter     *RateLimiterConfig     `yaml:"rate_limiter" json:"rate_limiter"`
+	ErrorRecovery   *ErrorRecoveryConfig   `yaml:"error_recovery" json:"error_recovery"`
 }
 
 // ProxyConfig represents proxy configuration for the scraper
@@ -257,6 +258,28 @@ type PaginationResult struct {
 	Duration     time.Duration    `json:"duration"`
 	StartTime    time.Time        `json:"start_time"`
 	EndTime      time.Time        `json:"end_time"`
+}
+
+// ErrorRecoveryConfig configures comprehensive error recovery mechanisms
+type ErrorRecoveryConfig struct {
+	Enabled         bool                           `yaml:"enabled" json:"enabled"`
+	CircuitBreakers map[string]CircuitBreakerSpec  `yaml:"circuit_breakers,omitempty" json:"circuit_breakers,omitempty"`
+	Fallbacks       map[string]FallbackSpec        `yaml:"fallbacks,omitempty" json:"fallbacks,omitempty"`
+}
+
+// CircuitBreakerSpec defines circuit breaker configuration for specific operations
+type CircuitBreakerSpec struct {
+	MaxFailures  int           `yaml:"max_failures" json:"max_failures"`
+	ResetTimeout time.Duration `yaml:"reset_timeout" json:"reset_timeout"`
+}
+
+// FallbackSpec defines fallback strategy configuration for specific operations
+type FallbackSpec struct {
+	Strategy     string                 `yaml:"strategy" json:"strategy"`           // "cached", "default", "alternative", "degrade"
+	CacheTimeout time.Duration          `yaml:"cache_timeout,omitempty" json:"cache_timeout,omitempty"`
+	DefaultValue interface{}            `yaml:"default_value,omitempty" json:"default_value,omitempty"`
+	Alternative  string                 `yaml:"alternative,omitempty" json:"alternative,omitempty"`
+	Degraded     map[string]interface{} `yaml:"degraded,omitempty" json:"degraded,omitempty"`
 }
 
 // Note: FieldExtractor is defined in extractor.go as a struct that processes fields

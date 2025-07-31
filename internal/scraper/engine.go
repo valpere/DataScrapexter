@@ -180,6 +180,44 @@ func NewEngine(config *Config) (*Engine, error) {
 		engine.rateLimiter = NewAdaptiveRateLimiter(rlConfig)
 	}
 
+	// Configure error recovery if specified
+	if config.ErrorRecovery != nil && config.ErrorRecovery.Enabled {
+		// Configure circuit breakers
+		for operationName, cbSpec := range config.ErrorRecovery.CircuitBreakers {
+			circuitConfig := errors.CircuitBreakerConfig{
+				MaxFailures:  cbSpec.MaxFailures,
+				ResetTimeout: cbSpec.ResetTimeout,
+			}
+			engine.errorService.ConfigureCircuitBreaker(operationName, circuitConfig)
+		}
+		
+		// Configure fallbacks
+		for operationName, fbSpec := range config.ErrorRecovery.Fallbacks {
+			var strategy errors.FallbackStrategy
+			switch fbSpec.Strategy {
+			case "cached":
+				strategy = errors.FallbackCached
+			case "default":
+				strategy = errors.FallbackDefault
+			case "alternative":
+				strategy = errors.FallbackAlternative
+			case "degrade":
+				strategy = errors.FallbackDegrade
+			default:
+				strategy = errors.FallbackNone
+			}
+			
+			fallbackConfig := errors.FallbackConfig{
+				Strategy:     strategy,
+				CacheTimeout: fbSpec.CacheTimeout,
+				DefaultValue: fbSpec.DefaultValue,
+				Alternative:  fbSpec.Alternative,
+				Degraded:     fbSpec.Degraded,
+			}
+			engine.errorService.ConfigureFallback(operationName, fallbackConfig)
+		}
+	}
+
 	return engine, nil
 }
 
@@ -193,19 +231,30 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 		Warnings:  make([]string, 0),
 	}
 
-	// Execute with retry logic
-	var doc *goquery.Document
-	err := e.errorService.ExecuteWithRetry(ctx, func() error {
-		var fetchErr error
-		doc, fetchErr = e.fetchDocument(ctx, url)
-		return fetchErr
-	}, "fetch_document")
+	// Execute with comprehensive error recovery
+	recoveryResult := e.errorService.ExecuteWithRecovery(ctx, "fetch_document", func() (interface{}, error) {
+		doc, err := e.fetchDocument(ctx, url)
+		return doc, err
+	})
 
-	if err != nil {
+	if !recoveryResult.Success {
+		result.Error = recoveryResult.OriginalError
+		result.Errors = append(result.Errors, recoveryResult.OriginalError.Error())
+		if recoveryResult.UsedFallback {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("Used fallback strategy: %s", recoveryResult.FallbackType))
+		}
+		return result, fmt.Errorf("failed to fetch document after %d attempts: %w", recoveryResult.AttemptCount, recoveryResult.OriginalError)
+	}
+
+	var doc *goquery.Document
+	var ok bool
+	if doc, ok = recoveryResult.Result.(*goquery.Document); !ok {
+		err := fmt.Errorf("unexpected result type from document fetch")
 		result.Error = err
 		result.Errors = append(result.Errors, err.Error())
-		return result, fmt.Errorf("failed to fetch document: %w", err)
+		return result, err
 	}
+
 
 	// Extract fields with error tracking
 	successCount := 0
@@ -470,6 +519,45 @@ func (e *Engine) SetRateLimitStrategy(strategy RateLimitStrategy) {
 func (e *Engine) ResetRateLimiter() {
 	if e.rateLimiter != nil {
 		e.rateLimiter.Reset()
+	}
+}
+
+// ConfigureErrorRecovery configures error recovery mechanisms
+func (e *Engine) ConfigureErrorRecovery(operationName string, circuitConfig *errors.CircuitBreakerConfig, fallbackConfig *errors.FallbackConfig) {
+	if e.errorService == nil {
+		return
+	}
+	
+	if circuitConfig != nil {
+		e.errorService.ConfigureCircuitBreaker(operationName, *circuitConfig)
+	}
+	
+	if fallbackConfig != nil {
+		e.errorService.ConfigureFallback(operationName, *fallbackConfig)
+	}
+}
+
+// GetErrorRecoveryStats returns error recovery statistics
+func (e *Engine) GetErrorRecoveryStats() map[string]interface{} {
+	if e.errorService == nil {
+		return nil
+	}
+	
+	return map[string]interface{}{
+		"circuit_breakers": e.errorService.GetCircuitBreakerStats(),
+		"cache":           e.errorService.GetCacheStats(),
+	}
+}
+
+// ResetErrorRecovery resets all error recovery mechanisms
+func (e *Engine) ResetErrorRecovery() {
+	if e.errorService != nil {
+		e.errorService.ClearCache()
+		// Reset circuit breakers by getting their names and resetting each
+		stats := e.errorService.GetCircuitBreakerStats()
+		for name := range stats {
+			e.errorService.ResetCircuitBreaker(name)
+		}
 	}
 }
 
