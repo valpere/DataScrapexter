@@ -3,6 +3,7 @@ package output
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ type SQLiteWriter struct {
 	config  SQLiteOptions
 	table   string
 	columns []string
+	closed  bool
 }
 
 // NewSQLiteWriter creates a new SQLite writer
@@ -335,11 +337,17 @@ func (w *SQLiteWriter) convertValue(value interface{}) interface{} {
 	case time.Time:
 		return v.Format(time.RFC3339)
 	case []interface{}:
-		// Convert slice to JSON string
-		return fmt.Sprintf("%v", v)
+		// Convert slice to proper JSON string
+		if jsonBytes, err := json.Marshal(v); err == nil {
+			return string(jsonBytes)
+		}
+		return "[]" // fallback for invalid JSON
 	case map[string]interface{}:
-		// Convert map to JSON string
-		return fmt.Sprintf("%v", v)
+		// Convert map to proper JSON string
+		if jsonBytes, err := json.Marshal(v); err == nil {
+			return string(jsonBytes)
+		}
+		return "{}" // fallback for invalid JSON
 	case string:
 		return v
 	case bool:
@@ -352,20 +360,24 @@ func (w *SQLiteWriter) convertValue(value interface{}) interface{} {
 	case float32, float64:
 		return v
 	default:
-		// Convert anything else to string
+		// Convert anything else to string representation
 		return fmt.Sprintf("%v", v)
 	}
 }
 
 // Close closes the SQLite connection
 func (w *SQLiteWriter) Close() error {
-	if w.db != nil {
-		// Optimize database before closing
-		w.db.Exec("PRAGMA optimize")
-		w.db.Exec("VACUUM")
+	if w.db != nil && !w.closed {
+		// Only optimize database if explicitly configured to do so
+		// VACUUM can be expensive and block other operations
+		if w.config.OptimizeOnClose {
+			w.db.Exec("PRAGMA optimize")
+			w.db.Exec("VACUUM")
+		}
 
 		err := w.db.Close()
 		w.db = nil
+		w.closed = true
 		return err
 	}
 	return nil

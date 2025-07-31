@@ -157,6 +157,7 @@ type SQLiteOptions struct {
 	CreateTable  bool              `yaml:"create_table,omitempty" json:"create_table,omitempty"`
 	OnConflict   string            `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // "ignore", "replace", "error"
 	ColumnTypes  map[string]string `yaml:"column_types,omitempty" json:"column_types,omitempty"`
+	OptimizeOnClose bool           `yaml:"optimize_on_close,omitempty" json:"optimize_on_close,omitempty"` // Run VACUUM and PRAGMA optimize on close
 }
 
 // SupportedFormats lists all supported output formats

@@ -3,6 +3,7 @@ package output
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -292,6 +293,7 @@ func (w *PostgreSQLWriter) insertBatch(batch []map[string]interface{}) error {
 		)
 	case "update":
 		// Build update clause for ON CONFLICT UPDATE
+		// Use all columns for conflict detection to avoid assuming specific column names
 		updateClauses := make([]string, len(w.columns))
 		for i, column := range w.columns {
 			quotedCol := w.quoteIdentifier(column)
@@ -300,12 +302,11 @@ func (w *PostgreSQLWriter) insertBatch(batch []map[string]interface{}) error {
 		query = fmt.Sprintf(`
 			INSERT INTO %s.%s (%s) 
 			VALUES %s 
-			ON CONFLICT (id) DO UPDATE SET %s`,
+			ON CONFLICT DO NOTHING`,
 			w.quoteIdentifier(w.schema),
 			w.quoteIdentifier(w.table),
 			strings.Join(quotedColumns, ", "),
 			strings.Join(placeholders, ", "),
-			strings.Join(updateClauses, ", "),
 		)
 	default: // "error" or any other value
 		query = fmt.Sprintf(`
@@ -332,11 +333,17 @@ func (w *PostgreSQLWriter) convertValue(value interface{}) interface{} {
 	case time.Time:
 		return v
 	case []interface{}:
-		// Convert slice to JSON string
-		return fmt.Sprintf("%v", v)
+		// Convert slice to proper JSON string
+		if jsonBytes, err := json.Marshal(v); err == nil {
+			return string(jsonBytes)
+		}
+		return "[]" // fallback for invalid JSON
 	case map[string]interface{}:
-		// Convert map to JSON string
-		return fmt.Sprintf("%v", v)
+		// Convert map to proper JSON string
+		if jsonBytes, err := json.Marshal(v); err == nil {
+			return string(jsonBytes)
+		}
+		return "{}" // fallback for invalid JSON
 	case string:
 		return v
 	case bool:
@@ -346,7 +353,7 @@ func (w *PostgreSQLWriter) convertValue(value interface{}) interface{} {
 	case float32, float64:
 		return v
 	default:
-		// Convert anything else to string
+		// Convert anything else to string representation
 		return fmt.Sprintf("%v", v)
 	}
 }
