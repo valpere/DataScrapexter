@@ -142,7 +142,7 @@ func (w *PostgreSQLWriter) createTable(data []map[string]interface{}) error {
 
 	query := queryBuilder.String()
 	if _, err := w.db.Exec(query); err != nil {
-		return fmt.Errorf("failed to create table: %w", err)
+		return fmt.Errorf("failed to create table '%s.%s': %w", w.schema, w.table, err)
 	}
 
 	return nil
