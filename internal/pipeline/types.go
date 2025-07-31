@@ -20,6 +20,7 @@ var (
 	intCleanRegex      = regexp.MustCompile(`[^0-9-]`)
 	numberExtractRegex = regexp.MustCompile(`\d+(?:\.\d+)?`)
 	currencyCleanRegex = regexp.MustCompile(`[^\d.-]`)
+	currencyNumericRegex = regexp.MustCompile(`([+-]?\d{1,}(?:[,\s]\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)`) // Extract numeric values from currency strings
 	titleCaser         = cases.Title(language.English) // Modern replacement for deprecated strings.Title
 )
 
@@ -167,9 +168,8 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 
 	case "format_currency":
 		// Extract numeric value handling various currency formats
-		// Step 1: Try to extract any reasonable numeric pattern
-		numericPattern := regexp.MustCompile(`([+-]?\d{1,}(?:[,\s]\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)`)
-		numericMatch := numericPattern.FindString(strings.TrimSpace(input))
+		// Step 1: Try to extract any reasonable numeric pattern using pre-compiled regex
+		numericMatch := currencyNumericRegex.FindString(strings.TrimSpace(input))
 		
 		if numericMatch == "" {
 			return input, nil

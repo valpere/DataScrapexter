@@ -25,8 +25,8 @@ var (
 	numberCleanRegex = regexp.MustCompile(`[+-]?\d+(\.\d+)?`)            // Match valid numeric formats with optional sign and decimal point
 	integerRegex     = regexp.MustCompile(`[+-]?\d+`)                   // Allow optional plus/minus prefix
 	emailRegex       = regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
-	phoneRegex       = regexp.MustCompile(`[\+][1-9][\d\s\-\(\)\.]{7,20}|[1-9][\d\s\-\(\)\.]{7,20}`) // International phone format (with or without +)
-	localPhoneRegex  = regexp.MustCompile(`0[\d\s\-\(\)\.]{7,14}`)       // Local phone numbers starting with 0
+	phoneRegex       = regexp.MustCompile(`[\+][1-9][\d\s\-().]{7,20}|[1-9][\d\s\-().]{7,20}`) // International phone format (with or without +)
+	localPhoneRegex  = regexp.MustCompile(`0[\d\s\-().]{7,14}`)       // Local phone numbers starting with 0
 	phoneCleanRegex  = regexp.MustCompile(`[^\d\+]`) // Preserve digits and plus sign
 )
 
@@ -292,8 +292,8 @@ func (fe *FieldExtractor) extractNumber(selection *goquery.Selection) (float64, 
 		return 0.0, nil
 	}
 
-	// Clean common number formatting
-	cleaned := numberCleanRegex.ReplaceAllString(text, "")
+	// Extract numeric value using pre-compiled regex
+	cleaned := numberCleanRegex.FindString(text)
 	if cleaned == "" {
 		return 0.0, fmt.Errorf("no numeric value found in: %s", text)
 	}
@@ -388,9 +388,10 @@ func (fe *FieldExtractor) extractBoolean(selection *goquery.Selection) (bool, er
 		return false, nil
 	}
 
-	// For any other non-empty text, return an error for unrecognized text
-	extractorLogger.Warn(fmt.Sprintf("Boolean extraction: unrecognized text '%s' cannot be interpreted as a boolean", text))
-	return false, fmt.Errorf("unrecognized boolean text: '%s'", text)
+	// For any other non-empty text, we need to be explicit about the behavior
+	// Default: treat non-empty unrecognized text as true (document this behavior)
+	extractorLogger.Warn(fmt.Sprintf("Boolean extraction: unrecognized text '%s' treated as true", text))
+	return true, nil
 }
 
 // extractDate extracts and parses a date
