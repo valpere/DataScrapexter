@@ -43,11 +43,15 @@ func TestAdaptiveRateLimiter_FixedStrategy(t *testing.T) {
 
 func TestAdaptiveRateLimiter_AdaptiveStrategy(t *testing.T) {
 	config := &RateLimiterConfig{
-		BaseInterval:    50 * time.Millisecond,
-		BurstSize:       2,
-		Strategy:        StrategyAdaptive,
-		MaxInterval:     500 * time.Millisecond,
-		AdaptationRate:  0.5,
+		BaseInterval:         50 * time.Millisecond,
+		BurstSize:           2,
+		Strategy:            StrategyAdaptive,
+		MaxInterval:         500 * time.Millisecond,
+		AdaptationRate:      0.5,
+		AdaptationThreshold: 10 * time.Millisecond, // Fast adaptation for testing
+		ErrorRateThreshold:  0.0,                   // Any errors trigger adaptation for testing
+		ConsecutiveErrLimit: 2,                     // Lower threshold for testing
+		MinChangeThreshold:  0.0,                   // No minimum change for testing
 	}
 	
 	rl := NewAdaptiveRateLimiter(config)
@@ -162,11 +166,15 @@ func TestAdaptiveRateLimiter_HybridStrategy(t *testing.T) {
 
 func TestAdaptiveRateLimiter_ConsecutiveErrors(t *testing.T) {
 	config := &RateLimiterConfig{
-		BaseInterval:   50 * time.Millisecond,
-		BurstSize:      2,
-		Strategy:       StrategyAdaptive,
-		MaxInterval:    500 * time.Millisecond,
-		AdaptationRate: 0.5,
+		BaseInterval:         50 * time.Millisecond,
+		BurstSize:           2,
+		Strategy:            StrategyAdaptive,
+		MaxInterval:         500 * time.Millisecond,
+		AdaptationRate:      0.5,
+		AdaptationThreshold: 10 * time.Millisecond, // Fast adaptation for testing
+		ErrorRateThreshold:  0.0,                   // Any errors trigger adaptation for testing
+		ConsecutiveErrLimit: 2,                     // Lower threshold for testing
+		MinChangeThreshold:  0.0,                   // No minimum change for testing
 	}
 	
 	rl := NewAdaptiveRateLimiter(config)
@@ -275,9 +283,13 @@ func TestAdaptiveRateLimiter_Stats(t *testing.T) {
 
 func TestAdaptiveRateLimiter_Reset(t *testing.T) {
 	config := &RateLimiterConfig{
-		BaseInterval: 100 * time.Millisecond,
-		BurstSize:    3,
-		Strategy:     StrategyAdaptive,
+		BaseInterval:         100 * time.Millisecond,
+		BurstSize:           3,
+		Strategy:            StrategyAdaptive,
+		AdaptationThreshold: 10 * time.Millisecond, // Fast adaptation for testing
+		ErrorRateThreshold:  0.0,                   // Any errors trigger adaptation for testing
+		ConsecutiveErrLimit: 2,                     // Lower threshold for testing
+		MinChangeThreshold:  0.0,                   // No minimum change for testing
 	}
 	
 	rl := NewAdaptiveRateLimiter(config)

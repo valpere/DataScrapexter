@@ -18,10 +18,14 @@ type AdaptiveRateLimiter struct {
 	mu      sync.RWMutex
 	
 	// Configuration
-	baseInterval    time.Duration
-	baseBurstSize   int
-	maxInterval     time.Duration
-	adaptationRate  float64
+	baseInterval        time.Duration
+	baseBurstSize       int
+	maxInterval         time.Duration
+	adaptationRate      float64
+	adaptationThreshold time.Duration
+	errorRateThreshold  float64
+	consecutiveErrLimit int
+	minChangeThreshold  float64
 	
 	// Adaptive behavior
 	errorCount      int
@@ -58,37 +62,65 @@ const (
 
 // RateLimiterConfig configures the adaptive rate limiter
 type RateLimiterConfig struct {
-	BaseInterval     time.Duration     `yaml:"base_interval" json:"base_interval"`
-	BurstSize        int               `yaml:"burst_size" json:"burst_size"`
-	MaxInterval      time.Duration     `yaml:"max_interval" json:"max_interval"`
-	AdaptationRate   float64           `yaml:"adaptation_rate" json:"adaptation_rate"`
-	Strategy         RateLimitStrategy `yaml:"strategy" json:"strategy"`
-	BurstRefillRate  time.Duration     `yaml:"burst_refill_rate" json:"burst_refill_rate"`
-	HealthWindow     time.Duration     `yaml:"health_window" json:"health_window"`
+	BaseInterval         time.Duration     `yaml:"base_interval" json:"base_interval"`
+	BurstSize            int               `yaml:"burst_size" json:"burst_size"`
+	MaxInterval          time.Duration     `yaml:"max_interval" json:"max_interval"`
+	AdaptationRate       float64           `yaml:"adaptation_rate" json:"adaptation_rate"`
+	Strategy             RateLimitStrategy `yaml:"strategy" json:"strategy"`
+	BurstRefillRate      time.Duration     `yaml:"burst_refill_rate" json:"burst_refill_rate"`
+	HealthWindow         time.Duration     `yaml:"health_window" json:"health_window"`
+	
+	// Adaptation sensitivity controls
+	AdaptationThreshold  time.Duration     `yaml:"adaptation_threshold" json:"adaptation_threshold"`   // Minimum time between adaptations
+	ErrorRateThreshold   float64           `yaml:"error_rate_threshold" json:"error_rate_threshold"`   // Error rate that triggers adaptation
+	ConsecutiveErrLimit  int               `yaml:"consecutive_err_limit" json:"consecutive_err_limit"` // Consecutive errors threshold
+	MinChangeThreshold   float64           `yaml:"min_change_threshold" json:"min_change_threshold"`   // Minimum rate change percentage
 }
 
 // NewAdaptiveRateLimiter creates a new adaptive rate limiter
 func NewAdaptiveRateLimiter(config *RateLimiterConfig) *AdaptiveRateLimiter {
 	if config == nil {
 		config = &RateLimiterConfig{
-			BaseInterval:    1 * time.Second,
-			BurstSize:       5,
-			MaxInterval:     30 * time.Second,
-			AdaptationRate:  0.5,
-			Strategy:        StrategyHybrid,
-			BurstRefillRate: 10 * time.Second,
-			HealthWindow:    5 * time.Minute,
+			BaseInterval:         1 * time.Second,
+			BurstSize:           5,
+			MaxInterval:         30 * time.Second,
+			AdaptationRate:      0.5,
+			Strategy:            StrategyHybrid,
+			BurstRefillRate:     10 * time.Second,
+			HealthWindow:        5 * time.Minute,
+			AdaptationThreshold: 1 * time.Second,   // Production default
+			ErrorRateThreshold:  0.1,               // 10% error rate threshold
+			ConsecutiveErrLimit: 5,                 // 5 consecutive errors
+			MinChangeThreshold:  0.1,               // 10% minimum change
 		}
 	}
 
+	// Set production defaults for missing values
+	if config.AdaptationThreshold == 0 {
+		config.AdaptationThreshold = 1 * time.Second
+	}
+	if config.ErrorRateThreshold == 0 {
+		config.ErrorRateThreshold = 0.1 // 10%
+	}
+	if config.ConsecutiveErrLimit == 0 {
+		config.ConsecutiveErrLimit = 5
+	}
+	if config.MinChangeThreshold == 0 {
+		config.MinChangeThreshold = 0.1 // 10%
+	}
+
 	rl := &AdaptiveRateLimiter{
-		baseInterval:    config.BaseInterval,
-		baseBurstSize:   config.BurstSize,
-		maxInterval:     config.MaxInterval,
-		adaptationRate:  config.AdaptationRate,
-		strategy:        config.Strategy,
-		burstRefillRate: config.BurstRefillRate,
-		healthWindow:    config.HealthWindow,
+		baseInterval:        config.BaseInterval,
+		baseBurstSize:       config.BurstSize,
+		maxInterval:         config.MaxInterval,
+		adaptationRate:      config.AdaptationRate,
+		adaptationThreshold: config.AdaptationThreshold,
+		errorRateThreshold:  config.ErrorRateThreshold,
+		consecutiveErrLimit: config.ConsecutiveErrLimit,
+		minChangeThreshold:  config.MinChangeThreshold,
+		strategy:            config.Strategy,
+		burstRefillRate:     config.BurstRefillRate,
+		healthWindow:        config.HealthWindow,
 		
 		currentInterval: config.BaseInterval,
 		currentBurst:    config.BurstSize,
@@ -257,7 +289,7 @@ func (rl *AdaptiveRateLimiter) updateAdaptiveRate() {
 	defer rl.mu.Unlock()
 	
 	now := time.Now()
-	if now.Sub(rl.lastAdaptation) < 100*time.Millisecond { // Reduced from 1 second for testing
+	if now.Sub(rl.lastAdaptation) < rl.adaptationThreshold {
 		return // Don't adapt too frequently
 	}
 	
@@ -274,14 +306,14 @@ func (rl *AdaptiveRateLimiter) updateAdaptiveRate() {
 	// Adjust rate based on error rate and consecutive errors
 	var multiplier float64 = 1.0
 	
-	// Increase delays for any errors (more sensitive for testing)
-	if errorRate > 0.0 { // Any errors trigger adaptation
+	// Increase delays only if error rate exceeds threshold
+	if errorRate > rl.errorRateThreshold {
 		multiplier = 1 + (errorRate * 3) // Up to 4x slower at 100% error rate
 	}
 	
 	// Additional penalty for consecutive errors
-	if rl.consecutiveErrs > 2 { // Lower threshold for testing
-		consecutiveMultiplier := math.Min(float64(rl.consecutiveErrs)/2.0, 10.0)
+	if rl.consecutiveErrs > rl.consecutiveErrLimit {
+		consecutiveMultiplier := math.Min(float64(rl.consecutiveErrs)/float64(rl.consecutiveErrLimit), 10.0)
 		multiplier *= consecutiveMultiplier
 	}
 	
@@ -291,8 +323,9 @@ func (rl *AdaptiveRateLimiter) updateAdaptiveRate() {
 		newInterval = rl.maxInterval
 	}
 	
-	// Always update if there's a change (removed threshold for testing)
-	if newInterval != rl.currentInterval {
+	// Only update if change is significant enough
+	changeRatio := math.Abs(float64(newInterval-rl.currentInterval)) / float64(rl.currentInterval)
+	if changeRatio >= rl.minChangeThreshold {
 		rl.currentInterval = newInterval
 		rl.limiter.SetLimit(rate.Every(newInterval))
 	}
