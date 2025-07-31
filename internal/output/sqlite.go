@@ -372,8 +372,12 @@ func (w *SQLiteWriter) Close() error {
 		// Only optimize database if explicitly configured to do so
 		// VACUUM can be expensive and block other operations
 		if w.config.OptimizeOnClose {
-			w.db.Exec("PRAGMA optimize")
-			w.db.Exec("VACUUM")
+			if _, err := w.db.Exec("PRAGMA optimize"); err != nil {
+				fmt.Printf("Error during PRAGMA optimize: %v\n", err)
+			}
+			if _, err := w.db.Exec("VACUUM"); err != nil {
+				fmt.Printf("Error during VACUUM: %v\n", err)
+			}
 		}
 
 		err := w.db.Close()
