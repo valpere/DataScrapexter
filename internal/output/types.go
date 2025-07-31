@@ -9,16 +9,18 @@ import (
 type OutputFormat string
 
 const (
-	FormatJSON OutputFormat = "json"
-	FormatCSV  OutputFormat = "csv"
-	FormatXML  OutputFormat = "xml"
-	FormatYAML OutputFormat = "yaml"
-	FormatTSV  OutputFormat = "tsv"
+	FormatJSON       OutputFormat = "json"
+	FormatCSV        OutputFormat = "csv"
+	FormatXML        OutputFormat = "xml"
+	FormatYAML       OutputFormat = "yaml"
+	FormatTSV        OutputFormat = "tsv"
+	FormatPostgreSQL OutputFormat = "postgresql"
+	FormatSQLite     OutputFormat = "sqlite"
 )
 
 // ValidOutputFormats returns all valid output format values
 func ValidOutputFormats() []OutputFormat {
-	return []OutputFormat{FormatJSON, FormatCSV, FormatXML, FormatYAML, FormatTSV}
+	return []OutputFormat{FormatJSON, FormatCSV, FormatXML, FormatYAML, FormatTSV, FormatPostgreSQL, FormatSQLite}
 }
 
 // IsValid checks if the output format is valid
@@ -113,8 +115,10 @@ type ValidationError struct {
 
 // FormatOptions defines format-specific options
 type FormatOptions struct {
-	JSON JSONOptions `yaml:"json,omitempty" json:"json,omitempty"`
-	CSV  CSVOptions  `yaml:"csv,omitempty" json:"csv,omitempty"`
+	JSON       JSONOptions       `yaml:"json,omitempty" json:"json,omitempty"`
+	CSV        CSVOptions        `yaml:"csv,omitempty" json:"csv,omitempty"`
+	PostgreSQL PostgreSQLOptions `yaml:"postgresql,omitempty" json:"postgresql,omitempty"`
+	SQLite     SQLiteOptions     `yaml:"sqlite,omitempty" json:"sqlite,omitempty"`
 }
 
 // JSONOptions defines JSON-specific options
@@ -134,6 +138,27 @@ type CSVOptions struct {
 	SkipEmpty bool     `yaml:"skip_empty,omitempty" json:"skip_empty,omitempty"`
 }
 
+// PostgreSQLOptions defines PostgreSQL-specific options
+type PostgreSQLOptions struct {
+	ConnectionString string            `yaml:"connection_string" json:"connection_string"`
+	Table            string            `yaml:"table" json:"table"`
+	Schema           string            `yaml:"schema,omitempty" json:"schema,omitempty"`
+	BatchSize        int               `yaml:"batch_size,omitempty" json:"batch_size,omitempty"`
+	CreateTable      bool              `yaml:"create_table,omitempty" json:"create_table,omitempty"`
+	OnConflict       string            `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // "ignore", "update", "error"
+	ColumnTypes      map[string]string `yaml:"column_types,omitempty" json:"column_types,omitempty"`
+}
+
+// SQLiteOptions defines SQLite-specific options  
+type SQLiteOptions struct {
+	DatabasePath string            `yaml:"database_path" json:"database_path"`
+	Table        string            `yaml:"table" json:"table"`
+	BatchSize    int               `yaml:"batch_size,omitempty" json:"batch_size,omitempty"`
+	CreateTable  bool              `yaml:"create_table,omitempty" json:"create_table,omitempty"`
+	OnConflict   string            `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // "ignore", "replace", "error"
+	ColumnTypes  map[string]string `yaml:"column_types,omitempty" json:"column_types,omitempty"`
+}
+
 // SupportedFormats lists all supported output formats
 var SupportedFormats = []string{
 	"json",
@@ -142,7 +167,9 @@ var SupportedFormats = []string{
 	"yaml",
 	"txt",
 	"html",
-	"jsonl", // JSON Lines
+	"jsonl",     // JSON Lines
+	"postgresql", // PostgreSQL database
+	"sqlite",    // SQLite database
 }
 
 // DefaultConfigs provides default configurations for each format
@@ -173,6 +200,25 @@ var DefaultConfigs = map[string]Config{
 		Format: FormatYAML,
 		Options: map[string]string{
 			"indent": "2",
+		},
+	},
+	"postgresql": {
+		Format: FormatPostgreSQL,
+		Options: map[string]string{
+			"table":        "scraped_data",
+			"schema":       "public",
+			"batch_size":   "1000",
+			"create_table": "true",
+			"on_conflict":  "ignore",
+		},
+	},
+	"sqlite": {
+		Format: FormatSQLite,
+		Options: map[string]string{
+			"table":        "scraped_data",
+			"batch_size":   "1000",
+			"create_table": "true",
+			"on_conflict":  "ignore",
 		},
 	},
 }
