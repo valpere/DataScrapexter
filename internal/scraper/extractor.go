@@ -389,9 +389,9 @@ func (fe *FieldExtractor) extractBoolean(selection *goquery.Selection) (bool, er
 	}
 
 	// For any other non-empty text, we need to be explicit about the behavior
-	// Default: use the configured default value for unrecognized text
-	extractorLogger.Warn(fmt.Sprintf("Boolean extraction: unrecognized text '%s' treated as %t", text, fe.DefaultBooleanValue))
-	return fe.DefaultBooleanValue, nil
+	// Default: treat non-empty unrecognized text as true (document this behavior)
+	extractorLogger.Warn(fmt.Sprintf("Boolean extraction: unrecognized text '%s' treated as true", text))
+	return true, nil
 }
 
 // extractDate extracts and parses a date
@@ -535,10 +535,7 @@ func (fe *FieldExtractor) extractURL(selection *goquery.Selection) (string, erro
 			extractorLogger.Info(fmt.Sprintf("Resolved relative URL '%s' to '%s'", urlStr, absoluteURL.String()))
 			return absoluteURL.String(), nil
 		} else {
-			// No base URL available
-			if !fe.config.AllowRelativeURLs {
-				return "", fmt.Errorf("relative URL '%s' found but no base URL is available", urlStr)
-			}
+			// No base URL available, return relative URL with warning
 			extractorLogger.Warn(fmt.Sprintf("Relative URL found '%s' - no base URL available, returning as-is", urlStr))
 		}
 	}
