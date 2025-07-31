@@ -128,6 +128,7 @@ func (w *PostgreSQLWriter) createTable(data []map[string]interface{}) error {
 
 	// Add created_at timestamp column
 	columnDefs = append(columnDefs, "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+	w.columns = append(w.columns, "created_at") // Ensure consistency with the columns slice
 
 	var queryBuilder strings.Builder
 	queryBuilder.WriteString("CREATE TABLE IF NOT EXISTS ")
