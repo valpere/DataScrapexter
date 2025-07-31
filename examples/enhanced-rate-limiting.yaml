@@ -1,0 +1,222 @@
+# Enhanced Rate Limiting Configuration Examples
+
+# Example 1: Fixed Rate Limiting (Classic Approach)
+name: "fixed_rate_example"
+base_url: "https://example.com"
+
+# Basic configuration still works (backward compatibility)
+rate_limit: "2s"      # Simple fixed interval
+burst_size: 5         # Allow up to 5 rapid requests
+
+fields:
+  - name: "title"
+    selector: "h1"
+    type: "text"
+
+---
+
+# Example 2: Adaptive Rate Limiting (Smart Throttling)
+name: "adaptive_rate_example"
+base_url: "https://api.example.com"
+
+# Enhanced rate limiter configuration
+rate_limiter:
+  base_interval: "1s"           # Starting at 1 request per second
+  burst_size: 3                 # Allow 3 rapid requests initially
+  max_interval: "30s"           # Never slower than 1 request per 30 seconds
+  adaptation_rate: 0.5          # How quickly to adapt to errors (0.0-1.0)
+  strategy: 1                   # 0=Fixed, 1=Adaptive, 2=Burst, 3=Hybrid
+  burst_refill_rate: "10s"      # Refill burst tokens every 10 seconds
+  health_window: "5m"           # Track errors over 5-minute window
+  
+  # Adaptation sensitivity controls (optional - production defaults shown)
+  adaptation_threshold: "1s"    # Minimum time between adaptations
+  error_rate_threshold: 0.1     # Error rate that triggers adaptation (10%)
+  consecutive_err_limit: 5      # Consecutive errors threshold
+  min_change_threshold: 0.1     # Minimum rate change percentage (10%)
+
+fields:
+  - name: "data"
+    selector: ".api-response"
+    type: "json"
+
+---
+
+# Example 3: Burst-Aware Rate Limiting (Traffic Spike Handling)
+name: "burst_aware_example"
+base_url: "https://cdn.example.com"
+
+rate_limiter:
+  base_interval: "500ms"        # Base rate: 2 requests per second
+  burst_size: 10                # Allow large bursts for batching
+  strategy: 2                   # Burst strategy
+  burst_refill_rate: "5s"       # Refill burst every 5 seconds
+  health_window: "2m"
+
+fields:
+  - name: "image_url"
+    selector: "img"
+    type: "url"
+    attribute: "src"
+
+---
+
+# Example 4: Hybrid Strategy (Best of Both Worlds)
+name: "hybrid_strategy_example"
+base_url: "https://social.example.com"
+
+rate_limiter:
+  base_interval: "1.5s"         # Conservative base rate
+  burst_size: 5                 # Moderate burst allowance
+  max_interval: "60s"           # Maximum backoff for troubled sites
+  adaptation_rate: 0.7          # Aggressive adaptation to errors
+  strategy: 3                   # Hybrid: adaptive + burst aware
+  burst_refill_rate: "15s"      # Conservative burst refill
+  health_window: "10m"          # Long-term error tracking
+
+# Advanced scraping configuration
+browser:
+  enabled: true
+  headless: true
+  timeout: "30s"
+  wait_for_element: ".content"
+
+proxy:
+  enabled: true
+  rotation: "random"
+  health_check: true
+  providers:
+    - name: "provider1"
+      type: "http"
+      host: "proxy1.example.com"
+      port: 8080
+      enabled: true
+
+fields:
+  - name: "post_content"
+    selector: ".post-text"
+    type: "text"
+    transform:
+      - type: "normalize_spaces"
+      - type: "truncate"
+        params:
+          length: 500
+          suffix: "..."
+
+---
+
+# Example 5: High-Performance Configuration (Fast Sites)
+name: "high_performance_example"
+base_url: "https://fast-api.example.com"
+
+rate_limiter:
+  base_interval: "100ms"        # Very fast: 10 requests per second
+  burst_size: 20                # Large burst for batch operations
+  max_interval: "5s"            # Quick recovery from errors
+  adaptation_rate: 0.3          # Conservative adaptation
+  strategy: 3                   # Hybrid strategy
+  burst_refill_rate: "2s"       # Quick burst refill
+  health_window: "1m"           # Short error tracking window
+
+# High concurrency settings
+max_concurrency: 10
+request_timeout: "10s"
+retry_attempts: 2
+
+fields:
+  - name: "quick_data"
+    selector: ".data"
+    type: "text"
+
+---
+
+# Example 6: Conservative Configuration (Fragile Sites)
+name: "conservative_example"
+base_url: "https://fragile-site.example.com"
+
+rate_limiter:
+  base_interval: "5s"           # Very slow: 1 request per 5 seconds
+  burst_size: 2                 # Minimal burst
+  max_interval: "120s"          # Very long backoff
+  adaptation_rate: 0.8          # Aggressive error response
+  strategy: 1                   # Pure adaptive strategy
+  burst_refill_rate: "30s"      # Slow burst refill
+  health_window: "30m"          # Long error tracking
+  
+  # Very sensitive adaptation for fragile sites
+  adaptation_threshold: "2s"    # Slower adaptation (don't overreact)
+  error_rate_threshold: 0.05    # 5% error rate triggers adaptation (very sensitive)
+  consecutive_err_limit: 3      # Only 3 consecutive errors allowed
+  min_change_threshold: 0.05    # React to even small changes (5%)
+
+# Conservative request settings
+request_timeout: "60s"
+retry_attempts: 5
+retry_delay: "10s"
+
+# Respectful headers
+headers:
+  "User-Agent": "DataScrapexter/1.0 (Respectful Bot)"
+  "Accept": "text/html,application/xhtml+xml"
+
+fields:
+  - name: "sensitive_data"
+    selector: ".content"
+    type: "text"
+    required: true
+
+---
+
+# Example 7: Real-world E-commerce Configuration
+name: "ecommerce_adaptive"
+base_url: "https://shop.example.com"
+
+rate_limiter:
+  base_interval: "2s"           # Start conservative
+  burst_size: 5                 # Allow moderate bursts
+  max_interval: "45s"           # Don't get too slow
+  adaptation_rate: 0.6          # Balanced adaptation
+  strategy: 3                   # Hybrid for flexibility
+  burst_refill_rate: "12s"      # Reasonable refill rate
+  health_window: "8m"           # Medium-term error tracking
+
+# Enhanced field extraction with rate-aware scraping
+fields:
+  - name: "product_name"
+    selector: "h1.product-title"
+    type: "text"
+    required: true
+    transform:
+      - type: "trim"
+      - type: "normalize_spaces"
+
+  - name: "price"
+    selector: ".price"
+    type: "number"
+    transform:
+      - type: "regex"
+        pattern: "\\$([0-9,]+\\.?[0-9]*)"
+        replacement: "$1"
+      - type: "remove_commas"
+
+  - name: "availability"
+    selector: ".stock-status"
+    type: "boolean"
+
+  - name: "reviews_count"
+    selector: ".review-count"
+    type: "integer"
+
+  - name: "product_images"
+    selector: ".product-gallery img"
+    type: "list"
+    attribute: "src"
+
+# Pagination with rate-aware delays
+pagination:
+  enabled: true
+  type: "next_button"
+  next_selector: ".pagination .next"
+  max_pages: 50
+  delay_between_pages: "3s"     # Extra delay between pages
+  continue_on_error: true

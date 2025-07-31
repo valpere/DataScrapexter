@@ -21,7 +21,7 @@ type Engine struct {
 	userAgentPool  []string
 	currentUAIndex int
 	config         *Config
-	rateLimiter    *RateLimiter
+	rateLimiter    *AdaptiveRateLimiter
 	
 	// Enhanced features: error handling, browser automation, and proxy management
 	errorService   *errors.Service
@@ -156,9 +156,70 @@ func NewEngine(config *Config) (*Engine, error) {
 		engine.proxyManager = pm
 	}
 
-	// Existing rate limiter setup preserved
-	if config.RateLimit > 0 {
-		engine.rateLimiter = NewRateLimiter(config.RateLimit, config.BurstSize)
+	// Enhanced rate limiter setup
+	if config.RateLimiter != nil || config.RateLimit > 0 {
+		// Validate rate limit duration
+		if config.RateLimit < 0 {
+			return nil, fmt.Errorf("invalid rate limit duration: %v (must be >= 0)", config.RateLimit)
+		}
+		var rlConfig *RateLimiterConfig
+		if config.RateLimiter != nil {
+			rlConfig = config.RateLimiter
+		} else {
+			// Convert legacy config to new format with production defaults
+			rlConfig = &RateLimiterConfig{
+				BaseInterval:         config.RateLimit,
+				BurstSize:           config.BurstSize,
+				Strategy:            StrategyFixed,
+				MaxInterval:         config.RateLimit * 10,
+				AdaptationRate:      DefaultAdaptationRate,
+				BurstRefillRate:     DefaultBurstRefillRate,
+				HealthWindow:        DefaultHealthWindow,
+				AdaptationThreshold: DefaultAdaptationThreshold,
+				ErrorRateThreshold:  DefaultErrorRateThreshold,
+				ConsecutiveErrLimit: DefaultConsecutiveErrLimit,
+				MinChangeThreshold:  DefaultMinChangeThreshold,
+			}
+		}
+		engine.rateLimiter = NewAdaptiveRateLimiter(rlConfig)
+	}
+
+	// Configure error recovery if specified
+	if config.ErrorRecovery != nil && config.ErrorRecovery.Enabled {
+		// Configure circuit breakers
+		for operationName, cbSpec := range config.ErrorRecovery.CircuitBreakers {
+			circuitConfig := errors.CircuitBreakerConfig{
+				MaxFailures:  cbSpec.MaxFailures,
+				ResetTimeout: cbSpec.ResetTimeout,
+			}
+			engine.errorService.ConfigureCircuitBreaker(operationName, circuitConfig)
+		}
+		
+		// Configure fallbacks
+		for operationName, fbSpec := range config.ErrorRecovery.Fallbacks {
+			var strategy errors.FallbackStrategy
+			switch fbSpec.Strategy {
+			case "cached":
+				strategy = errors.FallbackCached
+			case "default":
+				strategy = errors.FallbackDefault
+			case "alternative":
+				strategy = errors.FallbackAlternative
+			case "degrade":
+				strategy = errors.FallbackDegrade
+			default:
+				strategy = errors.FallbackNone
+			}
+			
+			fallbackConfig := errors.FallbackConfig{
+				Strategy:     strategy,
+				CacheTimeout: fbSpec.CacheTimeout,
+				DefaultValue: fbSpec.DefaultValue,
+				Alternative:  fbSpec.Alternative,
+				Degraded:     fbSpec.Degraded,
+			}
+			engine.errorService.ConfigureFallback(operationName, fallbackConfig)
+		}
 	}
 
 	return engine, nil
@@ -174,19 +235,30 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 		Warnings:  make([]string, 0),
 	}
 
-	// Execute with retry logic
-	var doc *goquery.Document
-	err := e.errorService.ExecuteWithRetry(ctx, func() error {
-		var fetchErr error
-		doc, fetchErr = e.fetchDocument(ctx, url)
-		return fetchErr
-	}, "fetch_document")
+	// Execute with comprehensive error recovery
+	recoveryResult := e.errorService.ExecuteWithRecovery(ctx, "fetch_document", func() (interface{}, error) {
+		doc, err := e.fetchDocument(ctx, url)
+		return doc, err
+	})
 
-	if err != nil {
+	if !recoveryResult.Success {
+		result.Error = recoveryResult.OriginalError
+		result.Errors = append(result.Errors, recoveryResult.OriginalError.Error())
+		if recoveryResult.UsedFallback {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("Used fallback strategy: %s", recoveryResult.FallbackType))
+		}
+		return result, fmt.Errorf("failed to fetch document after %d attempts: %w", recoveryResult.AttemptCount, recoveryResult.OriginalError)
+	}
+
+	var doc *goquery.Document
+	var ok bool
+	if doc, ok = recoveryResult.Result.(*goquery.Document); !ok {
+		err := fmt.Errorf("unexpected result type from document fetch")
 		result.Error = err
 		result.Errors = append(result.Errors, err.Error())
-		return result, fmt.Errorf("failed to fetch document: %w", err)
+		return result, err
 	}
+
 
 	// Extract fields with error tracking
 	successCount := 0
@@ -222,9 +294,11 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 
 // Enhanced fetchDocument method (existing logic preserved, browser automation added)
 func (e *Engine) fetchDocument(ctx context.Context, url string) (*goquery.Document, error) {
-	// Existing rate limiting preserved
+	// Enhanced rate limiting with context support
 	if e.rateLimiter != nil {
-		e.rateLimiter.Wait()
+		if err := e.rateLimiter.Wait(ctx); err != nil {
+			return nil, fmt.Errorf("rate limiting failed: %w", err)
+		}
 	}
 
 	// Use browser automation if enabled
@@ -290,6 +364,10 @@ func (e *Engine) fetchDocumentWithHTTP(ctx context.Context, url string) (*goquer
 	// Execute request with proxy-aware client
 	resp, err := client.Do(req)
 	if err != nil {
+		// Report rate limiter failure for adaptive behavior
+		if e.rateLimiter != nil {
+			e.rateLimiter.ReportError()
+		}
 		// Report proxy failure if proxy was used
 		if proxyInstance != nil {
 			e.proxyManager.ReportFailure(proxyInstance, err)
@@ -300,6 +378,10 @@ func (e *Engine) fetchDocumentWithHTTP(ctx context.Context, url string) (*goquer
 
 	// Existing status code handling preserved
 	if resp.StatusCode >= 400 {
+		// Report rate limiter failure for adaptive behavior
+		if e.rateLimiter != nil {
+			e.rateLimiter.ReportError()
+		}
 		// Report proxy failure for client errors when using proxy
 		if proxyInstance != nil {
 			httpErr := fmt.Errorf("HTTP error %d: %s", resp.StatusCode, resp.Status)
@@ -308,6 +390,10 @@ func (e *Engine) fetchDocumentWithHTTP(ctx context.Context, url string) (*goquer
 		return nil, fmt.Errorf("HTTP error %d: %s", resp.StatusCode, resp.Status)
 	}
 
+	// Report success for adaptive rate limiting
+	if e.rateLimiter != nil {
+		e.rateLimiter.ReportSuccess()
+	}
 	// Report proxy success if proxy was used
 	if proxyInstance != nil {
 		e.proxyManager.ReportSuccess(proxyInstance)
@@ -416,6 +502,67 @@ func (e *Engine) Close() error {
 // IsBrowserEnabled returns whether browser automation is enabled
 func (e *Engine) IsBrowserEnabled() bool {
 	return e.browserManager != nil && e.browserManager.IsEnabled()
+}
+
+// GetRateLimiterStats returns current rate limiter statistics
+func (e *Engine) GetRateLimiterStats() *RateLimiterStats {
+	if e.rateLimiter == nil {
+		return nil
+	}
+	return e.rateLimiter.GetStats()
+}
+
+// SetRateLimitStrategy changes the rate limiting strategy
+func (e *Engine) SetRateLimitStrategy(strategy RateLimitStrategy) {
+	if e.rateLimiter != nil {
+		e.rateLimiter.SetStrategy(strategy)
+	}
+}
+
+// ResetRateLimiter resets rate limiter statistics
+func (e *Engine) ResetRateLimiter() {
+	if e.rateLimiter != nil {
+		e.rateLimiter.Reset()
+	}
+}
+
+// ConfigureErrorRecovery configures error recovery mechanisms
+func (e *Engine) ConfigureErrorRecovery(operationName string, circuitConfig *errors.CircuitBreakerConfig, fallbackConfig *errors.FallbackConfig) {
+	if e.errorService == nil {
+		return
+	}
+	
+	if circuitConfig != nil {
+		e.errorService.ConfigureCircuitBreaker(operationName, *circuitConfig)
+	}
+	
+	if fallbackConfig != nil {
+		e.errorService.ConfigureFallback(operationName, *fallbackConfig)
+	}
+}
+
+// GetErrorRecoveryStats returns error recovery statistics
+func (e *Engine) GetErrorRecoveryStats() map[string]interface{} {
+	if e.errorService == nil {
+		return nil
+	}
+	
+	return map[string]interface{}{
+		"circuit_breakers": e.errorService.GetCircuitBreakerStats(),
+		"cache":           e.errorService.GetCacheStats(),
+	}
+}
+
+// ResetErrorRecovery resets all error recovery mechanisms
+func (e *Engine) ResetErrorRecovery() {
+	if e.errorService != nil {
+		e.errorService.ClearCache()
+		// Reset circuit breakers by getting their names and resetting each
+		stats := e.errorService.GetCircuitBreakerStats()
+		for name := range stats {
+			e.errorService.ResetCircuitBreaker(name)
+		}
+	}
 }
 
 // ScrapeWithPagination scrapes multiple pages based on pagination configuration
