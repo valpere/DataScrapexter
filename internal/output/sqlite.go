@@ -150,7 +150,7 @@ func (w *SQLiteWriter) createTable(data []map[string]interface{}) error {
 		columnDefs = append(columnDefs, fmt.Sprintf("[%s] %s", column, columnType))
 	}
 
-	// Add metadata columns
+	// Add metadata column
 	columnDefs = append(columnDefs, "created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
 
 	query := `
