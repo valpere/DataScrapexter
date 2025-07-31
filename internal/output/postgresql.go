@@ -129,16 +129,18 @@ func (w *PostgreSQLWriter) createTable(data []map[string]interface{}) error {
 	// Add created_at timestamp column
 	columnDefs = append(columnDefs, "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
 
-	query := fmt.Sprintf(`
-		CREATE TABLE IF NOT EXISTS %s.%s (
-			id SERIAL PRIMARY KEY,
-			%s
-		)`,
-		w.quoteIdentifier(w.schema),
-		w.quoteIdentifier(w.table),
-		strings.Join(columnDefs, ",\n\t\t\t"),
-	)
+	var queryBuilder strings.Builder
+	queryBuilder.WriteString("CREATE TABLE IF NOT EXISTS ")
+	queryBuilder.WriteString(w.quoteIdentifier(w.schema))
+	queryBuilder.WriteString(".")
+	queryBuilder.WriteString(w.quoteIdentifier(w.table))
+	queryBuilder.WriteString(" (\n")
+	queryBuilder.WriteString("\tid SERIAL PRIMARY KEY,\n")
+	queryBuilder.WriteString("\t")
+	queryBuilder.WriteString(strings.Join(columnDefs, ",\n\t"))
+	queryBuilder.WriteString("\n);")
 
+	query := queryBuilder.String()
 	if _, err := w.db.Exec(query); err != nil {
 		return fmt.Errorf("failed to create table: %w", err)
 	}
