@@ -21,7 +21,7 @@ type Engine struct {
 	userAgentPool  []string
 	currentUAIndex int
 	config         *Config
-	rateLimiter    *RateLimiter
+	rateLimiter    *AdaptiveRateLimiter
 	
 	// Enhanced features: error handling, browser automation, and proxy management
 	errorService   *errors.Service
@@ -156,9 +156,24 @@ func NewEngine(config *Config) (*Engine, error) {
 		engine.proxyManager = pm
 	}
 
-	// Existing rate limiter setup preserved
-	if config.RateLimit > 0 {
-		engine.rateLimiter = NewRateLimiter(config.RateLimit, config.BurstSize)
+	// Enhanced rate limiter setup
+	if config.RateLimit > 0 || config.RateLimiter != nil {
+		var rlConfig *RateLimiterConfig
+		if config.RateLimiter != nil {
+			rlConfig = config.RateLimiter
+		} else {
+			// Convert legacy config to new format
+			rlConfig = &RateLimiterConfig{
+				BaseInterval:    config.RateLimit,
+				BurstSize:       config.BurstSize,
+				Strategy:        StrategyFixed,
+				MaxInterval:     config.RateLimit * 10,
+				AdaptationRate:  0.5,
+				BurstRefillRate: 10 * time.Second,
+				HealthWindow:    5 * time.Minute,
+			}
+		}
+		engine.rateLimiter = NewAdaptiveRateLimiter(rlConfig)
 	}
 
 	return engine, nil
@@ -222,9 +237,11 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 
 // Enhanced fetchDocument method (existing logic preserved, browser automation added)
 func (e *Engine) fetchDocument(ctx context.Context, url string) (*goquery.Document, error) {
-	// Existing rate limiting preserved
+	// Enhanced rate limiting with context support
 	if e.rateLimiter != nil {
-		e.rateLimiter.Wait()
+		if err := e.rateLimiter.Wait(ctx); err != nil {
+			return nil, fmt.Errorf("rate limiting failed: %w", err)
+		}
 	}
 
 	// Use browser automation if enabled
@@ -290,6 +307,10 @@ func (e *Engine) fetchDocumentWithHTTP(ctx context.Context, url string) (*goquer
 	// Execute request with proxy-aware client
 	resp, err := client.Do(req)
 	if err != nil {
+		// Report rate limiter failure for adaptive behavior
+		if e.rateLimiter != nil {
+			e.rateLimiter.ReportError()
+		}
 		// Report proxy failure if proxy was used
 		if proxyInstance != nil {
 			e.proxyManager.ReportFailure(proxyInstance, err)
@@ -300,6 +321,10 @@ func (e *Engine) fetchDocumentWithHTTP(ctx context.Context, url string) (*goquer
 
 	// Existing status code handling preserved
 	if resp.StatusCode >= 400 {
+		// Report rate limiter failure for adaptive behavior
+		if e.rateLimiter != nil {
+			e.rateLimiter.ReportError()
+		}
 		// Report proxy failure for client errors when using proxy
 		if proxyInstance != nil {
 			httpErr := fmt.Errorf("HTTP error %d: %s", resp.StatusCode, resp.Status)
@@ -308,6 +333,10 @@ func (e *Engine) fetchDocumentWithHTTP(ctx context.Context, url string) (*goquer
 		return nil, fmt.Errorf("HTTP error %d: %s", resp.StatusCode, resp.Status)
 	}
 
+	// Report success for adaptive rate limiting
+	if e.rateLimiter != nil {
+		e.rateLimiter.ReportSuccess()
+	}
 	// Report proxy success if proxy was used
 	if proxyInstance != nil {
 		e.proxyManager.ReportSuccess(proxyInstance)
@@ -416,6 +445,28 @@ func (e *Engine) Close() error {
 // IsBrowserEnabled returns whether browser automation is enabled
 func (e *Engine) IsBrowserEnabled() bool {
 	return e.browserManager != nil && e.browserManager.IsEnabled()
+}
+
+// GetRateLimiterStats returns current rate limiter statistics
+func (e *Engine) GetRateLimiterStats() *RateLimiterStats {
+	if e.rateLimiter == nil {
+		return nil
+	}
+	return e.rateLimiter.GetStats()
+}
+
+// SetRateLimitStrategy changes the rate limiting strategy
+func (e *Engine) SetRateLimitStrategy(strategy RateLimitStrategy) {
+	if e.rateLimiter != nil {
+		e.rateLimiter.SetStrategy(strategy)
+	}
+}
+
+// ResetRateLimiter resets rate limiter statistics
+func (e *Engine) ResetRateLimiter() {
+	if e.rateLimiter != nil {
+		e.rateLimiter.Reset()
+	}
 }
 
 // ScrapeWithPagination scrapes multiple pages based on pagination configuration

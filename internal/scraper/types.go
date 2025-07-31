@@ -2,13 +2,10 @@
 package scraper
 
 import (
-	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/valpere/DataScrapexter/internal/pipeline"
-	"golang.org/x/time/rate"
 )
 
 // Common errors
@@ -131,18 +128,19 @@ func (s *Selector) ValidateSelector(expression string) error {
 
 // Config represents the scraper engine configuration
 type Config struct {
-	MaxRetries      int                `yaml:"max_retries" json:"max_retries"`
-	RetryDelay      time.Duration      `yaml:"retry_delay" json:"retry_delay"`
-	Timeout         time.Duration      `yaml:"timeout" json:"timeout"`
-	FollowRedirects bool               `yaml:"follow_redirects" json:"follow_redirects"`
-	MaxRedirects    int                `yaml:"max_redirects" json:"max_redirects"`
-	RateLimit       time.Duration      `yaml:"rate_limit" json:"rate_limit"`
-	BurstSize       int                `yaml:"burst_size" json:"burst_size"`
-	Headers         map[string]string  `yaml:"headers" json:"headers"`
-	UserAgents      []string           `yaml:"user_agents" json:"user_agents"`
-	Browser         *BrowserConfig     `yaml:"browser" json:"browser"`
-	Proxy           *ProxyConfig       `yaml:"proxy" json:"proxy"`
-	Pagination      *PaginationConfig  `yaml:"pagination" json:"pagination"`
+	MaxRetries      int                    `yaml:"max_retries" json:"max_retries"`
+	RetryDelay      time.Duration          `yaml:"retry_delay" json:"retry_delay"`
+	Timeout         time.Duration          `yaml:"timeout" json:"timeout"`
+	FollowRedirects bool                   `yaml:"follow_redirects" json:"follow_redirects"`
+	MaxRedirects    int                    `yaml:"max_redirects" json:"max_redirects"`
+	RateLimit       time.Duration          `yaml:"rate_limit" json:"rate_limit"`
+	BurstSize       int                    `yaml:"burst_size" json:"burst_size"`
+	Headers         map[string]string      `yaml:"headers" json:"headers"`
+	UserAgents      []string               `yaml:"user_agents" json:"user_agents"`
+	Browser         *BrowserConfig         `yaml:"browser" json:"browser"`
+	Proxy           *ProxyConfig           `yaml:"proxy" json:"proxy"`
+	Pagination      *PaginationConfig      `yaml:"pagination" json:"pagination"`
+	RateLimiter     *RateLimiterConfig     `yaml:"rate_limiter" json:"rate_limiter"`
 }
 
 // ProxyConfig represents proxy configuration for the scraper
@@ -201,37 +199,6 @@ type BrowserConfig struct {
 	DisableJS      bool          `yaml:"disable_js" json:"disable_js"`
 }
 
-// RateLimiter provides rate limiting functionality
-type RateLimiter struct {
-	limiter *rate.Limiter
-	mu      sync.Mutex
-}
-
-// NewRateLimiter creates a new rate limiter
-func NewRateLimiter(interval time.Duration, burst int) *RateLimiter {
-	if burst <= 0 {
-		burst = 1
-	}
-	return &RateLimiter{
-		limiter: rate.NewLimiter(rate.Every(interval), burst),
-	}
-}
-
-// Wait blocks until the rate limiter allows the operation
-func (rl *RateLimiter) Wait() {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	if rl.limiter != nil {
-		rl.limiter.Wait(context.Background())
-	}
-}
-
-// Allow checks if an operation is allowed without blocking
-func (rl *RateLimiter) Allow() bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	return rl.limiter.Allow()
-}
 
 // PaginationType represents different pagination strategies
 type PaginationType string
