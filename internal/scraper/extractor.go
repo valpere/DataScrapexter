@@ -427,8 +427,8 @@ func (fe *FieldExtractor) extractDate(selection *goquery.Selection) (string, err
 		}
 	}
 
-	extractorLogger.Warn(fmt.Sprintf("Could not parse date '%s', returning as-is", text))
-	return text, nil
+	extractorLogger.Warn(fmt.Sprintf("Could not parse date '%s'", text))
+	return "", fmt.Errorf("failed to parse date: '%s'", text)
 }
 
 // extractDateTime extracts and parses a datetime
