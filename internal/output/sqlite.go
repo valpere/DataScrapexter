@@ -156,7 +156,7 @@ func (w *SQLiteWriter) createTable(data []map[string]interface{}) error {
 		)`
 
 	if _, err := w.db.Exec(query); err != nil {
-		return fmt.Errorf("failed to create table: %w", err)
+		return fmt.Errorf("failed to create table '%s': %w", w.table, err)
 	}
 
 	return nil
