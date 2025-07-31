@@ -302,11 +302,13 @@ func (w *PostgreSQLWriter) insertBatch(batch []map[string]interface{}) error {
 		query = fmt.Sprintf(`
 			INSERT INTO %s.%s (%s) 
 			VALUES %s 
-			ON CONFLICT DO NOTHING`,
+			ON CONFLICT (%s) DO UPDATE SET %s`,
 			w.quoteIdentifier(w.schema),
 			w.quoteIdentifier(w.table),
 			strings.Join(quotedColumns, ", "),
 			strings.Join(placeholders, ", "),
+			strings.Join(quotedColumns, ", "), // Conflict target: all columns
+			strings.Join(updateClauses, ", "),
 		)
 	default: // "error" or any other value
 		query = fmt.Sprintf(`
