@@ -33,7 +33,7 @@ const (
 	BurstDecreaseThreshold     = 0.2  // 20% error rate - reduce bursts
 	BurstIncreaseMultiplier    = 1.5  // Increase burst size by 50%
 	BurstDecreaseMultiplier    = 0.5  // Decrease burst size by 50%
-	MaxConsecutiveMultiplier   = 10.0 // Maximum consecutive error multiplier
+	MaxConsecutiveMultiplier   = 10.0 // Caps the rate slowdown caused by consecutive errors to prevent excessive delays in the adaptation algorithm.
 )
 
 // Health tracking efficiency constants
