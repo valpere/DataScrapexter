@@ -151,13 +151,14 @@ type PostgreSQLOptions struct {
 
 // SQLiteOptions defines SQLite-specific options  
 type SQLiteOptions struct {
-	DatabasePath string            `yaml:"database_path" json:"database_path"`
-	Table        string            `yaml:"table" json:"table"`
-	BatchSize    int               `yaml:"batch_size,omitempty" json:"batch_size,omitempty"`
-	CreateTable  bool              `yaml:"create_table,omitempty" json:"create_table,omitempty"`
-	OnConflict   string            `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // "ignore", "replace", "error"
-	ColumnTypes  map[string]string `yaml:"column_types,omitempty" json:"column_types,omitempty"`
-	OptimizeOnClose bool           `yaml:"optimize_on_close,omitempty" json:"optimize_on_close,omitempty"` // Run VACUUM and PRAGMA optimize on close
+	DatabasePath     string            `yaml:"database_path" json:"database_path"`
+	Table            string            `yaml:"table" json:"table"`
+	BatchSize        int               `yaml:"batch_size,omitempty" json:"batch_size,omitempty"`
+	CreateTable      bool              `yaml:"create_table,omitempty" json:"create_table,omitempty"`
+	OnConflict       string            `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // "ignore", "replace", "error"
+	ColumnTypes      map[string]string `yaml:"column_types,omitempty" json:"column_types,omitempty"`
+	OptimizeOnClose  bool              `yaml:"optimize_on_close,omitempty" json:"optimize_on_close,omitempty"` // Run VACUUM and PRAGMA optimize on close
+	ConnectionParams string            `yaml:"connection_params,omitempty" json:"connection_params,omitempty"` // SQLite connection parameters
 }
 
 // SupportedFormats lists all supported output formats
