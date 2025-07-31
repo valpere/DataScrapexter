@@ -25,8 +25,9 @@ var (
 	numberCleanRegex = regexp.MustCompile(`[+-]?\d+(\.\d+)?`)            // Match valid numeric formats with optional sign and decimal point
 	integerRegex     = regexp.MustCompile(`[+-]?\d+`)                   // Allow optional plus/minus prefix
 	emailRegex       = regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
-	phoneRegex       = regexp.MustCompile(`[\+]?[0-9][\d\s\-\(\)\.]{7,15}`) // Allow phone numbers starting with any digit (0-9) after an optional plus sign
-	phoneCleanRegex  = regexp.MustCompile(`[^\d\+]`)
+	phoneRegex       = regexp.MustCompile(`[\+][1-9][\d\s\-\(\)\.]{7,20}|[1-9][\d\s\-\(\)\.]{7,20}`) // International phone format (with or without +)
+	localPhoneRegex  = regexp.MustCompile(`0[\d\s\-\(\)\.]{7,14}`)       // Local phone numbers starting with 0
+	phoneCleanRegex  = regexp.MustCompile(`[^\d\+]`) // Preserve digits and plus sign
 )
 
 // FieldExtractor handles extraction and transformation of individual fields
@@ -612,13 +613,17 @@ func (fe *FieldExtractor) extractPhone(selection *goquery.Selection) (string, er
 		return "", nil
 	}
 
-	// Extract phone number pattern (basic international format)
-	match := phoneRegex.FindString(text)
+	// Extract phone number pattern (try local format first, then international)
+	match := localPhoneRegex.FindString(text)
 	if match == "" {
-		return "", fmt.Errorf("no valid phone number found in: %s", text)
+		// Try international phone number format
+		match = phoneRegex.FindString(text)
+		if match == "" {
+			return "", fmt.Errorf("no valid phone number found in: %s", text)
+		}
 	}
 
-	// Clean up the phone number
+	// Clean up the phone number (remove spaces, hyphens, parentheses, dots but keep digits and plus)
 	cleaned := phoneCleanRegex.ReplaceAllString(match, "")
 	return cleaned, nil
 }

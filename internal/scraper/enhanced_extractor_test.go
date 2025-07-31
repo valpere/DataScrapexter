@@ -376,28 +376,60 @@ func TestFieldExtractor_EnhancedTypes(t *testing.T) {
 			// Type-specific comparisons
 			switch tt.config.Type {
 			case "table":
-				expected := tt.expected.(map[string]interface{})
-				actual := result.(map[string]interface{})
-				
-				if len(actual["headers"].([]string)) != len(expected["headers"].([]string)) {
-					t.Errorf("Headers length mismatch: expected %d, got %d", 
-						len(expected["headers"].([]string)), len(actual["headers"].([]string)))
+				// Safe type assertions for table comparison
+				expectedMap, ok := tt.expected.(map[string]interface{})
+				if !ok {
+					t.Errorf("Expected result is not a map[string]interface{}")
+					return
 				}
 				
-				if actual["count"] != expected["count"] {
-					t.Errorf("Row count mismatch: expected %v, got %v", expected["count"], actual["count"])
+				actualMap, ok := result.(map[string]interface{})
+				if !ok {
+					t.Errorf("Actual result is not a map[string]interface{}")
+					return
+				}
+				
+				// Safe assertion for headers
+				expectedHeaders, ok := expectedMap["headers"].([]string)
+				if !ok {
+					t.Errorf("Expected headers is not []string")
+					return
+				}
+				
+				actualHeaders, ok := actualMap["headers"].([]string)
+				if !ok {
+					t.Errorf("Actual headers is not []string")
+					return
+				}
+				
+				if len(actualHeaders) != len(expectedHeaders) {
+					t.Errorf("Headers length mismatch: expected %d, got %d", 
+						len(expectedHeaders), len(actualHeaders))
+				}
+				
+				if actualMap["count"] != expectedMap["count"] {
+					t.Errorf("Row count mismatch: expected %v, got %v", expectedMap["count"], actualMap["count"])
 				}
 				
 			case "json":
-				// For JSON, we need to compare the structure rather than direct equality
-				expected := tt.expected.(map[string]interface{})
-				actual := result.(map[string]interface{})
-				
-				if expected["name"] != actual["name"] {
-					t.Errorf("JSON name mismatch: expected %v, got %v", expected["name"], actual["name"])
+				// Safe type assertions for JSON comparison
+				expectedMap, ok := tt.expected.(map[string]interface{})
+				if !ok {
+					t.Errorf("Expected result is not a map[string]interface{}")
+					return
 				}
-				if expected["age"] != actual["age"] {
-					t.Errorf("JSON age mismatch: expected %v, got %v", expected["age"], actual["age"])
+				
+				actualMap, ok := result.(map[string]interface{})
+				if !ok {
+					t.Errorf("Actual result is not a map[string]interface{}")
+					return
+				}
+				
+				if expectedMap["name"] != actualMap["name"] {
+					t.Errorf("JSON name mismatch: expected %v, got %v", expectedMap["name"], actualMap["name"])
+				}
+				if expectedMap["age"] != actualMap["age"] {
+					t.Errorf("JSON age mismatch: expected %v, got %v", expectedMap["age"], actualMap["age"])
 				}
 				
 			default:

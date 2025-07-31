@@ -166,15 +166,17 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 		return strings.ReplaceAll(input, ",", ""), nil
 
 	case "format_currency":
-		// Extract numeric value preserving spaces (e.g., "1 234.56" → "1234.56")
-		// Remove currency symbols but preserve digits, decimal points, spaces, and minus signs
-		numericPart := regexp.MustCompile(`[^\d\s.-]`).ReplaceAllString(input, "")
-		// Remove spaces to get clean number
-		cleaned := strings.ReplaceAll(numericPart, " ", "")
-
-		if cleaned == "" {
+		// Extract numeric value handling various currency formats
+		// Step 1: Try to extract any reasonable numeric pattern
+		numericPattern := regexp.MustCompile(`([+-]?\d{1,}(?:[,\s]\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)`)
+		numericMatch := numericPattern.FindString(strings.TrimSpace(input))
+		
+		if numericMatch == "" {
 			return input, nil
 		}
+
+		// Step 2: Clean the numeric part (remove spaces and commas)
+		cleaned := strings.ReplaceAll(strings.ReplaceAll(numericMatch, " ", ""), ",", "")
 
 		if value, err := strconv.ParseFloat(cleaned, 64); err == nil {
 			currency := "$"
