@@ -22,12 +22,12 @@ var extractorLogger = utils.NewComponentLogger("field-extractor")
 
 // Pre-compiled regular expressions for performance
 var (
-	numberCleanRegex = regexp.MustCompile(`[+-]?\d+(\.\d+)?`)            // Match valid numeric formats with optional sign and decimal point
-	integerRegex     = regexp.MustCompile(`[+-]?\d+`)                   // Allow optional plus/minus prefix
-	emailRegex       = regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
-	phoneRegex       = regexp.MustCompile(`[\+][1-9][\d\s\-().]{7,20}|[1-9][\d\s\-().]{7,20}`) // International phone format (with or without +)
-	localPhoneRegex  = regexp.MustCompile(`0[\d\s\-().]{7,14}`)       // Local phone numbers starting with 0
-	phoneCleanRegex  = regexp.MustCompile(`[^\d\+]`) // Preserve digits and plus sign
+	numberCleanRegex = regexp.MustCompile(`[+-]?\d+(\.\d+)?`)                                                        // Match valid numeric formats with optional sign and decimal point
+	integerRegex     = regexp.MustCompile(`[+-]?\d+`)                                                                // Allow optional plus/minus prefix
+	emailRegex       = regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)                          // Email pattern
+	phoneRegex       = regexp.MustCompile(`\+[1-9]\d{0,3}[-.\s]*\(?[0-9]{1,4}\)?[-.\s]*[0-9]{1,4}[-.\s]*[0-9]{1,9}`) // International phone format with country code
+	localPhoneRegex  = regexp.MustCompile(`0[0-9]{2,3}[-.\s]*[0-9]{3,4}[-.\s]*[0-9]{3,4}`)                           // Local phone numbers starting with 0
+	phoneCleanRegex  = regexp.MustCompile(`[^\d+]`)                                                                  // Preserve digits and plus sign
 )
 
 // FieldExtractor handles extraction and transformation of individual fields
@@ -494,7 +494,7 @@ func (fe *FieldExtractor) extractTime(selection *goquery.Selection) (string, err
 }
 
 // extractURL extracts and validates a URL
-// 
+//
 // URL extraction behavior:
 // 1. Attempts href attribute first (for links)
 // 2. Falls back to src attribute (for images, scripts)
