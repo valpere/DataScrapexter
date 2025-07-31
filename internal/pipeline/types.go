@@ -183,7 +183,18 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 			if tr.Params != nil && tr.Params["symbol"] != nil {
 				currency = fmt.Sprintf("%v", tr.Params["symbol"])
 			}
-			return fmt.Sprintf("%s%.2f", currency, value), nil
+
+			// Determine the number of decimal places
+			decimals := 2 // Default to 2 decimal places
+			if tr.Params != nil && tr.Params["decimals"] != nil {
+				if d, ok := tr.Params["decimals"].(int); ok && d >= 0 {
+					decimals = d
+				}
+			}
+
+			// Construct the format string dynamically
+			format := fmt.Sprintf("%%s%%.%df", decimals)
+			return fmt.Sprintf(format, currency, value), nil
 		}
 		return input, nil
 
