@@ -149,14 +149,11 @@ func (w *SQLiteWriter) createTable(data []map[string]interface{}) error {
 	// Add metadata columns
 	columnDefs = append(columnDefs, "created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
 
-	query := fmt.Sprintf(`
-		CREATE TABLE IF NOT EXISTS [%s] (
+	query := `
+		CREATE TABLE IF NOT EXISTS [` + w.table + `] (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			%s
-		)`,
-		w.table,
-		strings.Join(columnDefs, ",\n\t\t\t"),
-	)
+			` + strings.Join(columnDefs, ",\n\t\t\t") + `
+		)`
 
 	if _, err := w.db.Exec(query); err != nil {
 		return fmt.Errorf("failed to create table: %w", err)
