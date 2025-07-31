@@ -387,3 +387,73 @@ func BenchmarkAdaptiveRateLimiter_Wait(b *testing.B) {
 		rl.Wait(ctx)
 	}
 }
+
+func TestAdaptiveRateLimiter_DefaultConstants(t *testing.T) {
+	// Test nil config uses defaults
+	rl := NewAdaptiveRateLimiter(nil)
+	stats := rl.GetStats()
+	
+	if stats.BaseInterval != DefaultBaseInterval {
+		t.Errorf("Expected base interval %v, got %v", DefaultBaseInterval, stats.BaseInterval)
+	}
+	if stats.BaseBurstSize != DefaultBurstSize {
+		t.Errorf("Expected burst size %d, got %d", DefaultBurstSize, stats.BaseBurstSize)
+	}
+	if stats.Strategy != DefaultStrategy {
+		t.Errorf("Expected strategy %d, got %d", DefaultStrategy, stats.Strategy)
+	}
+}
+
+func TestAdaptiveRateLimiter_ApplyDefaults(t *testing.T) {
+	// Test partial config gets defaults applied
+	config := &RateLimiterConfig{
+		BaseInterval: 500 * time.Millisecond,
+		BurstSize:    3,
+		// Other fields should get defaults
+	}
+	
+	rl := NewAdaptiveRateLimiter(config)
+	
+	if rl.errorRateThreshold != DefaultErrorRateThreshold {
+		t.Errorf("Expected error rate threshold %v, got %v", DefaultErrorRateThreshold, rl.errorRateThreshold)
+	}
+	if rl.consecutiveErrLimit != DefaultConsecutiveErrLimit {
+		t.Errorf("Expected consecutive error limit %d, got %d", DefaultConsecutiveErrLimit, rl.consecutiveErrLimit)
+	}
+	if rl.minChangeThreshold != DefaultMinChangeThreshold {
+		t.Errorf("Expected min change threshold %v, got %v", DefaultMinChangeThreshold, rl.minChangeThreshold)
+	}
+}
+
+func TestAdaptiveRateLimiter_ResetMemoryManagement(t *testing.T) {
+	rl := NewAdaptiveRateLimiter(nil)
+	
+	// Add some errors to create the slice
+	for i := 0; i < 10; i++ {
+		rl.ReportError()
+	}
+	
+	stats := rl.GetStats()
+	if stats.ErrorCount == 0 {
+		t.Error("Expected some errors before reset")
+	}
+	
+	// Reset should clear everything and free memory
+	rl.Reset()
+	
+	// Verify reset worked
+	newStats := rl.GetStats()
+	if newStats.ErrorCount != 0 {
+		t.Errorf("Expected error count to be 0 after reset, got %d", newStats.ErrorCount)
+	}
+	if newStats.RecentErrors != 0 {
+		t.Errorf("Expected recent errors to be 0 after reset, got %d", newStats.RecentErrors)
+	}
+	
+	// Health errors slice should be nil (memory freed)
+	rl.healthMu.Lock()
+	if rl.healthErrors != nil {
+		t.Error("Expected health errors slice to be nil after reset for memory efficiency")
+	}
+	rl.healthMu.Unlock()
+}

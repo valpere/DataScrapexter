@@ -7,11 +7,17 @@ DataScrapexter provides sophisticated rate limiting capabilities with configurab
 ### Basic Rate Limiting
 ```yaml
 rate_limiter:
-  base_interval: "1s"           # Starting request interval
-  burst_size: 5                 # Number of burst tokens
-  max_interval: "30s"           # Maximum backoff interval
-  strategy: 3                   # 0=Fixed, 1=Adaptive, 2=Burst, 3=Hybrid
+  base_interval: "1s"           # Starting request interval (default: 1s)
+  burst_size: 5                 # Number of burst tokens (default: 5)
+  max_interval: "30s"           # Maximum backoff interval (default: 30s)
+  strategy: 3                   # 0=Fixed, 1=Adaptive, 2=Burst, 3=Hybrid (default: 3)
 ```
+
+All parameters have production-safe defaults defined as constants in the code:
+- `DefaultBaseInterval = 1s`
+- `DefaultBurstSize = 5`
+- `DefaultMaxInterval = 30s`
+- `DefaultStrategy = StrategyHybrid (3)`
 
 ### Adaptation Sensitivity Controls
 

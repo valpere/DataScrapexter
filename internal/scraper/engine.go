@@ -168,13 +168,13 @@ func NewEngine(config *Config) (*Engine, error) {
 				BurstSize:           config.BurstSize,
 				Strategy:            StrategyFixed,
 				MaxInterval:         config.RateLimit * 10,
-				AdaptationRate:      0.5,
-				BurstRefillRate:     10 * time.Second,
-				HealthWindow:        5 * time.Minute,
-				AdaptationThreshold: 1 * time.Second,   // Production default
-				ErrorRateThreshold:  0.1,               // 10% error rate
-				ConsecutiveErrLimit: 5,                 // 5 consecutive errors
-				MinChangeThreshold:  0.1,               // 10% minimum change
+				AdaptationRate:      DefaultAdaptationRate,
+				BurstRefillRate:     DefaultBurstRefillRate,
+				HealthWindow:        DefaultHealthWindow,
+				AdaptationThreshold: DefaultAdaptationThreshold,
+				ErrorRateThreshold:  DefaultErrorRateThreshold,
+				ConsecutiveErrLimit: DefaultConsecutiveErrLimit,
+				MinChangeThreshold:  DefaultMinChangeThreshold,
 			}
 		}
 		engine.rateLimiter = NewAdaptiveRateLimiter(rlConfig)

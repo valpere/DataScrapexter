@@ -11,6 +11,31 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// Default configuration constants
+const (
+	DefaultBaseInterval         = 1 * time.Second
+	DefaultBurstSize           = 5
+	DefaultMaxInterval         = 30 * time.Second
+	DefaultAdaptationRate      = 0.5
+	DefaultStrategy            = StrategyHybrid
+	DefaultBurstRefillRate     = 10 * time.Second
+	DefaultHealthWindow        = 5 * time.Minute
+	DefaultAdaptationThreshold = 1 * time.Second
+	DefaultErrorRateThreshold  = 0.1  // 10% error rate
+	DefaultConsecutiveErrLimit = 5
+	DefaultMinChangeThreshold  = 0.1  // 10% minimum change
+)
+
+// Adaptation behavior constants
+const (
+	ErrorRateMultiplier        = 3.0  // Up to 4x slower at 100% error rate (1 + 3)
+	BurstIncreaseThreshold     = 0.05 // 5% error rate - allow larger bursts
+	BurstDecreaseThreshold     = 0.2  // 20% error rate - reduce bursts
+	BurstIncreaseMultiplier    = 1.5  // Increase burst size by 50%
+	BurstDecreaseMultiplier    = 0.5  // Decrease burst size by 50%
+	MaxConsecutiveMultiplier   = 10.0 // Maximum consecutive error multiplier
+)
+
 // AdaptiveRateLimiter provides enhanced rate limiting with burst control and adaptive delays
 type AdaptiveRateLimiter struct {
 	// Core rate limiting
@@ -77,36 +102,46 @@ type RateLimiterConfig struct {
 	MinChangeThreshold   float64           `yaml:"min_change_threshold" json:"min_change_threshold"`   // Minimum rate change percentage
 }
 
+// getDefaultConfig returns a configuration with production-safe defaults
+func getDefaultConfig() *RateLimiterConfig {
+	return &RateLimiterConfig{
+		BaseInterval:         DefaultBaseInterval,
+		BurstSize:           DefaultBurstSize,
+		MaxInterval:         DefaultMaxInterval,
+		AdaptationRate:      DefaultAdaptationRate,
+		Strategy:            DefaultStrategy,
+		BurstRefillRate:     DefaultBurstRefillRate,
+		HealthWindow:        DefaultHealthWindow,
+		AdaptationThreshold: DefaultAdaptationThreshold,
+		ErrorRateThreshold:  DefaultErrorRateThreshold,
+		ConsecutiveErrLimit: DefaultConsecutiveErrLimit,
+		MinChangeThreshold:  DefaultMinChangeThreshold,
+	}
+}
+
+// applyDefaults fills in missing configuration values with production-safe defaults
+func applyDefaults(config *RateLimiterConfig) {
+	if config.AdaptationThreshold == 0 {
+		config.AdaptationThreshold = DefaultAdaptationThreshold
+	}
+	if config.ErrorRateThreshold == 0 {
+		config.ErrorRateThreshold = DefaultErrorRateThreshold
+	}
+	if config.ConsecutiveErrLimit == 0 {
+		config.ConsecutiveErrLimit = DefaultConsecutiveErrLimit
+	}
+	if config.MinChangeThreshold == 0 {
+		config.MinChangeThreshold = DefaultMinChangeThreshold
+	}
+}
+
 // NewAdaptiveRateLimiter creates a new adaptive rate limiter
 func NewAdaptiveRateLimiter(config *RateLimiterConfig) *AdaptiveRateLimiter {
 	if config == nil {
-		config = &RateLimiterConfig{
-			BaseInterval:         1 * time.Second,
-			BurstSize:           5,
-			MaxInterval:         30 * time.Second,
-			AdaptationRate:      0.5,
-			Strategy:            StrategyHybrid,
-			BurstRefillRate:     10 * time.Second,
-			HealthWindow:        5 * time.Minute,
-			AdaptationThreshold: 1 * time.Second,   // Production default
-			ErrorRateThreshold:  0.1,               // 10% error rate threshold
-			ConsecutiveErrLimit: 5,                 // 5 consecutive errors
-			MinChangeThreshold:  0.1,               // 10% minimum change
-		}
-	}
-
-	// Set production defaults for missing values
-	if config.AdaptationThreshold == 0 {
-		config.AdaptationThreshold = 1 * time.Second
-	}
-	if config.ErrorRateThreshold == 0 {
-		config.ErrorRateThreshold = 0.1 // 10%
-	}
-	if config.ConsecutiveErrLimit == 0 {
-		config.ConsecutiveErrLimit = 5
-	}
-	if config.MinChangeThreshold == 0 {
-		config.MinChangeThreshold = 0.1 // 10%
+		config = getDefaultConfig()
+	} else {
+		// Apply defaults for any missing values
+		applyDefaults(config)
 	}
 
 	rl := &AdaptiveRateLimiter{
@@ -308,12 +343,12 @@ func (rl *AdaptiveRateLimiter) updateAdaptiveRate() {
 	
 	// Increase delays only if error rate exceeds threshold
 	if errorRate > rl.errorRateThreshold {
-		multiplier = 1 + (errorRate * 3) // Up to 4x slower at 100% error rate
+		multiplier = 1 + (errorRate * ErrorRateMultiplier) // Up to 4x slower at 100% error rate
 	}
 	
 	// Additional penalty for consecutive errors
 	if rl.consecutiveErrs > rl.consecutiveErrLimit {
-		consecutiveMultiplier := math.Min(float64(rl.consecutiveErrs)/float64(rl.consecutiveErrLimit), 10.0)
+		consecutiveMultiplier := math.Min(float64(rl.consecutiveErrs)/float64(rl.consecutiveErrLimit), MaxConsecutiveMultiplier)
 		multiplier *= consecutiveMultiplier
 	}
 	
@@ -332,10 +367,10 @@ func (rl *AdaptiveRateLimiter) updateAdaptiveRate() {
 	
 	// Adjust burst size based on performance
 	newBurst := rl.baseBurstSize
-	if errorRate < 0.05 { // Less than 5% errors - allow larger bursts
-		newBurst = int(float64(rl.baseBurstSize) * 1.5)
-	} else if errorRate > 0.2 { // More than 20% errors - reduce bursts
-		newBurst = int(float64(rl.baseBurstSize) * 0.5)
+	if errorRate < BurstIncreaseThreshold { // Less than 5% errors - allow larger bursts
+		newBurst = int(float64(rl.baseBurstSize) * BurstIncreaseMultiplier)
+	} else if errorRate > BurstDecreaseThreshold { // More than 20% errors - reduce bursts
+		newBurst = int(float64(rl.baseBurstSize) * BurstDecreaseMultiplier)
 		if newBurst < 1 {
 			newBurst = 1
 		}
@@ -403,7 +438,9 @@ func (rl *AdaptiveRateLimiter) Reset() {
 	rl.mu.Unlock()
 	
 	rl.healthMu.Lock()
-	rl.healthErrors = rl.healthErrors[:0]
+	// Clear health errors - use nil to free memory since this is a reset operation
+	// and we don't expect frequent resets that would benefit from capacity retention
+	rl.healthErrors = nil
 	rl.healthMu.Unlock()
 }
 
