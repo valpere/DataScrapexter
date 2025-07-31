@@ -9,6 +9,12 @@ import (
 	"time"
 )
 
+// Test configuration constants
+const (
+	TestCircuitBreakerResetTimeout = 100 * time.Millisecond // Short timeout for circuit breaker tests
+	TestSlowOperationTimeout       = 100 * time.Millisecond // Timeout for slow operation simulation
+)
+
 func TestService_ExecuteWithRecovery_Success(t *testing.T) {
 	service := NewService()
 	ctx := context.Background()
@@ -173,7 +179,7 @@ func TestCircuitBreaker_Recovery(t *testing.T) {
 	// Configure circuit breaker with short reset timeout
 	service.ConfigureCircuitBreaker("recovery_test", CircuitBreakerConfig{
 		MaxFailures:  1,
-		ResetTimeout: 100 * time.Millisecond,
+		ResetTimeout: TestCircuitBreakerResetTimeout,
 	})
 
 	// Fail once to open circuit
@@ -384,7 +390,7 @@ func TestService_ContextCancellation(t *testing.T) {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(TestSlowOperationTimeout):
 			return "too_late", nil
 		}
 	}
@@ -446,6 +452,67 @@ func TestService_AlternativeOperation_Strategies(t *testing.T) {
 			}
 			if !tc.expectError && result == nil {
 				t.Error("Expected result but got nil")
+			}
+		})
+	}
+}
+
+func TestService_DefaultCircuitBreakerConfiguration(t *testing.T) {
+	service := NewService()
+	
+	// Trigger circuit breaker creation by executing an operation
+	ctx := context.Background()
+	failOperation := func() (interface{}, error) {
+		return nil, fmt.Errorf("test error")
+	}
+	
+	service.ExecuteWithRecovery(ctx, "default_config_test", failOperation)
+	
+	// Get circuit breaker stats to verify default configuration
+	stats := service.GetCircuitBreakerStats()
+	cbStats, exists := stats["default_config_test"]
+	if !exists {
+		t.Fatal("Expected circuit breaker to be created")
+	}
+	
+	cbStatsMap := cbStats.(map[string]interface{})
+	
+	// Verify default max failures
+	maxFailures := cbStatsMap["max_failures"].(int)
+	if maxFailures != DefaultCircuitBreakerMaxFailures {
+		t.Errorf("Expected max failures %d, got %d", DefaultCircuitBreakerMaxFailures, maxFailures)
+	}
+	
+	// Verify default reset timeout
+	resetTimeout := cbStatsMap["reset_timeout"].(time.Duration)
+	if resetTimeout != DefaultCircuitBreakerResetTimeout {
+		t.Errorf("Expected reset timeout %v, got %v", DefaultCircuitBreakerResetTimeout, resetTimeout)
+	}
+}
+
+func TestService_RetryableErrorPatterns(t *testing.T) {
+	service := NewService()
+	
+	testCases := []struct {
+		errorMessage string
+		shouldRetry  bool
+	}{
+		{"temporary failure", true},        // Should match "temporary"
+		{"temporary error occurred", true}, // Should match "temporary" (not redundant pattern)
+		{"connection timeout", true},       // Should match "timeout"
+		{"503 service unavailable", true},  // Should match both "503" and "service unavailable"
+		{"permanent failure", false},       // Should not match any pattern
+		{"invalid request", false},         // Should not match any pattern
+	}
+	
+	for _, tc := range testCases {
+		t.Run(tc.errorMessage, func(t *testing.T) {
+			err := fmt.Errorf("%s", tc.errorMessage)
+			shouldRetry := service.shouldRetry(err, 0) // First attempt
+			
+			if shouldRetry != tc.shouldRetry {
+				t.Errorf("Error '%s' - expected shouldRetry=%t, got %t", 
+					tc.errorMessage, tc.shouldRetry, shouldRetry)
 			}
 		})
 	}

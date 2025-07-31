@@ -9,6 +9,12 @@ import (
 	"time"
 )
 
+// Circuit breaker default configuration constants
+const (
+	DefaultCircuitBreakerMaxFailures  = 5                // Default: open after 5 failures
+	DefaultCircuitBreakerResetTimeout = 60 * time.Second // Default: try again after 60 seconds
+)
+
 // Service provides comprehensive error recovery capabilities
 type Service struct {
 	retryConfig      RetryConfig
@@ -263,8 +269,8 @@ func (s *Service) getOrCreateCircuitBreaker(operationName string) *CircuitBreake
 	// Create new circuit breaker with default config
 	cb := &CircuitBreaker{
 		name:         operationName,
-		maxFailures:  5,                   // Default: open after 5 failures
-		resetTimeout: 60 * time.Second,    // Default: try again after 60 seconds
+		maxFailures:  DefaultCircuitBreakerMaxFailures,
+		resetTimeout: DefaultCircuitBreakerResetTimeout,
 		state:        CircuitClosed,
 	}
 
@@ -403,7 +409,7 @@ func (s *Service) shouldRetry(err error, attempt int) bool {
 	retryableErrors := []string{
 		"timeout", "connection refused", "no such host",
 		"500", "502", "503", "504", "429",
-		"temporary", "temporary error", "service unavailable",
+		"temporary", "service unavailable",
 	}
 	
 	for _, retryable := range retryableErrors {
