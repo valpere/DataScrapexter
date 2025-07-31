@@ -51,7 +51,11 @@ func NewSQLiteWriter(options SQLiteOptions) (*SQLiteWriter, error) {
 	}
 
 	// Connect to database
-	db, err := sql.Open("sqlite3", options.DatabasePath+"?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=on")
+	connectionParams := options.ConnectionParams
+	if connectionParams == "" {
+		connectionParams = "?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=on"
+	}
+	db, err := sql.Open("sqlite3", options.DatabasePath+connectionParams)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to SQLite: %w", err)
 	}
