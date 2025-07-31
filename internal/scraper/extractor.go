@@ -535,7 +535,10 @@ func (fe *FieldExtractor) extractURL(selection *goquery.Selection) (string, erro
 			extractorLogger.Info(fmt.Sprintf("Resolved relative URL '%s' to '%s'", urlStr, absoluteURL.String()))
 			return absoluteURL.String(), nil
 		} else {
-			// No base URL available, return relative URL with warning
+			// No base URL available
+			if !fe.config.AllowRelativeURLs {
+				return "", fmt.Errorf("relative URL '%s' found but no base URL is available", urlStr)
+			}
 			extractorLogger.Warn(fmt.Sprintf("Relative URL found '%s' - no base URL available, returning as-is", urlStr))
 		}
 	}
