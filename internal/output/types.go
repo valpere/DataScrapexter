@@ -145,7 +145,7 @@ type PostgreSQLOptions struct {
 	Schema           string            `yaml:"schema,omitempty" json:"schema,omitempty"`
 	BatchSize        int               `yaml:"batch_size,omitempty" json:"batch_size,omitempty"`
 	CreateTable      bool              `yaml:"create_table,omitempty" json:"create_table,omitempty"`
-	OnConflict       string            `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // "ignore", "update", "error" - "update" applies to PostgreSQL and allows updating existing rows on conflict.
+	OnConflict       string            `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // PostgreSQL: "ignore", "update", "error". Note: "update" uses DO NOTHING for safety.
 	ColumnTypes      map[string]string `yaml:"column_types,omitempty" json:"column_types,omitempty"`
 }
 
@@ -155,7 +155,7 @@ type SQLiteOptions struct {
 	Table            string            `yaml:"table" json:"table"`
 	BatchSize        int               `yaml:"batch_size,omitempty" json:"batch_size,omitempty"`
 	CreateTable      bool              `yaml:"create_table,omitempty" json:"create_table,omitempty"`
-	OnConflict       string            `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // "ignore", "replace", "error"
+	OnConflict       string            `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // SQLite: "ignore", "replace", "error"
 	ColumnTypes      map[string]string `yaml:"column_types,omitempty" json:"column_types,omitempty"`
 	OptimizeOnClose  bool              `yaml:"optimize_on_close,omitempty" json:"optimize_on_close,omitempty"` // Run VACUUM and PRAGMA optimize on close
 	ConnectionParams string            `yaml:"connection_params,omitempty" json:"connection_params,omitempty"` // SQLite connection parameters

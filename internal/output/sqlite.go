@@ -152,6 +152,7 @@ func (w *SQLiteWriter) createTable(data []map[string]interface{}) error {
 
 	// Add metadata column
 	columnDefs = append(columnDefs, "created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+	w.columns = append(w.columns, "created_at") // Ensure consistency with the columns slice
 
 	query := `
 		CREATE TABLE IF NOT EXISTS [` + w.table + `] (
@@ -268,13 +269,21 @@ func (w *SQLiteWriter) insertBatch(tx *sql.Tx, batch []map[string]interface{}) e
 		return nil
 	}
 
+	// Filter out system columns (created_at) that have DEFAULT values
+	insertColumns := make([]string, 0, len(w.columns))
+	for _, column := range w.columns {
+		if column != "created_at" { // Skip created_at as it has DEFAULT value
+			insertColumns = append(insertColumns, column)
+		}
+	}
+
 	// Build INSERT statement with placeholders
-	columnList := make([]string, len(w.columns))
-	for i, column := range w.columns {
+	columnList := make([]string, len(insertColumns))
+	for i, column := range insertColumns {
 		columnList[i] = "[" + column + "]"
 	}
 
-	placeholders := strings.Repeat("?,", len(w.columns))
+	placeholders := strings.Repeat("?,", len(insertColumns))
 	placeholders = placeholders[:len(placeholders)-1] // Remove trailing comma
 
 	var query string
@@ -314,8 +323,8 @@ func (w *SQLiteWriter) insertBatch(tx *sql.Tx, batch []map[string]interface{}) e
 
 	// Execute for each record
 	for _, record := range batch {
-		args := make([]interface{}, len(w.columns))
-		for i, column := range w.columns {
+		args := make([]interface{}, len(insertColumns))
+		for i, column := range insertColumns {
 			value := record[column]
 			args[i] = w.convertValue(value)
 		}

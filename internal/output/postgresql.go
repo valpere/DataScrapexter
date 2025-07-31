@@ -258,14 +258,22 @@ func (w *PostgreSQLWriter) insertBatch(batch []map[string]interface{}) error {
 		return nil
 	}
 
+	// Filter out system columns (created_at) that have DEFAULT values
+	insertColumns := make([]string, 0, len(w.columns))
+	for _, column := range w.columns {
+		if column != "created_at" { // Skip created_at as it has DEFAULT value
+			insertColumns = append(insertColumns, column)
+		}
+	}
+
 	// Build INSERT statement
 	placeholders := make([]string, len(batch))
-	args := make([]interface{}, 0, len(batch)*len(w.columns))
+	args := make([]interface{}, 0, len(batch)*len(insertColumns))
 	argIndex := 1
 
 	for i, record := range batch {
-		rowPlaceholders := make([]string, len(w.columns))
-		for j, column := range w.columns {
+		rowPlaceholders := make([]string, len(insertColumns))
+		for j, column := range insertColumns {
 			rowPlaceholders[j] = "$" + strconv.Itoa(argIndex)
 			argIndex++
 
@@ -276,9 +284,9 @@ func (w *PostgreSQLWriter) insertBatch(batch []map[string]interface{}) error {
 		placeholders[i] = "(" + strings.Join(rowPlaceholders, ", ") + ")"
 	}
 
-	// Build column list
-	quotedColumns := make([]string, len(w.columns))
-	for i, column := range w.columns {
+	// Build column list (quoted)
+	quotedColumns := make([]string, len(insertColumns))
+	for i, column := range insertColumns {
 		quotedColumns[i] = w.quoteIdentifier(column)
 	}
 
@@ -296,21 +304,17 @@ func (w *PostgreSQLWriter) insertBatch(batch []map[string]interface{}) error {
 		)
 	case "update":
 		// Build update clause for ON CONFLICT UPDATE
-		// Use all columns for conflict detection to avoid assuming specific column names
-		updateClauses := make([]string, len(w.columns))
-		for i, column := range w.columns {
-			quotedCol := w.quoteIdentifier(column)
-			updateClauses[i] = fmt.Sprintf("%s = EXCLUDED.%s", quotedCol, quotedCol)
-		}
+		// Since we can't assume which columns have unique constraints,
+		// use DO NOTHING as safer alternative. For true upsert functionality,
+		// users should specify unique constraints in their table schema.
 		query = fmt.Sprintf(`
 			INSERT INTO %s.%s (%s) 
 			VALUES %s 
-			ON CONFLICT (id) DO UPDATE SET %s`,
+			ON CONFLICT DO NOTHING`,
 			w.quoteIdentifier(w.schema),
 			w.quoteIdentifier(w.table),
 			strings.Join(quotedColumns, ", "),
 			strings.Join(placeholders, ", "),
-			strings.Join(updateClauses, ", "),
 		)
 	default: // "error" or any other value
 		query = fmt.Sprintf(`
