@@ -40,6 +40,7 @@ const (
 const (
 	MaxHealthErrors           = 1000  // Maximum health errors to track (memory protection)
 	HealthCleanupInterval     = 100   // Clean up after every N error reports
+	HealthErrorsRetentionRatio = 0.5  // Retain 50% of entries when truncating to avoid frequent re-truncation
 )
 
 // AdaptiveRateLimiter provides enhanced rate limiting with burst control and adaptive delays
@@ -297,8 +298,8 @@ func (rl *AdaptiveRateLimiter) ReportError() {
 	
 	// Implement memory protection: enforce maximum size
 	if len(rl.healthErrors) > MaxHealthErrors {
-		// Keep only the most recent MaxHealthErrors/2 entries to avoid frequent truncation
-		keepCount := MaxHealthErrors / 2
+		// Keep only the most recent entries based on retention ratio to avoid frequent re-truncation
+		keepCount := int(float64(MaxHealthErrors) * HealthErrorsRetentionRatio)
 		copy(rl.healthErrors, rl.healthErrors[len(rl.healthErrors)-keepCount:])
 		rl.healthErrors = rl.healthErrors[:keepCount]
 	}
@@ -383,7 +384,9 @@ func (rl *AdaptiveRateLimiter) updateAdaptiveRate() {
 	
 	// Additional penalty for consecutive errors
 	if rl.consecutiveErrs > rl.consecutiveErrLimit {
-		consecutiveMultiplier := math.Min(float64(rl.consecutiveErrs)/float64(rl.consecutiveErrLimit), MaxConsecutiveMultiplier)
+		// Calculate ratio and apply it as an additional multiplier
+		consecutiveRatio := float64(rl.consecutiveErrs) / float64(rl.consecutiveErrLimit)
+		consecutiveMultiplier := math.Min(consecutiveRatio, MaxConsecutiveMultiplier)
 		multiplier *= consecutiveMultiplier
 	}
 	

@@ -314,8 +314,9 @@ func (s *Service) executeFallback(operationName string) (interface{}, error) {
 		return nil, fmt.Errorf("no default value configured for operation: %s", operationName)
 	case FallbackAlternative:
 		if config.Alternative != "" {
-			// Could implement alternative endpoint/method here
-			return fmt.Sprintf("alternative_result_for_%s", operationName), nil
+			// Execute alternative operation - this is a placeholder that should be
+			// replaced with actual alternative logic in production implementations
+			return s.executeAlternativeOperation(operationName, config.Alternative)
 		}
 		return nil, fmt.Errorf("no alternative configured for operation: %s", operationName)
 	case FallbackDegrade:
@@ -354,6 +355,42 @@ func (s *Service) getCachedResult(operationName string, maxAge time.Duration) (i
 	}
 
 	return cached.Data, nil
+}
+
+// executeAlternativeOperation executes an alternative operation strategy
+// This is a framework method that should be extended for specific use cases
+func (s *Service) executeAlternativeOperation(operationName, alternative string) (interface{}, error) {
+	// This method provides a framework for alternative operation execution
+	// In production implementations, this should be extended to:
+	// 1. Route to alternative endpoints/services
+	// 2. Use different scraping methods (e.g., mobile version, API instead of HTML)
+	// 3. Switch to backup data sources
+	// 4. Apply different extraction strategies
+	
+	switch alternative {
+	case "mobile_version":
+		return map[string]interface{}{
+			"source": "mobile_fallback",
+			"message": "Using mobile version as fallback",
+			"operation": operationName,
+		}, nil
+	case "api_fallback":
+		return map[string]interface{}{
+			"source": "api_fallback", 
+			"message": "Using API as fallback to HTML scraping",
+			"operation": operationName,
+		}, nil
+	case "cached_alternative":
+		// Try to get alternative cached data
+		return s.getCachedResult(alternative+"_"+operationName, time.Hour)
+	default:
+		return map[string]interface{}{
+			"source": "generic_alternative",
+			"alternative": alternative,
+			"operation": operationName,
+			"message": "Alternative strategy executed",
+		}, nil
+	}
 }
 
 // shouldRetry determines if error is retryable

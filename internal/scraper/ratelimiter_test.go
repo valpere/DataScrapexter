@@ -478,8 +478,8 @@ func TestAdaptiveRateLimiter_HealthErrorsMemoryProtection(t *testing.T) {
 		t.Errorf("Expected health errors to be capped at %d, got %d", MaxHealthErrors, actualCount)
 	}
 	
-	// Should be around MaxHealthErrors/2 due to truncation logic
-	expectedCount := MaxHealthErrors / 2
+	// Should be around MaxHealthErrors * HealthErrorsRetentionRatio due to truncation logic
+	expectedCount := int(float64(MaxHealthErrors) * HealthErrorsRetentionRatio)
 	if actualCount < expectedCount-10 || actualCount > MaxHealthErrors {
 		t.Errorf("Expected health errors count around %d, got %d", expectedCount, actualCount)
 	}
@@ -512,5 +512,48 @@ func TestAdaptiveRateLimiter_PeriodicCleanup(t *testing.T) {
 	// Should only have recent errors (within the health window)
 	if recentCount > HealthCleanupInterval+10 { // Allow some tolerance
 		t.Errorf("Expected cleanup to remove old errors, still have %d errors", recentCount)
+	}
+}
+
+func TestAdaptiveRateLimiter_ConsecutiveErrorMultiplier(t *testing.T) {
+	config := &RateLimiterConfig{
+		BaseInterval:         100 * time.Millisecond,
+		BurstSize:           2,
+		Strategy:            StrategyAdaptive,
+		MaxInterval:         10 * time.Second,
+		AdaptationRate:      0.5,
+		AdaptationThreshold: 10 * time.Millisecond, // Fast adaptation for testing
+		ErrorRateThreshold:  0.0,                   // Any errors trigger adaptation for testing
+		ConsecutiveErrLimit: 5,                     // Test threshold
+		MinChangeThreshold:  0.0,                   // No minimum change for testing
+	}
+	
+	rl := NewAdaptiveRateLimiter(config)
+	
+	// Report more consecutive errors than the limit to test multiplier logic
+	for i := 0; i < 15; i++ { // 3x the consecutive error limit
+		rl.ReportError()
+	}
+	
+	// Force adaptation
+	time.Sleep(50 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	rl.Wait(ctx)
+	
+	stats := rl.GetStats()
+	
+	// Verify consecutive errors are tracked correctly
+	if stats.ConsecutiveErrs != 15 {
+		t.Errorf("Expected 15 consecutive errors, got %d", stats.ConsecutiveErrs)
+	}
+	
+	// Verify that the interval has increased significantly due to consecutive errors
+	// With 15 consecutive errors and limit of 5, we should have a ratio of 3.0
+	// which should be applied as a multiplier
+	expectedMinInterval := time.Duration(float64(config.BaseInterval) * 3.0) // At least 3x slower
+	if stats.CurrentInterval < expectedMinInterval {
+		t.Errorf("Expected interval >= %v due to consecutive errors, got %v", 
+			expectedMinInterval, stats.CurrentInterval)
 	}
 }

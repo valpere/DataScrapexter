@@ -157,7 +157,11 @@ func NewEngine(config *Config) (*Engine, error) {
 	}
 
 	// Enhanced rate limiter setup
-	if config.RateLimit > 0 || config.RateLimiter != nil {
+	if config.RateLimit >= 0 || config.RateLimiter != nil {
+		// Validate rate limit duration
+		if config.RateLimit < 0 {
+			return nil, fmt.Errorf("invalid rate limit duration: %v (must be >= 0)", config.RateLimit)
+		}
 		var rlConfig *RateLimiterConfig
 		if config.RateLimiter != nil {
 			rlConfig = config.RateLimiter

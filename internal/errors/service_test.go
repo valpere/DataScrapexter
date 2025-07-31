@@ -224,9 +224,13 @@ func TestService_ConfigureFallback_AllStrategies(t *testing.T) {
 			name: "alternative_strategy",
 			config: FallbackConfig{
 				Strategy:    FallbackAlternative,
-				Alternative: "alt_endpoint",
+				Alternative: "mobile_version",
 			},
-			expected: "alternative_result_for_alt_test",
+			expected: map[string]interface{}{
+				"source": "mobile_fallback",
+				"message": "Using mobile version as fallback",
+				"operation": "alternative_strategy_test",
+			},
 		},
 		{
 			name: "degrade_strategy",
@@ -256,11 +260,18 @@ func TestService_ConfigureFallback_AllStrategies(t *testing.T) {
 				t.Error("Expected fallback to be used")
 			}
 
-			// For alternative strategy, we expect a different result format
+			// For alternative strategy, we expect a structured result
 			if tc.name == "alternative_strategy" {
-				expected := fmt.Sprintf("alternative_result_for_%s", operationName)
-				if result.Result != expected {
-					t.Errorf("Expected %v, got %v", expected, result.Result)
+				resultMap, ok := result.Result.(map[string]interface{})
+				if !ok {
+					t.Errorf("Expected map result for alternative strategy, got %T", result.Result)
+					return
+				}
+				expectedMap := tc.expected.(map[string]interface{})
+				for key, expectedValue := range expectedMap {
+					if resultMap[key] != expectedValue {
+						t.Errorf("Expected %s = %v, got %v", key, expectedValue, resultMap[key])
+					}
 				}
 			} else {
 				// For other strategies, check the configured expected value
@@ -385,6 +396,58 @@ func TestService_ContextCancellation(t *testing.T) {
 	}
 	if result.OriginalError == nil {
 		t.Error("Expected context cancellation error")
+	}
+}
+
+func TestService_AlternativeOperation_Strategies(t *testing.T) {
+	service := NewService()
+
+	testCases := []struct {
+		name        string
+		operation   string
+		alternative string
+		expectError bool
+	}{
+		{
+			name:        "mobile_version",
+			operation:   "test_op",
+			alternative: "mobile_version",
+			expectError: false,
+		},
+		{
+			name:        "api_fallback",
+			operation:   "test_op",
+			alternative: "api_fallback",
+			expectError: false,
+		},
+		{
+			name:        "cached_alternative",
+			operation:   "test_op",
+			alternative: "cached_alternative",
+			expectError: true, // No cached data initially
+		},
+		{
+			name:        "generic_alternative",
+			operation:   "test_op",
+			alternative: "custom_strategy",
+			expectError: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := service.executeAlternativeOperation(tc.operation, tc.alternative)
+
+			if tc.expectError && err == nil {
+				t.Error("Expected error but got none")
+			}
+			if !tc.expectError && err != nil {
+				t.Errorf("Expected no error but got: %v", err)
+			}
+			if !tc.expectError && result == nil {
+				t.Error("Expected result but got nil")
+			}
+		})
 	}
 }
 
