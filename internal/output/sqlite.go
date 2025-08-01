@@ -529,6 +529,10 @@ func (w *SQLiteWriter) performDatabaseOptimization() error {
 		// Fallback to a limited VACUUM with timeout protection would be ideal,
 		// but SQLite doesn't support VACUUM timeouts. In production, consider
 		// implementing this as a background goroutine with context cancellation.
+		// TODO: Implement a background goroutine with context cancellation to
+		// handle the fallback VACUUM operation. This should ensure that the
+		// operation does not block the main thread and can be safely terminated
+		// if it exceeds a predefined timeout or if the application shuts down.
 	}
 	
 	return nil
