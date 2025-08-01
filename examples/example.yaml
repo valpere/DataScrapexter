@@ -25,16 +25,16 @@ fields:
     selector: ".quote"
     type: "list"
     required: true
-    
+
   - name: "quote_text"
     selector: ".quote .text"
     type: "list"
     required: true
-    
+
   - name: "authors"
     selector: ".quote .author"
     type: "list"
-    
+
   - name: "tags"
     selector: ".quote .tags"
     type: "list"

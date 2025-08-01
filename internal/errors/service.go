@@ -153,23 +153,23 @@ func (s *Service) WithVerbose(verbose bool) *Service {
 // ExecuteWithRetry adds retry logic to existing functions
 func (s *Service) ExecuteWithRetry(ctx context.Context, operation func() error, operationName string) error {
 	var lastErr error
-	
+
 	for attempt := 0; attempt <= s.retryConfig.MaxRetries; attempt++ {
 		err := operation()
 		if err == nil {
 			return nil
 		}
-		
+
 		lastErr = err
-		
+
 		// Check if should retry
 		if !s.shouldRetry(err, attempt) {
 			break
 		}
-		
+
 		// Calculate delay
 		delay := s.calculateDelay(attempt)
-		
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -177,7 +177,7 @@ func (s *Service) ExecuteWithRetry(ctx context.Context, operation func() error, 
 			continue
 		}
 	}
-	
+
 	return fmt.Errorf("operation %s failed after %d attempts: %w", operationName, s.retryConfig.MaxRetries+1, lastErr)
 }
 
@@ -195,7 +195,7 @@ func (s *Service) ExecuteWithRecovery(ctx context.Context, operationName string,
 	if !circuitBreaker.CanExecute() {
 		result.OriginalError = fmt.Errorf("circuit breaker is open for operation: %s", operationName)
 		result.RecoveryTime = time.Since(startTime)
-		
+
 		// Try fallback
 		if fallbackResult, err := s.executeFallback(operationName); err == nil {
 			result.Success = true
@@ -210,14 +210,14 @@ func (s *Service) ExecuteWithRecovery(ctx context.Context, operationName string,
 	var lastErr error
 	for attempt := 0; attempt <= s.retryConfig.MaxRetries; attempt++ {
 		result.AttemptCount++
-		
+
 		data, err := operation()
 		if err == nil {
 			circuitBreaker.RecordSuccess()
 			result.Success = true
 			result.Result = data
 			result.RecoveryTime = time.Since(startTime)
-			
+
 			// Cache successful result for future fallback
 			s.cacheResult(operationName, data)
 			return result
@@ -339,7 +339,7 @@ func (s *Service) executeFallback(operationName string) (interface{}, error) {
 func (s *Service) cacheResult(operationName string, result interface{}) {
 	s.fallbackRegistry.mu.Lock()
 	defer s.fallbackRegistry.mu.Unlock()
-	
+
 	s.fallbackRegistry.cache[operationName] = CachedResult{
 		Data:      result,
 		Timestamp: time.Now(),
@@ -372,7 +372,7 @@ func (s *Service) executeAlternativeOperation(operationName, alternative string)
 	// 2. Use different scraping methods (e.g., mobile version, API instead of HTML)
 	// 3. Switch to backup data sources
 	// 4. Apply different extraction strategies
-	
+
 	switch alternative {
 	case "mobile_version":
 		return map[string]interface{}{
@@ -382,7 +382,7 @@ func (s *Service) executeAlternativeOperation(operationName, alternative string)
 		}, nil
 	case "api_fallback":
 		return map[string]interface{}{
-			"source": "api_fallback", 
+			"source": "api_fallback",
 			"message": "Using API as fallback to HTML scraping",
 			"operation": operationName,
 		}, nil
@@ -404,20 +404,20 @@ func (s *Service) shouldRetry(err error, attempt int) bool {
 	if attempt >= s.retryConfig.MaxRetries {
 		return false
 	}
-	
+
 	errStr := strings.ToLower(err.Error())
 	retryableErrors := []string{
 		"timeout", "connection refused", "no such host",
 		"500", "502", "503", "504", "429",
 		"temporary", "service unavailable",
 	}
-	
+
 	for _, retryable := range retryableErrors {
 		if strings.Contains(errStr, retryable) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -435,12 +435,12 @@ func (s *Service) GetUserFriendlyError(err error) (title, message string, sugges
 	if err == nil {
 		return "", "", nil
 	}
-	
+
 	errStr := strings.ToLower(err.Error())
-	
+
 	// Network errors
 	if strings.Contains(errStr, "timeout") {
-		return "Connection Timeout", 
+		return "Connection Timeout",
 			"The request timed out while trying to connect to the website.",
 			[]string{
 				"Check your internet connection",
@@ -448,7 +448,7 @@ func (s *Service) GetUserFriendlyError(err error) (title, message string, sugges
 				"The website might be slow or experiencing issues",
 			}
 	}
-	
+
 	if strings.Contains(errStr, "no such host") {
 		return "Domain Not Found",
 			"Could not find the website domain.",
@@ -458,7 +458,7 @@ func (s *Service) GetUserFriendlyError(err error) (title, message string, sugges
 				"Check your DNS settings",
 			}
 	}
-	
+
 	if strings.Contains(errStr, "connection refused") {
 		return "Connection Refused",
 			"The website server refused the connection.",
@@ -468,7 +468,7 @@ func (s *Service) GetUserFriendlyError(err error) (title, message string, sugges
 				"Try using a proxy server",
 			}
 	}
-	
+
 	// Parsing errors
 	if strings.Contains(errStr, "selector") {
 		return "Element Not Found",
@@ -479,7 +479,7 @@ func (s *Service) GetUserFriendlyError(err error) (title, message string, sugges
 				"The website structure might have changed",
 			}
 	}
-	
+
 	// Configuration errors
 	if strings.Contains(errStr, "yaml") {
 		return "Configuration Error",
@@ -490,7 +490,7 @@ func (s *Service) GetUserFriendlyError(err error) (title, message string, sugges
 				"Use a YAML validator online to check syntax",
 			}
 	}
-	
+
 	// Rate limiting
 	if strings.Contains(errStr, "429") || strings.Contains(errStr, "rate limit") {
 		return "Rate Limit Exceeded",
@@ -501,7 +501,7 @@ func (s *Service) GetUserFriendlyError(err error) (title, message string, sugges
 				"Use a different IP address or proxy",
 			}
 	}
-	
+
 	// Default
 	return "Unexpected Error",
 		"An unexpected error occurred during the operation.",
@@ -517,13 +517,13 @@ func (s *Service) GetExitCode(err error) int {
 	if err == nil {
 		return 0
 	}
-	
+
 	errStr := strings.ToLower(err.Error())
-	
+
 	switch {
 	case strings.Contains(errStr, "config") || strings.Contains(errStr, "yaml"):
 		return 2 // Configuration error
-	case strings.Contains(errStr, "network") || strings.Contains(errStr, "timeout") || 
+	case strings.Contains(errStr, "network") || strings.Contains(errStr, "timeout") ||
 		 strings.Contains(errStr, "connection") || strings.Contains(errStr, "host"):
 		return 3 // Network error
 	case strings.Contains(errStr, "parse") || strings.Contains(errStr, "selector"):
@@ -544,20 +544,20 @@ func (s *Service) GetExitCode(err error) int {
 // FormatErrorForCLI formats error for command-line display
 func (s *Service) FormatErrorForCLI(err error) string {
 	title, message, suggestions := s.GetUserFriendlyError(err)
-	
+
 	output := fmt.Sprintf("❌ %s\n%s\n", title, message)
-	
+
 	if s.messageHandler.showTechnical {
 		output += fmt.Sprintf("\nTechnical details: %s\n", err.Error())
 	}
-	
+
 	if len(suggestions) > 0 {
 		output += "\n💡 Suggestions:\n"
 		for _, suggestion := range suggestions {
 			output += fmt.Sprintf("  • %s\n", suggestion)
 		}
 	}
-	
+
 	return output
 }
 

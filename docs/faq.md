@@ -147,12 +147,12 @@ fields:
   - name: "table_rows"
     selector: "table.data-table tr"
     type: "list"
-    
+
   # Extract specific columns
   - name: "product_names"
     selector: "table tr td:nth-child(1)"
     type: "list"
-    
+
   - name: "prices"
     selector: "table tr td:nth-child(3)"
     type: "list"
@@ -306,7 +306,7 @@ fields:
     selector: ".price"
     type: "text"
     # Start with no transformations
-    
+
   - name: "price_step1"
     selector: ".price"
     type: "text"
@@ -326,12 +326,12 @@ transform:
   - type: "trim"              # Remove whitespace
   - type: "normalize_spaces"  # Clean internal spaces
   - type: "lowercase"         # Convert to lowercase
-  
+
   # Data extraction
   - type: "regex"
     pattern: "\\$([0-9,]+)"
     replacement: "$1"
-  
+
   # Type conversion
   - type: "parse_float"       # Convert to number
 ```
@@ -360,7 +360,7 @@ fields:
     selector: ".price"
     type: "text"
     required: true  # Scraping fails if missing
-    
+
   - name: "discount"
     selector: ".discount"
     type: "text"
@@ -376,7 +376,7 @@ fields:
   - name: "currency"
     selector: ".price .currency"
     type: "text"
-    
+
   - name: "amount"
     selector: ".price .amount"
     type: "text"
@@ -611,7 +611,7 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
 Commercial support is planned for enterprise users, including:
 
 - Priority bug fixes
-- Custom feature development  
+- Custom feature development
 - Training and consulting
 - SLA guarantees
 

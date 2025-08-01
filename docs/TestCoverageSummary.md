@@ -51,7 +51,7 @@ DataScrapexter/
 
 **Strategy Coverage:**
 - ✅ **OffsetStrategy** - Offset/limit pagination
-- ✅ **CursorStrategy** - Cursor-based pagination  
+- ✅ **CursorStrategy** - Cursor-based pagination
 - ✅ **NextButtonStrategy** - Next button clicking
 - ✅ **NumberedPagesStrategy** - Numbered page navigation
 
@@ -140,7 +140,7 @@ make test
 # Unit tests only
 make test-unit
 
-# Integration tests only  
+# Integration tests only
 make test-integration
 
 # Tests with coverage report
@@ -197,7 +197,7 @@ fields:
 
 ### News Test Configuration
 ```yaml
-name: "news_test_scraper"  
+name: "news_test_scraper"
 fields:
   - name: "headline"
     selector: "h1, .headline"
@@ -228,14 +228,14 @@ fields:
 With this comprehensive test suite in place:
 
 1. **Run initial tests**: `make test-coverage`
-2. **Validate performance**: `make test-bench` 
+2. **Validate performance**: `make test-bench`
 3. **Check integration**: `make test-integration`
 4. **Review coverage**: Open `coverage.html`
 5. **Iterate and improve** based on test results
 
 The test infrastructure provides a solid foundation for:
 - **Safe refactoring** with regression detection
-- **Performance optimization** with benchmark validation  
+- **Performance optimization** with benchmark validation
 - **Feature development** with comprehensive test coverage
 - **Quality assurance** with automated validation
 

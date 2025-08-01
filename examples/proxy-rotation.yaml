@@ -13,7 +13,7 @@ proxy:
   retry_delay: "2s"
   failure_threshold: 5
   recovery_time: "10m"
-  
+
   providers:
     - name: "primary_proxy"
       type: "http"
@@ -23,7 +23,7 @@ proxy:
       password: "pass1"
       weight: 3
       enabled: true
-    
+
     - name: "backup_proxy"
       type: "http"
       host: "proxy2.example.com"
@@ -32,7 +32,7 @@ proxy:
       password: "pass2"
       weight: 1
       enabled: true
-    
+
     - name: "socks_proxy"
       type: "socks5"
       host: "socks.example.com"

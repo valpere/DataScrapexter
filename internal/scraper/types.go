@@ -218,30 +218,30 @@ type PaginationConfig struct {
 	Type         PaginationType `yaml:"type" json:"type"`
 	MaxPages     int            `yaml:"max_pages,omitempty" json:"max_pages,omitempty"`
 	StartPage    int            `yaml:"start_page,omitempty" json:"start_page,omitempty"`
-	
+
 	// Next button pagination
 	NextSelector     string        `yaml:"next_selector,omitempty" json:"next_selector,omitempty"`
 	NextButtonText   string        `yaml:"next_button_text,omitempty" json:"next_button_text,omitempty"`
 	WaitAfterClick   time.Duration `yaml:"wait_after_click,omitempty" json:"wait_after_click,omitempty"`
-	
+
 	// Page numbers pagination
 	PageSelector     string `yaml:"page_selector,omitempty" json:"page_selector,omitempty"`
 	PageURLPattern   string `yaml:"page_url_pattern,omitempty" json:"page_url_pattern,omitempty"`
-	
+
 	// URL pattern pagination
 	URLTemplate      string `yaml:"url_template,omitempty" json:"url_template,omitempty"`
 	PageParam        string `yaml:"page_param,omitempty" json:"page_param,omitempty"`
-	
+
 	// Scrolling pagination
 	ScrollSelector   string        `yaml:"scroll_selector,omitempty" json:"scroll_selector,omitempty"`
 	LoadMoreSelector string        `yaml:"load_more_selector,omitempty" json:"load_more_selector,omitempty"`
 	ScrollPause      time.Duration `yaml:"scroll_pause,omitempty" json:"scroll_pause,omitempty"`
-	
+
 	// Offset pagination
 	OffsetParam      string `yaml:"offset_param,omitempty" json:"offset_param,omitempty"`
 	LimitParam       string `yaml:"limit_param,omitempty" json:"limit_param,omitempty"`
 	PageSize         int    `yaml:"page_size,omitempty" json:"page_size,omitempty"`
-	
+
 	// General settings
 	StopCondition    string        `yaml:"stop_condition,omitempty" json:"stop_condition,omitempty"`
 	DelayBetweenPages time.Duration `yaml:"delay_between_pages,omitempty" json:"delay_between_pages,omitempty"`

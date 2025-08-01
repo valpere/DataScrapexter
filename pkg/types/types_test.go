@@ -145,13 +145,13 @@ func TestURL(t *testing.T) {
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
             u, err := NewURL(tt.urlStr)
-            
+
             // Handle the actual behavior: NewURL might return error for some cases
             if tt.urlStr == "https://" && err != nil {
                 // If NewURL returns error for "https://", that's acceptable
                 return
             }
-            
+
             if (err != nil) != tt.wantErr {
                 t.Errorf("NewURL() error = %v, wantErr %v", err, tt.wantErr)
                 return

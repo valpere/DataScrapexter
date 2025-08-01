@@ -82,7 +82,7 @@ func (m *Manager) WriteResults(results []map[string]interface{}) error {
 func (m *Manager) createPostgreSQLWriter() (Writer, error) {
 	// Use format options if available, otherwise use defaults
 	options := m.formatOptions.PostgreSQL
-	
+
 	// Set defaults if not specified
 	if options.Table == "" {
 		options.Table = "scraped_data"
@@ -112,7 +112,7 @@ func (m *Manager) createPostgreSQLWriter() (Writer, error) {
 func (m *Manager) createSQLiteWriter() (Writer, error) {
 	// Use format options if available, otherwise use defaults
 	options := m.formatOptions.SQLite
-	
+
 	// Set defaults if not specified
 	if options.Table == "" {
 		options.Table = "scraped_data"

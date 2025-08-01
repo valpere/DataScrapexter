@@ -48,12 +48,12 @@ func NewPostgreSQLWriter(options PostgreSQLOptions) (*PostgreSQLWriter, error) {
 	if options.OnConflict == "" {
 		options.OnConflict = ConflictIgnore
 	}
-	
+
 	// Validate conflict strategy
 	if !IsValidConflictStrategy(options.OnConflict) {
 		return nil, fmt.Errorf("invalid conflict strategy: %s", options.OnConflict)
 	}
-	
+
 	// Validate table and schema names using PostgreSQL-specific validation
 	if err := ValidatePostgreSQLIdentifier(options.Table); err != nil {
 		return nil, fmt.Errorf("invalid table name: %w", err)
@@ -145,7 +145,7 @@ func (w *PostgreSQLWriter) createTable(data []map[string]interface{}) error {
 		UserTypes:   w.config.ColumnTypes,
 		QuoteFunc:   w.quoteIdentifier,
 	}
-	
+
 	columnDefs, err := builder.BuildColumnDefinitions()
 	if err != nil {
 		return err
@@ -301,7 +301,7 @@ func (w *PostgreSQLWriter) insertBatch(batch []map[string]interface{}) error {
 	for _, col := range w.systemColumns {
 		systemColumnMap[col] = true
 	}
-	
+
 	for _, column := range w.columns {
 		if !systemColumnMap[column] {
 			insertColumns = append(insertColumns, column)
@@ -336,8 +336,8 @@ func (w *PostgreSQLWriter) insertBatch(batch []map[string]interface{}) error {
 	switch w.config.OnConflict {
 	case ConflictIgnore:
 		query = fmt.Sprintf(`
-			INSERT INTO %s.%s (%s) 
-			VALUES %s 
+			INSERT INTO %s.%s (%s)
+			VALUES %s
 			ON CONFLICT DO NOTHING`,
 			w.quoteIdentifier(w.schema),
 			w.quoteIdentifier(w.table),
@@ -346,7 +346,7 @@ func (w *PostgreSQLWriter) insertBatch(batch []map[string]interface{}) error {
 		)
 	default: // ConflictError or any other value
 		query = fmt.Sprintf(`
-			INSERT INTO %s.%s (%s) 
+			INSERT INTO %s.%s (%s)
 			VALUES %s`,
 			w.quoteIdentifier(w.schema),
 			w.quoteIdentifier(w.table),

@@ -71,7 +71,7 @@ type ProxyConfig struct {
 	FailureThreshold int              `yaml:"failure_threshold,omitempty" json:"failure_threshold,omitempty"`
 	RecoveryTime     string           `yaml:"recovery_time,omitempty" json:"recovery_time,omitempty"`
 	TLS              *TLSConfig       `yaml:"tls,omitempty" json:"tls,omitempty"`
-	
+
 	// Legacy support for single proxy URL
 	URL      string `yaml:"url,omitempty" json:"url,omitempty"`
 	Username string `yaml:"username,omitempty" json:"username,omitempty"`
@@ -84,17 +84,17 @@ type TLSConfig struct {
 	// WARNING: Setting this to true is dangerous and makes connections vulnerable to attacks.
 	// Only use this for testing or with trusted internal services.
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" json:"insecure_skip_verify"`
-	
+
 	// ServerName is used to verify the hostname on returned certificates.
 	ServerName string `yaml:"server_name,omitempty" json:"server_name,omitempty"`
-	
+
 	// RootCAs defines the set of root certificate authorities.
 	RootCAs []string `yaml:"root_cas,omitempty" json:"root_cas,omitempty"`
-	
+
 	// ClientCert and ClientKey define the client certificate and key for mutual TLS.
 	ClientCert string `yaml:"client_cert,omitempty" json:"client_cert,omitempty"`
 	ClientKey  string `yaml:"client_key,omitempty" json:"client_key,omitempty"`
-	
+
 	// SuppressWarnings controls whether security warnings are logged when insecure settings are used.
 	SuppressWarnings bool `yaml:"suppress_warnings,omitempty" json:"suppress_warnings,omitempty"`
 }
@@ -166,15 +166,15 @@ func (c *ScraperConfig) SimpleValidate() error {
 	if c.Name == "" {
 		return fmt.Errorf("name is required")
 	}
-	
+
 	if c.BaseURL == "" && len(c.URLs) == 0 {
 		return fmt.Errorf("base_url or urls is required")
 	}
-	
+
 	if len(c.Fields) == 0 {
 		return fmt.Errorf("at least one field is required")
 	}
-	
+
 	// Validate fields
 	for i, field := range c.Fields {
 		if field.Name == "" {
@@ -186,7 +186,7 @@ func (c *ScraperConfig) SimpleValidate() error {
 		if field.Type == "" {
 			return fmt.Errorf("field %d: type is required", i)
 		}
-		
+
 		// Validate field types
 		validTypes := map[string]bool{
 			"text": true, "html": true, "attr": true, "list": true,
@@ -194,29 +194,29 @@ func (c *ScraperConfig) SimpleValidate() error {
 		if !validTypes[field.Type] {
 			return fmt.Errorf("field %d: invalid type %s", i, field.Type)
 		}
-		
+
 		// Require attribute for attr type
 		if field.Type == "attr" && field.Attribute == "" {
 			return fmt.Errorf("field %d: attribute is required for type 'attr'", i)
 		}
 	}
-	
+
 	// Validate output
 	if c.Output.Format == "" {
 		c.Output.Format = "json" // Default format
 	}
-	
+
 	validFormats := map[string]bool{
 		"json": true, "csv": true, "yaml": true,
 	}
 	if !validFormats[c.Output.Format] {
 		return fmt.Errorf("invalid output format: %s", c.Output.Format)
 	}
-	
+
 	if c.Output.File == "" {
 		c.Output.File = "output." + c.Output.Format // Default filename
 	}
-	
+
 	return nil
 }
 

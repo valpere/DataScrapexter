@@ -46,7 +46,7 @@ type ProxyConfig struct {
 // TLSConfig defines TLS/SSL configuration for proxy connections
 type TLSConfig struct {
 	// InsecureSkipVerify controls whether the proxy manager skips verification of server certificates.
-	// 
+	//
 	// ⚠️  SECURITY WARNING: Setting this to true is DANGEROUS and makes connections vulnerable to attacks.
 	// ⚠️  This bypasses ALL certificate verification including hostname validation.
 	// ⚠️  NEVER use this in production environments or with untrusted networks.
@@ -55,15 +55,15 @@ type TLSConfig struct {
 	// ServerName is used to verify the hostname on the returned certificates unless InsecureSkipVerify is true.
 	// It is also included in the client's handshake to support virtual hosting.
 	ServerName string `yaml:"server_name,omitempty" json:"server_name,omitempty"`
-	
+
 	// RootCAs defines the set of root certificate authorities that clients use when verifying server certificates.
 	// If RootCAs is nil, TLS uses the host's root CA set.
 	RootCAs []string `yaml:"root_cas,omitempty" json:"root_cas,omitempty"`
-	
+
 	// ClientCert and ClientKey define the client certificate and key for mutual TLS authentication.
 	ClientCert string `yaml:"client_cert,omitempty" json:"client_cert,omitempty"`
 	ClientKey  string `yaml:"client_key,omitempty" json:"client_key,omitempty"`
-	
+
 	// SuppressWarnings controls whether security warnings are logged when insecure settings are used.
 	// This can be useful in production environments where warnings might clutter logs.
 	SuppressWarnings bool `yaml:"suppress_warnings,omitempty" json:"suppress_warnings,omitempty"`
@@ -112,31 +112,31 @@ type ProxyInstance struct {
 type Manager interface {
 	// GetProxy returns the next proxy according to rotation strategy
 	GetProxy() (*ProxyInstance, error)
-	
+
 	// ReportSuccess reports successful usage of a proxy
 	ReportSuccess(proxy *ProxyInstance)
-	
+
 	// ReportFailure reports failed usage of a proxy
 	ReportFailure(proxy *ProxyInstance, err error)
-	
+
 	// GetStats returns proxy usage statistics
 	GetStats() ManagerStats
-	
+
 	// HealthCheck performs health checks on all proxies
 	HealthCheck() error
-	
+
 	// Start starts the proxy manager
 	Start() error
-	
+
 	// Stop stops the proxy manager
 	Stop() error
-	
+
 	// IsEnabled returns whether proxy rotation is enabled
 	IsEnabled() bool
-	
+
 	// GetHealthyProxies returns list of healthy proxies
 	GetHealthyProxies() []*ProxyInstance
-	
+
 	// RefreshProxies refreshes the proxy list
 	RefreshProxies() error
 }

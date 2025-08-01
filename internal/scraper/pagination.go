@@ -25,13 +25,13 @@ func NewPaginationManager(config PaginationConfig) (*PaginationManager, error) {
 	pm := &PaginationManager{
 		config: config,
 	}
-	
+
 	// Create the appropriate strategy based on type
 	strategy, err := pm.createStrategy()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pagination strategy: %w", err)
 	}
-	
+
 	pm.strategy = strategy
 	return pm, nil
 }
@@ -47,7 +47,7 @@ func (pm *PaginationManager) createStrategy() (PaginationStrategy, error) {
 			Limit:       pm.config.PageSize,
 			MaxOffset:   pm.config.MaxPages * pm.config.PageSize,
 		}, nil
-		
+
 	case PaginationTypePages, "numbered":
 		return &NumberedPagesStrategy{
 			BaseURL:   "",
@@ -55,13 +55,13 @@ func (pm *PaginationManager) createStrategy() (PaginationStrategy, error) {
 			StartPage: pm.config.StartPage,
 			MaxPages:  pm.config.MaxPages,
 		}, nil
-		
+
 	case PaginationTypeNextButton:
 		return &NextButtonStrategy{
 			Selector: pm.config.NextSelector,
 			MaxPages: pm.config.MaxPages,
 		}, nil
-		
+
 	case PaginationTypeURLPattern:
 		// For URL pattern, we'll use NumberedPagesStrategy but with URL template handling
 		return &NumberedPagesStrategy{
@@ -70,7 +70,7 @@ func (pm *PaginationManager) createStrategy() (PaginationStrategy, error) {
 			StartPage: pm.config.StartPage,
 			MaxPages:  pm.config.MaxPages,
 		}, nil
-		
+
 	case "cursor":
 		return &CursorStrategy{
 			BaseURL:        "",
@@ -80,7 +80,7 @@ func (pm *PaginationManager) createStrategy() (PaginationStrategy, error) {
 			MaxPages:       pm.config.MaxPages,
 			CursorSelector: pm.config.ScrollSelector, // Reuse scroll selector for cursor
 		}, nil
-		
+
 	default:
 		return nil, fmt.Errorf("unknown pagination type: %s", pm.config.Type)
 	}
@@ -91,7 +91,7 @@ func (pm *PaginationManager) GetNextURL(ctx context.Context, currentURL string, 
 	if pm.strategy == nil {
 		return "", fmt.Errorf("pagination strategy not initialized")
 	}
-	
+
 	return pm.strategy.GetNextURL(ctx, currentURL, doc, pageNum)
 }
 
@@ -100,7 +100,7 @@ func (pm *PaginationManager) IsComplete(ctx context.Context, currentURL string, 
 	if pm.strategy == nil {
 		return true
 	}
-	
+
 	return pm.strategy.IsComplete(ctx, currentURL, doc, pageNum)
 }
 
@@ -109,7 +109,7 @@ func (pm *PaginationManager) GetStrategyName() string {
 	if pm.strategy == nil {
 		return "none"
 	}
-	
+
 	return pm.strategy.GetName()
 }
 
@@ -118,7 +118,7 @@ func ValidatePaginationConfig(config *PaginationConfig) error {
 	if config.Type == "" {
 		return fmt.Errorf("pagination type is required")
 	}
-	
+
 	switch config.Type {
 	case PaginationTypeOffset:
 		if config.PageSize <= 0 {
@@ -130,39 +130,39 @@ func ValidatePaginationConfig(config *PaginationConfig) error {
 		if config.LimitParam == "" {
 			config.LimitParam = "limit"
 		}
-		
+
 	case PaginationTypeNextButton:
 		if config.NextSelector == "" {
 			return fmt.Errorf("next_selector is required for next_button pagination")
 		}
-		
+
 	case PaginationTypeURLPattern:
 		if config.URLTemplate == "" {
 			return fmt.Errorf("url_template is required for url_pattern pagination")
 		}
-		
+
 	case PaginationTypePages:
 		if config.PageParam == "" {
 			config.PageParam = "page"
 		}
-		
+
 	case PaginationTypeScrolling:
 		if config.ScrollSelector == "" && config.LoadMoreSelector == "" {
 			return fmt.Errorf("either scroll_selector or load_more_selector is required for scrolling pagination")
 		}
-		
+
 	default:
 		return fmt.Errorf("unsupported pagination type: %s", config.Type)
 	}
-	
+
 	if config.MaxPages < 0 {
 		return fmt.Errorf("max_pages cannot be negative")
 	}
-	
+
 	if config.StartPage <= 0 {
 		config.StartPage = 1
 	}
-	
+
 	return nil
 }
 
@@ -172,26 +172,26 @@ func SimpleOffsetPagination(baseURL string, pageNum int, limit int) (string, err
 	if err != nil {
 		return "", fmt.Errorf("invalid base URL: %w", err)
 	}
-	
+
 	offset := pageNum * limit
 	query := u.Query()
 	query.Set("offset", strconv.Itoa(offset))
 	query.Set("limit", strconv.Itoa(limit))
 	u.RawQuery = query.Encode()
-	
+
 	return u.String(), nil
 }
 
-// SimplePagedPagination provides simple page-based pagination  
+// SimplePagedPagination provides simple page-based pagination
 func SimplePagedPagination(baseURL string, pageNum int) (string, error) {
 	u, err := url.Parse(baseURL)
 	if err != nil {
 		return "", fmt.Errorf("invalid base URL: %w", err)
 	}
-	
+
 	query := u.Query()
 	query.Set("page", strconv.Itoa(pageNum))
 	u.RawQuery = query.Encode()
-	
+
 	return u.String(), nil
 }

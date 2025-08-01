@@ -31,26 +31,26 @@ func (sc *ScraperConfig) Validate() error {
 		Errors:   make([]ValidationError, 0),
 		Warnings: make([]string, 0),
 	}
-	
+
 	// Validate basic fields
 	sc.validateBasicFields(result)
-	
+
 	// Validate URL
 	sc.validateURL(result)
-	
+
 	// Validate fields configuration
 	sc.validateFields(result)
-	
+
 	// Validate output configuration
 	sc.validateOutput(result)
-	
+
 	// Validate engine settings
 	sc.validateEngineSettings(result)
-	
+
 	if len(result.Errors) > 0 {
 		return sc.formatValidationError(result)
 	}
-	
+
 	return nil
 }
 
@@ -63,7 +63,7 @@ func (sc *ScraperConfig) validateBasicFields(result *ValidationResult) {
 			Message: "Scraper name is required",
 		})
 	}
-	
+
 	if sc.BaseURL == "" {
 		result.Errors = append(result.Errors, ValidationError{
 			Field:   "base_url",
@@ -71,7 +71,7 @@ func (sc *ScraperConfig) validateBasicFields(result *ValidationResult) {
 			Message: "Base URL is required",
 		})
 	}
-	
+
 	if len(sc.Fields) == 0 {
 		result.Errors = append(result.Errors, ValidationError{
 			Field:   "fields",
@@ -86,7 +86,7 @@ func (sc *ScraperConfig) validateURL(result *ValidationResult) {
 	if sc.BaseURL == "" {
 		return
 	}
-	
+
 	parsedURL, err := url.Parse(sc.BaseURL)
 	if err != nil {
 		result.Errors = append(result.Errors, ValidationError{
@@ -96,7 +96,7 @@ func (sc *ScraperConfig) validateURL(result *ValidationResult) {
 		})
 		return
 	}
-	
+
 	if parsedURL.Scheme == "" {
 		result.Errors = append(result.Errors, ValidationError{
 			Field:   "base_url",
@@ -104,7 +104,7 @@ func (sc *ScraperConfig) validateURL(result *ValidationResult) {
 			Message: "URL must include protocol (http:// or https://)",
 		})
 	}
-	
+
 	if parsedURL.Host == "" {
 		result.Errors = append(result.Errors, ValidationError{
 			Field:   "base_url",
@@ -112,10 +112,10 @@ func (sc *ScraperConfig) validateURL(result *ValidationResult) {
 			Message: "URL must include hostname",
 		})
 	}
-	
+
 	// Warn about HTTP vs HTTPS
 	if parsedURL.Scheme == "http" {
-		result.Warnings = append(result.Warnings, 
+		result.Warnings = append(result.Warnings,
 			"Using HTTP instead of HTTPS may cause security issues")
 	}
 }
@@ -123,10 +123,10 @@ func (sc *ScraperConfig) validateURL(result *ValidationResult) {
 // validateFields checks field configurations
 func (sc *ScraperConfig) validateFields(result *ValidationResult) {
 	fieldNames := make(map[string]bool)
-	
+
 	for i, field := range sc.Fields {
 		fieldPrefix := fmt.Sprintf("fields[%d]", i)
-		
+
 		// Check required field properties
 		if field.Name == "" {
 			result.Errors = append(result.Errors, ValidationError{
@@ -135,7 +135,7 @@ func (sc *ScraperConfig) validateFields(result *ValidationResult) {
 				Message: "Field name is required",
 			})
 		}
-		
+
 		// Check for duplicate field names
 		if fieldNames[field.Name] {
 			result.Errors = append(result.Errors, ValidationError{
@@ -145,7 +145,7 @@ func (sc *ScraperConfig) validateFields(result *ValidationResult) {
 			})
 		}
 		fieldNames[field.Name] = true
-		
+
 		// Validate selector
 		if field.Selector == "" {
 			result.Errors = append(result.Errors, ValidationError{
@@ -163,7 +163,7 @@ func (sc *ScraperConfig) validateFields(result *ValidationResult) {
 				})
 			}
 		}
-		
+
 		// Validate field type
 		validTypes := []string{"text", "attr", "html", "array", "list", "int", "float", "bool"}
 		if !contains(validTypes, field.Type) {
@@ -173,7 +173,7 @@ func (sc *ScraperConfig) validateFields(result *ValidationResult) {
 				Message: fmt.Sprintf("Invalid field type. Valid types: %s", strings.Join(validTypes, ", ")),
 			})
 		}
-		
+
 		// Validate attribute for attr type
 		if field.Type == "attr" && field.Attribute == "" {
 			result.Errors = append(result.Errors, ValidationError{
@@ -182,7 +182,7 @@ func (sc *ScraperConfig) validateFields(result *ValidationResult) {
 				Message: "Attribute name is required for 'attr' type fields",
 			})
 		}
-		
+
 		// Validate transforms if present
 		sc.validateFieldTransforms(field, fieldPrefix, result)
 	}
@@ -192,7 +192,7 @@ func (sc *ScraperConfig) validateFields(result *ValidationResult) {
 func (sc *ScraperConfig) validateFieldTransforms(field FieldConfig, fieldPrefix string, result *ValidationResult) {
 	for i, transform := range field.Transform {
 		transformPrefix := fmt.Sprintf("%s.transform[%d]", fieldPrefix, i)
-		
+
 		if transform.Type == "" {
 			result.Errors = append(result.Errors, ValidationError{
 				Field:   fmt.Sprintf("%s.type", transformPrefix),
@@ -201,7 +201,7 @@ func (sc *ScraperConfig) validateFieldTransforms(field FieldConfig, fieldPrefix 
 			})
 			continue
 		}
-		
+
 		// Validate regex transforms
 		if transform.Type == "regex" {
 			if transform.Pattern == "" {
@@ -234,7 +234,7 @@ func (sc *ScraperConfig) validateOutput(result *ValidationResult) {
 		})
 		return
 	}
-	
+
 	validFormats := []string{"json", "csv", "yaml"}
 	if !contains(validFormats, sc.Output.Format) {
 		result.Errors = append(result.Errors, ValidationError{
@@ -243,9 +243,9 @@ func (sc *ScraperConfig) validateOutput(result *ValidationResult) {
 			Message: fmt.Sprintf("Invalid output format. Valid formats: %s", strings.Join(validFormats, ", ")),
 		})
 	}
-	
+
 	if sc.Output.File == "" {
-		result.Warnings = append(result.Warnings, 
+		result.Warnings = append(result.Warnings,
 			"No output file specified, results will be written to stdout")
 	}
 }
@@ -267,11 +267,11 @@ func (sc *ScraperConfig) validateEngineSettings(result *ValidationResult) {
 				Message: "Rate limit cannot be negative",
 			})
 		} else if duration < 500*time.Millisecond {
-			result.Warnings = append(result.Warnings, 
+			result.Warnings = append(result.Warnings,
 				"Rate limit below 500ms may overwhelm target servers")
 		}
 	}
-	
+
 	// Validate Timeout if provided
 	if sc.Timeout != "" {
 		if duration, err := time.ParseDuration(sc.Timeout); err != nil {
@@ -287,11 +287,11 @@ func (sc *ScraperConfig) validateEngineSettings(result *ValidationResult) {
 				Message: "Timeout cannot be negative",
 			})
 		} else if duration > 60*time.Second {
-			result.Warnings = append(result.Warnings, 
+			result.Warnings = append(result.Warnings,
 				"Timeout above 60 seconds may cause unnecessary delays")
 		}
 	}
-	
+
 	// Validate Retries
 	if sc.Retries < 0 {
 		result.Errors = append(result.Errors, ValidationError{
@@ -300,7 +300,7 @@ func (sc *ScraperConfig) validateEngineSettings(result *ValidationResult) {
 			Message: "Retries cannot be negative",
 		})
 	}
-	
+
 	// Validate MaxRetries
 	if sc.MaxRetries < 0 {
 		result.Errors = append(result.Errors, ValidationError{
@@ -317,40 +317,40 @@ func validateCSSSelector(selector string) error {
 	if selector == "" {
 		return fmt.Errorf("empty selector")
 	}
-	
+
 	// Check for obviously invalid patterns
 	invalidPatterns := []string{
-		"[", "]", "(", ")", "{", "}", 
+		"[", "]", "(", ")", "{", "}",
 		"<<", ">>", "|||", "&&&",
 	}
-	
+
 	for _, pattern := range invalidPatterns {
 		if strings.Contains(selector, pattern) {
 			return fmt.Errorf("invalid character sequence: %s", pattern)
 		}
 	}
-	
+
 	// Check for unclosed quotes
 	singleQuotes := strings.Count(selector, "'")
 	doubleQuotes := strings.Count(selector, "\"")
-	
+
 	if singleQuotes%2 != 0 {
 		return fmt.Errorf("unclosed single quote")
 	}
-	
+
 	if doubleQuotes%2 != 0 {
 		return fmt.Errorf("unclosed double quote")
 	}
-	
+
 	return nil
 }
 
 // formatValidationError creates a comprehensive error message
 func (sc *ScraperConfig) formatValidationError(result *ValidationResult) error {
 	var errorMsg strings.Builder
-	
+
 	errorMsg.WriteString("Configuration validation failed:\n")
-	
+
 	for i, err := range result.Errors {
 		errorMsg.WriteString(fmt.Sprintf("  %d. %s", i+1, err.Message))
 		if err.Field != "" {
@@ -361,14 +361,14 @@ func (sc *ScraperConfig) formatValidationError(result *ValidationResult) error {
 		}
 		errorMsg.WriteString("\n")
 	}
-	
+
 	if len(result.Warnings) > 0 {
 		errorMsg.WriteString("\nWarnings:\n")
 		for i, warning := range result.Warnings {
 			errorMsg.WriteString(fmt.Sprintf("  %d. %s\n", i+1, warning))
 		}
 	}
-	
+
 	return fmt.Errorf("%s", errorMsg.String())
 }
 
@@ -379,13 +379,13 @@ func (sc *ScraperConfig) ValidateWithDetails() *ValidationResult {
 		Errors:   make([]ValidationError, 0),
 		Warnings: make([]string, 0),
 	}
-	
+
 	sc.validateBasicFields(result)
 	sc.validateURL(result)
 	sc.validateFields(result)
 	sc.validateOutput(result)
 	sc.validateEngineSettings(result)
-	
+
 	result.Valid = len(result.Errors) == 0
 	return result
 }
@@ -393,11 +393,11 @@ func (sc *ScraperConfig) ValidateWithDetails() *ValidationResult {
 // GetValidationSuggestions provides actionable suggestions for fixing validation errors
 func (sc *ScraperConfig) GetValidationSuggestions(result *ValidationResult) []string {
 	suggestions := make([]string, 0)
-	
+
 	hasURLError := false
 	hasSelectorError := false
 	hasFieldError := false
-	
+
 	for _, err := range result.Errors {
 		if strings.Contains(err.Field, "url") {
 			hasURLError = true
@@ -409,35 +409,35 @@ func (sc *ScraperConfig) GetValidationSuggestions(result *ValidationResult) []st
 			hasFieldError = true
 		}
 	}
-	
+
 	if hasURLError {
 		suggestions = append(suggestions,
 			"Ensure URLs include protocol (http:// or https://)",
 			"Verify domain names are correct",
 			"Test URLs in a browser first")
 	}
-	
+
 	if hasSelectorError {
 		suggestions = append(suggestions,
 			"Test CSS selectors using browser developer tools",
 			"Use the browser's element inspector to generate selectors",
 			"Start with simple selectors and make them more specific as needed")
 	}
-	
+
 	if hasFieldError {
 		suggestions = append(suggestions,
 			"Ensure all field names are unique",
 			"Check that required field properties are set",
 			"Verify field types match expected data")
 	}
-	
+
 	if len(suggestions) == 0 {
 		suggestions = append(suggestions,
 			"Review the configuration file for syntax errors",
 			"Check YAML indentation and formatting",
 			"Ensure all required fields are present")
 	}
-	
+
 	return suggestions
 }
 

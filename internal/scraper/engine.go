@@ -22,7 +22,7 @@ type Engine struct {
 	currentUAIndex int
 	config         *Config
 	rateLimiter    *AdaptiveRateLimiter
-	
+
 	// Enhanced features: error handling, browser automation, and proxy management
 	errorService   *errors.Service
 	browserManager *browser.BrowserManager
@@ -36,7 +36,7 @@ type Result struct {
 	Success   bool                   `json:"success"`
 	Error     error                  `json:"error,omitempty"`
 	Timestamp time.Time              `json:"timestamp"`
-	
+
 	// Enhanced error information
 	Errors    []string `json:"errors,omitempty"`
 	Warnings  []string `json:"warnings,omitempty"`
@@ -92,10 +92,10 @@ func NewEngine(config *Config) (*Engine, error) {
 			DisableCSS:     config.Browser.DisableCSS,
 			DisableJS:      config.Browser.DisableJS,
 		}
-		
+
 		bm, err := browser.NewBrowserManager(browserConfig)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create browser manager (enabled=%t, headless=%t, timeout=%v): %w", 
+			return nil, fmt.Errorf("failed to create browser manager (enabled=%t, headless=%t, timeout=%v): %w",
 				config.Browser.Enabled, config.Browser.Headless, config.Browser.Timeout, err)
 		}
 		engine.browserManager = bm
@@ -109,7 +109,7 @@ func NewEngine(config *Config) (*Engine, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid rotation strategy: %w", err)
 		}
-		
+
 		proxyConfig := &proxy.ProxyConfig{
 			Enabled:          config.Proxy.Enabled,
 			Rotation:         rotation,
@@ -123,7 +123,7 @@ func NewEngine(config *Config) (*Engine, error) {
 			RecoveryTime:     config.Proxy.RecoveryTime,
 			Providers:        make([]proxy.ProxyProvider, len(config.Proxy.Providers)),
 		}
-		
+
 		// Convert providers
 		for i, provider := range config.Proxy.Providers {
 			proxyConfig.Providers[i] = proxy.ProxyProvider{
@@ -137,7 +137,7 @@ func NewEngine(config *Config) (*Engine, error) {
 				Enabled:  provider.Enabled,
 			}
 		}
-		
+
 		// Convert TLS configuration if present
 		if config.Proxy.TLS != nil {
 			proxyConfig.TLS = &proxy.TLSConfig{
@@ -148,7 +148,7 @@ func NewEngine(config *Config) (*Engine, error) {
 				ClientKey:          config.Proxy.TLS.ClientKey,
 			}
 		}
-		
+
 		pm := proxy.NewProxyManager(proxyConfig)
 		if err := pm.Start(); err != nil {
 			return nil, fmt.Errorf("failed to start proxy manager: %w", err)
@@ -194,7 +194,7 @@ func NewEngine(config *Config) (*Engine, error) {
 			}
 			engine.errorService.ConfigureCircuitBreaker(operationName, circuitConfig)
 		}
-		
+
 		// Configure fallbacks
 		for operationName, fbSpec := range config.ErrorRecovery.Fallbacks {
 			var strategy errors.FallbackStrategy
@@ -210,7 +210,7 @@ func NewEngine(config *Config) (*Engine, error) {
 			default:
 				strategy = errors.FallbackNone
 			}
-			
+
 			fallbackConfig := errors.FallbackConfig{
 				Strategy:     strategy,
 				CacheTimeout: fbSpec.CacheTimeout,
@@ -269,11 +269,11 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 		if err != nil {
 			errorMsg := fmt.Sprintf("Field '%s': %s", extractor.Name, err.Error())
 			result.Errors = append(result.Errors, errorMsg)
-			
+
 			// Use default value if available and not required
 			if !extractor.Required && extractor.Default != nil {
 				result.Data[extractor.Name] = extractor.Default
-				result.Warnings = append(result.Warnings, 
+				result.Warnings = append(result.Warnings,
 					fmt.Sprintf("Used default value for field '%s'", extractor.Name))
 				successCount++
 			}
@@ -423,7 +423,7 @@ func (e *Engine) extractField(doc *goquery.Document, extractor FieldConfig) (int
 			return nil, fmt.Errorf("required field is empty")
 		}
 		return text, nil
-		
+
 	case "attr":
 		if extractor.Attribute == "" {
 			return nil, fmt.Errorf("attribute name required for attr type")
@@ -433,21 +433,21 @@ func (e *Engine) extractField(doc *goquery.Document, extractor FieldConfig) (int
 			return nil, fmt.Errorf("required attribute '%s' not found", extractor.Attribute)
 		}
 		return attr, nil
-		
+
 	case "html":
 		html, err := selection.First().Html()
 		if err != nil {
 			return nil, fmt.Errorf("failed to extract HTML: %w", err)
 		}
 		return html, nil
-		
+
 	case "array", "list":
 		var items []string
 		selection.Each(func(i int, s *goquery.Selection) {
 			items = append(items, strings.TrimSpace(s.Text()))
 		})
 		return items, nil
-		
+
 	default:
 		return nil, fmt.Errorf("unsupported extraction type: %s", extractor.Type)
 	}
@@ -459,7 +459,7 @@ func (e *Engine) getUserAgent() string {
 	if len(e.userAgentPool) == 0 {
 		return "DataScrapexter/1.0"
 	}
-	
+
 	ua := e.userAgentPool[e.currentUAIndex]
 	e.currentUAIndex = (e.currentUAIndex + 1) % len(e.userAgentPool)
 	return ua
@@ -470,19 +470,19 @@ func (e *Engine) GetErrorSummary(result *Result) string {
 	if result == nil || len(result.Errors) == 0 {
 		return "No errors"
 	}
-	
+
 	summary := fmt.Sprintf("Encountered %d error(s):\n", len(result.Errors))
 	for i, err := range result.Errors {
 		summary += fmt.Sprintf("  %d. %s\n", i+1, err)
 	}
-	
+
 	if len(result.Warnings) > 0 {
 		summary += fmt.Sprintf("\nWarnings (%d):\n", len(result.Warnings))
 		for i, warning := range result.Warnings {
 			summary += fmt.Sprintf("  %d. %s\n", i+1, warning)
 		}
 	}
-	
+
 	return summary
 }
 
@@ -531,11 +531,11 @@ func (e *Engine) ConfigureErrorRecovery(operationName string, circuitConfig *err
 	if e.errorService == nil {
 		return
 	}
-	
+
 	if circuitConfig != nil {
 		e.errorService.ConfigureCircuitBreaker(operationName, *circuitConfig)
 	}
-	
+
 	if fallbackConfig != nil {
 		e.errorService.ConfigureFallback(operationName, *fallbackConfig)
 	}
@@ -546,7 +546,7 @@ func (e *Engine) GetErrorRecoveryStats() map[string]interface{} {
 	if e.errorService == nil {
 		return nil
 	}
-	
+
 	return map[string]interface{}{
 		"circuit_breakers": e.errorService.GetCircuitBreakerStats(),
 		"cache":           e.errorService.GetCacheStats(),
@@ -573,7 +573,7 @@ func (e *Engine) ScrapeWithPagination(ctx context.Context, baseURL string, extra
 		if err != nil {
 			return nil, fmt.Errorf("failed to scrape single page: %w", err)
 		}
-		
+
 		return &PaginationResult{
 			Pages: []ScrapingResult{{
 				URL:        baseURL,
@@ -600,7 +600,7 @@ func (e *Engine) ScrapeWithPagination(ctx context.Context, baseURL string, extra
 	startTime := time.Now()
 	results := make([]ScrapingResult, 0)
 	errors := make([]string, 0)
-	
+
 	currentURL := baseURL
 	pageNum := 0  // Start from 0 for offset-based pagination
 	maxPages := e.config.Pagination.MaxPages
@@ -643,7 +643,7 @@ func (e *Engine) ScrapeWithPagination(ctx context.Context, baseURL string, extra
 				errors = append(errors, errorMsg)
 				break
 			}
-			
+
 			if nextURL == "" {
 				break // No more pages
 			}
@@ -656,7 +656,7 @@ func (e *Engine) ScrapeWithPagination(ctx context.Context, baseURL string, extra
 		if err != nil {
 			errorMsg := fmt.Sprintf("Page %d failed: %v", pageNum+1, err)
 			errors = append(errors, errorMsg)
-			
+
 			if !e.config.Pagination.ContinueOnError {
 				break
 			}

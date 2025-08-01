@@ -76,7 +76,7 @@ extraction:
         transform:
           - type: "extract_pattern"
             pattern: "job-([0-9]+)"
-      
+
       - name: "title"
         selector: "h2.job-title, .position-title, a.job-link"
         type: "text"
@@ -84,7 +84,7 @@ extraction:
         transform:
           - type: "trim"
           - type: "normalize_job_title"
-      
+
       - name: "company"
         selector: ".company-name, .employer, [data-company]"
         type: "text"
@@ -93,7 +93,7 @@ extraction:
           - type: "trim"
           - type: "remove_suffix"
             suffix: ", Inc."
-      
+
       - name: "location"
         selector: ".job-location, .location, [data-location]"
         type: "complex"
@@ -111,7 +111,7 @@ extraction:
               - "Hybrid"
               - "On-site"
               - "Work from home"
-      
+
       - name: "salary"
         selector: ".salary-range, .compensation, .pay-range"
         type: "complex"
@@ -131,7 +131,7 @@ extraction:
               hourly: ["hour", "hourly", "/hr"]
               annual: ["year", "annual", "per annum", "/yr"]
               monthly: ["month", "monthly", "/mo"]
-      
+
       - name: "job_type"
         selector: ".job-type, .employment-type"
         type: "text"
@@ -142,7 +142,7 @@ extraction:
           "Temporary": "temporary"
           "Internship": "internship"
           "Freelance": "freelance"
-      
+
       - name: "experience_level"
         selector: ".experience-level, .seniority"
         type: "text"
@@ -152,7 +152,7 @@ extraction:
           "Senior level": "senior"
           "Executive": "executive"
           "Internship": "intern"
-      
+
       - name: "posted_date"
         selector: ".posted-date, time[datetime], .job-date"
         attribute: "datetime"
@@ -163,14 +163,14 @@ extraction:
               - "Posted {n} hours ago"
               - "Posted today"
               - "Posted yesterday"
-      
+
       - name: "application_deadline"
         selector: ".deadline, .apply-by"
         type: "text"
         transform:
           - type: "parse_date"
             format: "auto"
-      
+
       - name: "description"
         selector: ".job-description, .job-summary"
         type: "text"
@@ -178,14 +178,14 @@ extraction:
           - type: "trim"
           - type: "limit_length"
             max: 1000
-      
+
       - name: "requirements"
         selector: ".requirements li, .qualifications li"
         type: "list"
         transform:
           - type: "trim"
           - type: "extract_skills"
-      
+
       - name: "benefits"
         selector: ".benefits li, .perks li"
         type: "list"
@@ -197,7 +197,7 @@ extraction:
               retirement: ["401k", "pension", "retirement"]
               time_off: ["PTO", "vacation", "holiday"]
               remote: ["remote", "WFH", "flexible"]
-      
+
       - name: "skills"
         selector: ".skills span, .required-skills li, .tags"
         type: "list"
@@ -205,19 +205,19 @@ extraction:
           - type: "trim"
           - type: "lowercase"
           - type: "normalize_skills"
-      
+
       - name: "education_requirement"
         selector: ".education, .degree-requirement"
         type: "text"
         transform:
           - type: "extract_education_level"
-      
+
       - name: "industry"
         selector: ".industry, .sector, .category"
         type: "text"
         transform:
           - type: "map_to_standard_industry"
-      
+
       - name: "apply_url"
         selector: "a.apply-button, .application-link"
         attribute: "href"
@@ -225,28 +225,28 @@ extraction:
         transform:
           - type: "absolute_url"
           - type: "track_redirect"
-      
+
       - name: "company_logo"
         selector: ".company-logo img, .employer-logo"
         attribute: "src"
         transform:
           - type: "absolute_url"
-      
+
       - name: "is_featured"
         selector: ".featured-badge, .promoted"
         type: "exists"
         default: false
-      
+
       - name: "applicant_count"
         selector: ".applicant-count, .applications"
         type: "text"
         transform:
           - type: "extract_number"
-      
+
       - name: "job_function"
         selector: ".job-function, .department"
         type: "text"
-      
+
       - name: "clearance_required"
         selector: ".security-clearance"
         type: "text"
@@ -267,7 +267,7 @@ extraction:
         type: "text"
         transform:
           - type: "extract_range"
-      
+
       - name: "company_rating"
         selector: ".company-rating, .employer-rating"
         type: "text"
@@ -276,11 +276,11 @@ extraction:
           - type: "validate_range"
             min: 0
             max: 5
-      
+
       - name: "company_website"
         selector: ".company-website a"
         attribute: "href"
-      
+
       - name: "company_description"
         selector: ".company-about, .employer-description"
         type: "text"
@@ -306,9 +306,9 @@ skills_processing:
     - "description"
     - "requirements"
     - "title"
-  
+
   skill_database: "configs/skills-taxonomy.json"
-  
+
   categories:
     programming: ["python", "java", "javascript", "go", "rust"]
     databases: ["sql", "mongodb", "postgresql", "redis"]
@@ -320,7 +320,7 @@ salary_processing:
   normalize: true
   convert_to_annual: true
   include_benefits_value: false
-  
+
   estimation:
     enabled: true
     use_market_data: true
@@ -334,13 +334,13 @@ salary_processing:
 output:
   format: "json"
   path: "outputs/jobs/${DATE}/${SEARCH_KEYWORDS}_${LOCATION}_${TIMESTAMP}.json"
-  
+
   # Structured data for analysis
   additional_formats:
     - type: "csv"
       path: "outputs/jobs/${DATE}/jobs_summary.csv"
       fields: ["job_id", "title", "company", "location", "salary_min", "salary_max", "posted_date"]
-    
+
     - type: "analytics"
       path: "outputs/jobs/${DATE}/market_analysis.json"
       include:
@@ -356,17 +356,17 @@ analytics:
     - name: "salary_trends"
       groupBy: ["job_function", "experience_level", "location"]
       calculate: ["median", "p25", "p75", "count"]
-    
+
     - name: "skills_demand"
       track: "skills"
       top_n: 50
       trend_period: "weekly"
-    
+
     - name: "posting_velocity"
       measure: "new_postings_per_day"
       by_company: true
       by_location: true
-    
+
     - name: "remote_work_trends"
       track: "location.remote_type"
       over_time: true
@@ -381,15 +381,15 @@ monitoring:
         location: ["San Francisco", "New York", "Remote"]
       notification:
         immediate: true
-    
+
     - type: "hot_skills"
       track: "skills"
       threshold: "appearance > 20%"
-    
+
     - type: "salary_spike"
       threshold: "20% above average"
       for_role: "${TARGET_ROLE}"
-    
+
     - type: "company_hiring_surge"
       threshold: "> 10 postings/week"
 
@@ -404,7 +404,7 @@ deduplication:
       exact: true
     - field: "location"
       exact: true
-  
+
   action: "merge"  # Options: skip, merge, keep_latest
 
 # Data quality rules
@@ -414,15 +414,15 @@ quality:
       min_length: 5
       max_length: 200
       reject_patterns: ["[URGENT]", "!!!!", "ASAP"]
-    
+
     - field: "salary"
       validate: "realistic_range"
       min: 15000
       max: 1000000
-    
+
     - field: "posted_date"
       max_age_days: 60
-    
+
     - field: "description"
       min_length: 50
       language: "english"
@@ -432,7 +432,7 @@ compliance:
   equal_opportunity: true
   remove_discriminatory: true
   gdpr_compliant: true
-  
+
   filters:
     age_discrimination: true
     gender_bias: true
@@ -445,7 +445,7 @@ integrations:
     # type: "greenhouse"
     # api_key: "${ATS_API_KEY}"
     # sync_frequency: "hourly"
-  
+
   slack:
     enabled: false
     # webhook_url: "${SLACK_WEBHOOK}"
@@ -453,7 +453,7 @@ integrations:
     # notify_on:
     #   - "high_value_jobs"
     #   - "trending_skills"
-  
+
   spreadsheet:
     enabled: false
     # type: "google_sheets"

@@ -1,11 +1,11 @@
 # DataScrapexter Pagination Examples
 # This file demonstrates various pagination strategies
 
-# Example 1: URL Pattern Pagination (e.g., /page/1, /page/2, /page/3)  
+# Example 1: URL Pattern Pagination (e.g., /page/1, /page/2, /page/3)
 url_pattern_example:
   name: "URL Pattern Pagination Example"
   base_url: "https://example.com/products"
-  
+
   # Pagination configuration
   pagination:
     enabled: true
@@ -16,14 +16,14 @@ url_pattern_example:
     delay_between_pages: "2s"
     continue_on_error: true
     stop_condition: "no_results"
-  
+
   # Fields to extract from each page
   fields:
     - name: "product_titles"
       selector: ".product-title"
       type: "array"
       required: true
-    - name: "product_prices" 
+    - name: "product_prices"
       selector: ".price"
       type: "array"
       required: false
@@ -34,7 +34,7 @@ url_pattern_example:
 offset_pagination_example:
   name: "Offset Pagination Example"
   base_url: "https://api.example.com/products"
-  
+
   pagination:
     enabled: true
     type: "offset"
@@ -44,7 +44,7 @@ offset_pagination_example:
     max_pages: 5
     delay_between_pages: "1s"
     continue_on_error: true
-  
+
   fields:
     - name: "products"
       selector: ".product"
@@ -61,7 +61,7 @@ offset_pagination_example:
 next_button_example:
   name: "Next Button Pagination Example"
   base_url: "https://example.com/catalog"
-  
+
   # Browser automation required for next button pagination
   browser:
     enabled: true
@@ -71,7 +71,7 @@ next_button_example:
     viewport_height: 1080
     wait_for_element: ".product-list"
     wait_delay: "2s"
-  
+
   pagination:
     enabled: true
     type: "next_button"
@@ -81,7 +81,7 @@ next_button_example:
     delay_between_pages: "2s"
     continue_on_error: false
     stop_condition: "has_errors"
-  
+
   fields:
     - name: "item_names"
       selector: ".item-name"
@@ -99,7 +99,7 @@ next_button_example:
 numbered_pages_example:
   name: "Numbered Pages Pagination Example"
   base_url: "https://example.com/blog"
-  
+
   pagination:
     enabled: true
     type: "pages"
@@ -109,7 +109,7 @@ numbered_pages_example:
     delay_between_pages: "1.5s"
     continue_on_error: true
     stop_condition: "empty_data"
-  
+
   fields:
     - name: "article_titles"
       selector: "h2.article-title"
@@ -130,16 +130,16 @@ numbered_pages_example:
 ecommerce_full_example:
   name: "E-commerce Full-Featured Scraping"
   base_url: "https://shop.example.com/search?q=laptops"
-  
+
   # Rate limiting
   rate_limit: "2s"
   burst_size: 3
-  
+
   # User agents for rotation
   user_agents:
     - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-  
+
   # Browser configuration for dynamic content
   browser:
     enabled: true
@@ -150,7 +150,7 @@ ecommerce_full_example:
     wait_for_element: ".search-results"
     disable_images: true
     disable_css: false
-  
+
   # Proxy configuration for scale
   proxy:
     enabled: false  # Set to true if you have proxy providers
@@ -160,25 +160,25 @@ ecommerce_full_example:
     timeout: "30s"
     max_retries: 3
     providers: []
-  
+
   # Pagination with URL pattern
   pagination:
     enabled: true
-    type: "url_pattern" 
+    type: "url_pattern"
     url_template: "https://shop.example.com/search?q=laptops&page={page}"
     max_pages: 20
     start_page: 1
     delay_between_pages: "3s"
-    continue_on_error: true 
+    continue_on_error: true
     stop_condition: "no_results"
-  
+
   # Comprehensive field extraction
   fields:
     - name: "product_names"
       selector: ".product-title a"
       type: "array"
       required: true
-      
+
     - name: "product_prices"
       selector: ".price-current"
       type: "array"
@@ -188,36 +188,36 @@ ecommerce_full_example:
           pattern: "\\$([0-9,]+\\.?[0-9]*)"
           replacement: "$1"
         - type: "remove_commas"
-          
+
     - name: "product_urls"
       selector: ".product-title a"
       type: "array"
       attribute: "href"
       required: true
-      
+
     - name: "product_images"
       selector: ".product-image img"
       type: "array"
       attribute: "src"
       required: false
-      
+
     - name: "product_ratings"
       selector: ".rating-stars"
       type: "array"
       attribute: "data-rating"
       required: false
-      
+
     - name: "stock_status"
       selector: ".stock-indicator"
       type: "array"
       required: false
       default: "Unknown"
-      
+
     - name: "page_info"
       selector: ".results-info"
       type: "text"
       required: false
-  
+
   # Output configuration
   output:
     format: "json"
@@ -230,7 +230,7 @@ ecommerce_full_example:
 news_advanced_example:
   name: "News Site Advanced Pagination"
   base_url: "https://news.example.com/technology"
-  
+
   pagination:
     enabled: true
     type: "next_button"
@@ -240,40 +240,40 @@ news_advanced_example:
     delay_between_pages: "3s"
     continue_on_error: true
     stop_condition: "empty_data"
-  
+
   browser:
     enabled: true
     headless: true
     timeout: "30s"
     wait_for_element: ".article-list"
-  
+
   fields:
     - name: "headlines"
       selector: "h2.headline a"
       type: "array"
       required: true
-      
+
     - name: "article_links"
       selector: "h2.headline a"
       type: "array"
       attribute: "href"
       required: true
-      
+
     - name: "publish_dates"
       selector: ".publish-date"
       type: "array"
       required: false
-      
+
     - name: "authors"
       selector: ".author-name"
       type: "array"
       required: false
-      
+
     - name: "categories"
       selector: ".article-category"
       type: "array"
       required: false
-      
+
     - name: "summary_text"
       selector: ".article-summary"
       type: "array"

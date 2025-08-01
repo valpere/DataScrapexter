@@ -33,27 +33,27 @@ fields:
     transform:
       - type: "trim"
       - type: "normalize_spaces"
-  
+
   - name: "article_urls"
     selector: "article a, .article-link, h2 a"
     type: "list"
     attribute: "href"
     required: true
-  
+
   - name: "article_summaries"
     selector: ".article-summary, .excerpt, .description"
     type: "list"
     transform:
       - type: "trim"
       - type: "normalize_spaces"
-  
+
   - name: "publish_dates"
     selector: "time, .publish-date, .article-date"
     type: "list"
     attribute: "datetime"  # Try to get ISO format from datetime attribute
     transform:
       - type: "trim"
-  
+
   - name: "authors"
     selector: ".author, .by-line, .article-author"
     type: "list"
@@ -62,14 +62,14 @@ fields:
       - type: "regex"
         pattern: "^By\\s+"
         replacement: ""
-  
+
   - name: "categories"
     selector: ".category, .tag, .article-category"
     type: "list"
     transform:
       - type: "trim"
       - type: "lowercase"
-  
+
   # For individual article pages (when following links)
   - name: "full_text"
     selector: ".article-content, .story-body, main article"
@@ -77,29 +77,29 @@ fields:
     transform:
       - type: "trim"
       - type: "normalize_spaces"
-  
+
   - name: "image_url"
     selector: ".article-image img, .featured-image, article img"
     type: "attr"
     attribute: "src"
-  
+
   - name: "image_caption"
     selector: ".image-caption, figcaption, .wp-caption-text"
     type: "text"
     transform:
       - type: "trim"
-  
+
   # Metadata extraction
   - name: "meta_description"
     selector: "meta[name='description'], meta[property='og:description']"
     type: "attr"
     attribute: "content"
-  
+
   - name: "meta_keywords"
     selector: "meta[name='keywords']"
     type: "attr"
     attribute: "content"
-  
+
   - name: "read_time"
     selector: ".reading-time, .read-time"
     type: "text"
@@ -108,7 +108,7 @@ fields:
         pattern: "(\\d+)\\s*min"
         replacement: "$1"
       - type: "parse_int"
-  
+
   # Engagement metrics
   - name: "comment_count"
     selector: ".comment-count, .comments-number"
@@ -118,7 +118,7 @@ fields:
         pattern: "(\\d+)"
         replacement: "$1"
       - type: "parse_int"
-  
+
   - name: "share_count"
     selector: ".share-count, .social-shares"
     type: "text"

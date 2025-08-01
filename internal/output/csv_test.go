@@ -43,7 +43,7 @@ func TestCSVWriter_Write(t *testing.T) {
 			"count": 42,
 		},
 		{
-			"title": "Another Item", 
+			"title": "Another Item",
 			"price": "$25.50",
 			"count": 15,
 		},

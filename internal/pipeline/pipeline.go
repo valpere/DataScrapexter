@@ -16,10 +16,10 @@ type DataPipeline struct {
 	Deduplicator  *RecordDeduplicator
 	Enricher      *DataEnricher
 	OutputManager *OutputManager
-	
+
 	// Configuration
 	Config *PipelineConfig
-	
+
 	// State management
 	mu       sync.RWMutex
 	metrics  *PipelineMetrics
@@ -53,7 +53,7 @@ type ProcessedData struct {
 	Transformed map[string]interface{} `json:"transformed"`
 	Validated   map[string]interface{} `json:"validated"`
 	Enriched    map[string]interface{} `json:"enriched"`
-	
+
 	Metadata    ProcessingMetadata     `json:"metadata"`
 	Errors      []ProcessingError      `json:"errors,omitempty"`
 }
@@ -106,7 +106,7 @@ func NewDataPipeline(config *PipelineConfig) *DataPipeline {
 // Process processes data through the entire pipeline
 func (dp *DataPipeline) Process(ctx context.Context, rawData map[string]interface{}) (*ProcessedData, error) {
 	startTime := time.Now()
-	
+
 	result := &ProcessedData{
 		Raw: rawData,
 		Metadata: ProcessingMetadata{
@@ -224,7 +224,7 @@ func (dp *DataPipeline) Process(ctx context.Context, rawData map[string]interfac
 // ProcessBatch processes multiple data items through the pipeline
 func (dp *DataPipeline) ProcessBatch(ctx context.Context, batchData []map[string]interface{}) ([]*ProcessedData, error) {
 	results := make([]*ProcessedData, 0, len(batchData))
-	
+
 	// Create worker pool for concurrent processing
 	workerCount := dp.Config.WorkerCount
 	if workerCount <= 0 {
@@ -307,7 +307,7 @@ func (dp *DataPipeline) ProcessBatch(ctx context.Context, batchData []map[string
 func (dp *DataPipeline) GetMetrics() *PipelineMetrics {
 	dp.mu.RLock()
 	defer dp.mu.RUnlock()
-	
+
 	metricsCopy := *dp.metrics
 	return &metricsCopy
 }
@@ -325,7 +325,7 @@ func (dp *DataPipeline) updateMetrics(result *ProcessedData) {
 	dp.metrics.LastProcessedAt = time.Now()
 	dp.metrics.TotalTime += result.Metadata.Duration
 
-	if len(result.Errors) == 0 || !hassFatalError(result.Errors) {
+	if len(result.Errors) == 0 || !hasFatalError(result.Errors) {
 		dp.metrics.SuccessCount++
 	} else {
 		dp.metrics.ErrorCount++
@@ -337,8 +337,8 @@ func (dp *DataPipeline) updateMetrics(result *ProcessedData) {
 	}
 }
 
-// hassFatalError checks if there are any fatal errors
-func hassFatalError(errors []ProcessingError) bool {
+// hasFatalError checks if there are any fatal errors
+func hasFatalError(errors []ProcessingError) bool {
 	for _, err := range errors {
 		if err.Fatal {
 			return true

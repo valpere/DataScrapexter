@@ -65,41 +65,41 @@ fields:
     transform:
       - type: "trim"
       - type: "normalize_spaces"
-    
+
   - name: "product_urls"
     selector: ".product-item .product-title a"
     type: "list"
     attribute: "href"
     required: true
-    
+
   - name: "prices"
     selector: ".product-item .price-current"
     type: "list"
     transform:
       - type: "clean_price"
       - type: "parse_float"
-    
+
   - name: "original_prices"
     selector: ".product-item .price-was"
     type: "list"
     transform:
       - type: "clean_price"
       - type: "parse_float"
-    
+
   - name: "availability"
     selector: ".product-item .stock-status"
     type: "list"
     transform:
       - type: "trim"
       - type: "lowercase"
-    
+
   - name: "ratings"
     selector: ".product-item .rating"
     type: "list"
     attribute: "data-rating"
     transform:
       - type: "parse_float"
-    
+
   - name: "review_counts"
     selector: ".product-item .review-count"
     type: "list"
@@ -146,7 +146,7 @@ fields:
     type: "attr"
     attribute: "data-product-id"
     required: true
-    
+
   - name: "title"
     selector: "h1.product-name"
     type: "text"
@@ -154,13 +154,13 @@ fields:
     transform:
       - type: "trim"
       - type: "normalize_spaces"
-    
+
   - name: "brand"
     selector: ".product-brand a"
     type: "text"
     transform:
       - type: "trim"
-    
+
   - name: "current_price"
     selector: ".price-now"
     type: "text"
@@ -168,14 +168,14 @@ fields:
     transform:
       - type: "clean_price"
       - type: "parse_float"
-    
+
   - name: "original_price"
     selector: ".price-was"
     type: "text"
     transform:
       - type: "clean_price"
       - type: "parse_float"
-    
+
   - name: "discount_percentage"
     selector: ".discount-badge"
     type: "text"
@@ -184,7 +184,7 @@ fields:
         pattern: "(\\d+)%"
         replacement: "$1"
       - type: "parse_int"
-    
+
   - name: "availability_status"
     selector: ".availability-message"
     type: "text"
@@ -192,7 +192,7 @@ fields:
     transform:
       - type: "trim"
       - type: "lowercase"
-    
+
   - name: "stock_count"
     selector: ".stock-remaining"
     type: "text"
@@ -201,7 +201,7 @@ fields:
         pattern: "(\\d+) in stock"
         replacement: "$1"
       - type: "parse_int"
-    
+
   # Detailed specifications
   - name: "description"
     selector: ".product-description"
@@ -209,30 +209,30 @@ fields:
     transform:
       - type: "trim"
       - type: "normalize_spaces"
-    
+
   - name: "key_features"
     selector: ".key-features li"
     type: "list"
     transform:
       - type: "trim"
-    
+
   - name: "specifications"
     selector: ".specs-table tr"
     type: "list"
     transform:
       - type: "normalize_spaces"
-    
+
   # Media assets
   - name: "main_image"
     selector: ".product-image-main img"
     type: "attr"
     attribute: "src"
-    
+
   - name: "additional_images"
     selector: ".product-thumbnails img"
     type: "list"
     attribute: "src"
-    
+
   # Customer feedback
   - name: "rating"
     selector: ".product-rating"
@@ -240,7 +240,7 @@ fields:
     attribute: "data-rating"
     transform:
       - type: "parse_float"
-    
+
   - name: "review_count"
     selector: ".review-summary .count"
     type: "text"
@@ -249,14 +249,14 @@ fields:
         pattern: "(\\d+) reviews"
         replacement: "$1"
       - type: "parse_int"
-    
+
   # Fulfillment information
   - name: "shipping_info"
     selector: ".shipping-info"
     type: "text"
     transform:
       - type: "trim"
-    
+
   - name: "delivery_time"
     selector: ".estimated-delivery"
     type: "text"
@@ -311,10 +311,10 @@ Create a script to systematically scrape individual products:
 while IFS= read -r url; do
     echo "Processing: $url"
     filename=$(basename "$url" | sed 's/[^a-zA-Z0-9]/_/g')
-    
+
     PRODUCT_URL="$url" datascrapexter run configs/product-details.yaml \
         -o "outputs/products/${filename}.json"
-    
+
     # Respectful delay between products
     sleep 2
 done < outputs/product-urls.txt
@@ -334,21 +334,21 @@ fields:
     transform:
       - type: "clean_price"
       - type: "parse_float"
-      
+
   - name: "member_price"
     selector: ".price-member"
     type: "text"
     transform:
       - type: "clean_price"
       - type: "parse_float"
-      
+
   - name: "bulk_price"
     selector: ".price-bulk"
     type: "text"
     transform:
       - type: "clean_price"
       - type: "parse_float"
-      
+
   - name: "price_conditions"
     selector: ".price-condition"
     type: "list"
@@ -366,13 +366,13 @@ fields:
     selector: ".color-swatches .swatch"
     type: "list"
     attribute: "data-color"
-    
+
   - name: "size_options"
     selector: ".size-selector option"
     type: "list"
     transform:
       - type: "trim"
-      
+
   - name: "variant_skus"
     selector: ".variant-option"
     type: "list"
@@ -405,7 +405,7 @@ def combine_product_data():
                 'listing_data': row,
                 'scraped_at': datetime.now().isoformat()
             }
-    
+
     # Merge with detailed data
     for json_file in glob.glob('outputs/products/*.json'):
         with open(json_file, 'r') as f:
@@ -415,11 +415,11 @@ def combine_product_data():
                 url = detail.get('url', '')
                 if url in products:
                     products[url]['detail_data'] = detail.get('data', {})
-    
+
     # Save combined data
     with open('data/combined_products.json', 'w') as f:
         json.dump(list(products.values()), f, indent=2)
-    
+
     print(f"Combined {len(products)} products")
 
 if __name__ == "__main__":
@@ -466,36 +466,36 @@ from datetime import datetime, timedelta
 def analyze_price_changes():
     # Load latest two price snapshots
     files = sorted(glob.glob('data/price_history/listing_*.csv'))
-    
+
     if len(files) < 2:
         print("Insufficient data for comparison")
         return
-    
+
     current = pd.read_csv(files[-1])
     previous = pd.read_csv(files[-2])
-    
+
     # Merge on product URL
     merged = current.merge(
-        previous, 
-        on='product_urls', 
+        previous,
+        on='product_urls',
         suffixes=('_current', '_previous')
     )
-    
+
     # Calculate price changes
     merged['price_change'] = merged['prices_current'] - merged['prices_previous']
     merged['price_change_pct'] = (merged['price_change'] / merged['prices_previous']) * 100
-    
+
     # Identify significant changes
     significant = merged[abs(merged['price_change_pct']) > 5]
-    
+
     # Generate report
     with open('outputs/price_changes_report.txt', 'w') as f:
         f.write(f"Price Change Analysis - {datetime.now()}\n")
         f.write("=" * 50 + "\n\n")
-        
+
         f.write(f"Total products analyzed: {len(merged)}\n")
         f.write(f"Products with >5% change: {len(significant)}\n\n")
-        
+
         for _, row in significant.iterrows():
             f.write(f"Product: {row['product_names_current']}\n")
             f.write(f"Previous: ${row['prices_previous']:.2f}\n")
@@ -550,7 +550,7 @@ MIN_PRODUCTS=50
 if [ -f "outputs/products-listing.csv" ]; then
     PRODUCT_COUNT=$(wc -l < outputs/products-listing.csv)
     echo "Products in latest scrape: $PRODUCT_COUNT" >> "$LOG_FILE"
-    
+
     if [ $PRODUCT_COUNT -lt $MIN_PRODUCTS ]; then
         echo "WARNING: Low product count" >> "$LOG_FILE"
     fi

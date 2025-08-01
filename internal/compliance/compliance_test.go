@@ -125,9 +125,9 @@ func TestGDPRChecker(t *testing.T) {
 
 func TestComplianceReport(t *testing.T) {
     checker := NewComplianceChecker()
-    
+
     testURL := "https://example.com/data"
-    
+
     // Mock robots.txt that allows access
     mockRobots := &RobotsTxt{
         rules: map[string][]Rule{
@@ -142,7 +142,7 @@ func TestComplianceReport(t *testing.T) {
     }
 
     report := checker.GenerateReport(testURL, mockRobots, nil, nil)
-    
+
     if !report.RobotsCompliant {
         t.Error("should be robots.txt compliant")
     }

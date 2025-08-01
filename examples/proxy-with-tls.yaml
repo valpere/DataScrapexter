@@ -10,24 +10,24 @@ proxy:
   timeout: "30s"
   failure_threshold: 3
   recovery_time: "10m"
-  
+
   # TLS Configuration
   tls:
     # WARNING: Only set insecure_skip_verify to true for testing!
     # This makes connections vulnerable to man-in-the-middle attacks
     insecure_skip_verify: false  # Default: false (secure)
-    
+
     # Optional: Specify server name for certificate verification
     # server_name: "proxy.example.com"
-    
+
     # Optional: Custom root CA certificates
     # root_cas:
     #   - "/path/to/ca-cert.pem"
-    
+
     # Optional: Client certificate for mutual TLS
     # client_cert: "/path/to/client-cert.pem"
     # client_key: "/path/to/client-key.pem"
-  
+
   providers:
     - name: "secure_proxy"
       type: "https"

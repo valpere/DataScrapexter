@@ -12,7 +12,7 @@ func TestUserAgentRotatorIntegration(t *testing.T) {
     }
 
     rotator := NewUserAgentRotator(userAgents)
-    
+
     if rotator == nil {
         t.Error("rotator should not be nil")
     }
@@ -22,7 +22,7 @@ func TestAntiDetectionClientIntegration(t *testing.T) {
     config := &AntiDetectionConfig{}
 
     client := NewAntiDetectionClient(config)
-    
+
     if client == nil {
         t.Error("anti-detection client should not be nil")
     }

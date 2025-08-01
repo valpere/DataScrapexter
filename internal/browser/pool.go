@@ -53,7 +53,7 @@ func (p *BrowserPool) Get(ctx context.Context) (BrowserClient, error) {
 		// No available browser in pool, create new one if under limit
 		p.mu.Lock()
 		defer p.mu.Unlock()
-		
+
 		if p.currentSize < p.maxSize {
 			browser, err := NewChromeClient(p.config)
 			if err != nil {
@@ -62,7 +62,7 @@ func (p *BrowserPool) Get(ctx context.Context) (BrowserClient, error) {
 			p.currentSize++
 			return browser, nil
 		}
-		
+
 		// Wait for available browser (with timeout)
 		select {
 		case browser := <-p.browsers:
@@ -83,7 +83,7 @@ func (p *BrowserPool) Put(browser BrowserClient) error {
 
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	
+
 	if p.closed {
 		browser.Close()
 		return fmt.Errorf("pool is closed")
@@ -120,19 +120,19 @@ func (p *BrowserPool) TotalSize() int {
 func (p *BrowserPool) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	if p.closed {
 		return nil
 	}
-	
+
 	p.closed = true
-	
+
 	// Close all browsers in the pool
 	close(p.browsers)
 	for browser := range p.browsers {
 		browser.Close()
 	}
-	
+
 	p.currentSize = 0
 	return nil
 }

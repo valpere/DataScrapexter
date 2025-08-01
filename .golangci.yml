@@ -6,13 +6,13 @@
 run:
   # Timeout for analysis
   timeout: 5m
-  
+
   # Exit code when at least one issue was found
   issues-exit-code: 1
-  
+
   # Include test files
   tests: true
-  
+
   # Which dirs to skip
   skip-dirs:
     - vendor
@@ -21,19 +21,19 @@ run:
     - examples
     - docs
     - scripts
-  
+
   # Which files to skip
   skip-files:
     - ".*\\.pb\\.go$"
     - ".*\\.gen\\.go$"
     - "mock_.*\\.go$"
-  
+
   # By default, list of stable checks is used
   modules-download-mode: readonly
-  
+
   # Allow parallel running of linters
   allow-parallel-runners: true
-  
+
   # Define Go version
   go: "1.24"
 
@@ -41,16 +41,16 @@ run:
 output:
   # Format of output
   format: colored-line-number
-  
+
   # Print lines of code with issue
   print-issued-lines: true
-  
+
   # Print linter name in the end of issue text
   print-linter-name: true
-  
+
   # Make issues output unique by line
   uniq-by-line: true
-  
+
   # Sort results by: filepath, line, column
   sort-results: true
 
@@ -424,7 +424,7 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-    
+
     # Additional linters
     - asasalint
     - asciicheck
@@ -528,63 +528,63 @@ issues:
         - noctx
         - unparam
         - varnamelen
-    
+
     # Exclude some linters from running on example files
     - path: examples/
       linters:
         - errcheck
         - gosec
         - noctx
-    
+
     # Exclude some linters from cmd directory
     - path: cmd/
       linters:
         - gochecknoglobals
         - gochecknoinits
-    
+
     # Exclude generated files
     - path: \.pb\.go$
       linters:
         - all
-    
+
     # Exclude vendor
     - path: vendor/
       linters:
         - all
-    
+
     # Exclude known issues
     - text: "Error return value of .((os\\.)?std(out|err)\\..*|.*Close|.*Flush|os\\.Remove(All)?|.*print(f|ln)?|os\\.(Un)?Setenv). is not checked"
       linters:
         - errcheck
-    
+
     # Exclude long lines in comments
     - source: "^//( \\+build|go:)"
       linters:
         - lll
-    
+
     # Exclude magic numbers in test files
     - path: _test\.go
       text: "Magic number"
       linters:
         - gomnd
-    
+
     # Exclude some static errors
     - text: "SA1019: .*"
       linters:
         - staticcheck
-  
+
   # Independently from option `exclude` we use default exclude patterns
   exclude-use-default: true
-  
+
   # Maximum issues count per one linter
   max-issues-per-linter: 50
-  
+
   # Maximum count of issues with the same text
   max-same-issues: 10
-  
+
   # Show only new issues
   new: false
-  
+
   # Fix found issues (if it's supported by the linter)
   fix: false
 
@@ -592,10 +592,10 @@ issues:
 severity:
   # Default value is an empty string
   default-severity: warning
-  
+
   # If set to true `severity-rules` regular expressions become case-sensitive
   case-sensitive: false
-  
+
   # When a list of severity rules are provided, severity information will be added to lint issues
   rules:
     - linters:

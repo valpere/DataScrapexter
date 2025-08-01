@@ -17,7 +17,7 @@
    # CPU profiling
    go test -cpuprofile=cpu.prof -bench=.
    go tool pprof cpu.prof
-   
+
    # Memory profiling
    go test -memprofile=mem.prof -bench=.
    go tool pprof mem.prof
@@ -36,7 +36,7 @@
    ```bash
    # Run gosec
    make security
-   
+
    # Check for secrets
    detect-secrets scan
    ```
@@ -45,7 +45,7 @@
    ```bash
    # Check for vulnerabilities
    go list -m all | nancy sleuth
-   
+
    # Update dependencies
    go get -u ./...
    go mod tidy
@@ -160,10 +160,10 @@ linters-settings:
    ```bash
    # CPU profile
    go tool pprof http://localhost:6060/debug/pprof/profile
-   
+
    # Memory profile
    go tool pprof http://localhost:6060/debug/pprof/heap
-   
+
    # Goroutine profile
    go tool pprof http://localhost:6060/debug/pprof/goroutine
    ```
@@ -302,7 +302,7 @@ go tool cover -html=coverage.out -o coverage.html
    ```bash
    # Export settings
    cp .vscode/settings.json .vscode/settings.shared.json
-   
+
    # Team members import
    cp .vscode/settings.shared.json .vscode/settings.json
    ```
@@ -459,7 +459,7 @@ Before pushing:
    ```bash
    # Run specific linter
    golangci-lint run --no-config --disable-all --enable=errcheck
-   
+
    # Fix automatically
    golangci-lint run --fix
    ```
@@ -468,7 +468,7 @@ Before pushing:
    ```bash
    # Update imports
    goimports -w -local github.com/valpere/DataScrapexter .
-   
+
    # Tidy modules
    go mod tidy
    ```
@@ -477,7 +477,7 @@ Before pushing:
    ```bash
    # Skip hooks temporarily
    git commit --no-verify
-   
+
    # Run specific hook
    pre-commit run check-yaml --all-files
    ```
@@ -753,11 +753,11 @@ pre-commit autoupdate
    ```bash
    # Install Go tools
    make install-tools
-   
+
    # Install pre-commit
    pip install pre-commit
    pre-commit install
-   
+
    # Install golangci-lint
    curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
    ```
@@ -766,7 +766,7 @@ pre-commit autoupdate
    ```bash
    # Set up Git attributes
    git config core.attributesfile .gitattributes
-   
+
    # Enable Git hooks
    cp scripts/pre-commit .git/hooks/pre-commit
    chmod +x .git/hooks/pre-commit

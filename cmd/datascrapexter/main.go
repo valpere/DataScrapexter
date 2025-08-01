@@ -29,14 +29,14 @@ func runScraper(configFile string) {
 	// Check for verbose flag
 	verbose := hasFlag("-v") || hasFlag("--verbose")
 	errorService = errorService.WithVerbose(verbose)
-	
+
 	ctx := context.Background()
-	
+
 	// Execute with retry and error handling
 	err := errorService.ExecuteWithRetry(ctx, func() error {
 		return executeScrapingOperation(configFile, verbose)
 	}, "scraping")
-	
+
 	if err != nil {
 		fmt.Fprint(os.Stderr, errorService.FormatErrorForCLI(err))
 		os.Exit(errorService.GetExitCode(err))
@@ -47,18 +47,18 @@ func runScraper(configFile string) {
 func validateConfig(configFile string) {
 	verbose := hasFlag("-v") || hasFlag("--verbose")
 	errorService = errorService.WithVerbose(verbose)
-	
+
 	ctx := context.Background()
-	
+
 	err := errorService.ExecuteWithRetry(ctx, func() error {
 		return executeValidation(configFile, verbose)
 	}, "validation")
-	
+
 	if err != nil {
 		fmt.Fprint(os.Stderr, errorService.FormatErrorForCLI(err))
 		os.Exit(errorService.GetExitCode(err))
 	}
-	
+
 	fmt.Printf("✓ Configuration file '%s' is valid\n", configFile)
 }
 
@@ -68,16 +68,16 @@ func generateTemplate(args []string) (string, error) {
 	if len(args) > 0 && args[0] == "--type" && len(args) > 1 {
 		templateType = args[1]
 	}
-	
+
 	// Use existing template generation logic
 	template := config.GenerateTemplate(templateType)
-	
+
 	// Convert to YAML string
 	yamlData, err := yaml.Marshal(template)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal template to YAML: %w", err)
 	}
-	
+
 	return string(yamlData), nil
 }
 
@@ -88,30 +88,30 @@ func executeScrapingOperation(configFile string, verbose bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
-	
+
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("configuration validation failed: %w", err)
 	}
-	
+
 	if verbose {
 		fmt.Printf("Configuration loaded: %s\n", cfg.Name)
 		fmt.Printf("Target URL: %s\n", cfg.BaseURL)
 		fmt.Printf("Fields to extract: %d\n", len(cfg.Fields))
 	}
-	
+
 	// Create engine with existing constructor
 	engineConfig := convertToEngineConfig(cfg)
 	engine, err := scraper.NewEngine(engineConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create scraping engine: %w", err)
 	}
-	
+
 	// Execute scraping
 	if verbose {
 		fmt.Printf("Starting scraping operation...\n")
 	}
-	
+
 	// Convert config fields to FieldConfig for scraping
 	fieldConfigs := make([]scraper.FieldConfig, len(cfg.Fields))
 	for i, field := range cfg.Fields {
@@ -124,36 +124,36 @@ func executeScrapingOperation(configFile string, verbose bool) error {
 			Default:   field.Default,
 		}
 	}
-	
+
 	result, err := engine.Scrape(context.Background(), cfg.BaseURL, fieldConfigs)
 	if err != nil {
 		return fmt.Errorf("scraping failed: %w", err)
 	}
-	
+
 	// Check for partial failures
 	if !result.Success && result.Data != nil {
 		fmt.Printf("⚠ Scraping completed with some errors, saving partial results\n")
 	}
-	
+
 	// Save results using existing output manager
 	outputManager, err := output.NewManager(&cfg.Output)
 	if err != nil {
 		return fmt.Errorf("failed to create output manager: %w", err)
 	}
-	
+
 	outputData := []map[string]interface{}{result.Data}
 	err = outputManager.WriteResults(outputData)
 	if err != nil {
 		return fmt.Errorf("failed to write results: %w", err)
 	}
-	
+
 	if verbose {
 		fmt.Printf("Results saved to: %s\n", cfg.Output.File)
 		fmt.Printf("Fields extracted: %d\n", len(result.Data))
 	} else {
 		fmt.Printf("Scraping completed successfully. Results saved to %s\n", cfg.Output.File)
 	}
-	
+
 	return nil
 }
 
@@ -163,12 +163,12 @@ func executeValidation(configFile string, verbose bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
-	
+
 	err = cfg.Validate()
 	if err != nil {
 		return fmt.Errorf("validation failed: %w", err)
 	}
-	
+
 	if verbose {
 		fmt.Printf("Configuration details:\n")
 		fmt.Printf("  Name: %s\n", cfg.Name)
@@ -176,7 +176,7 @@ func executeValidation(configFile string, verbose bool) error {
 		fmt.Printf("  Fields: %d\n", len(cfg.Fields))
 		fmt.Printf("  Output format: %s\n", cfg.Output.Format)
 	}
-	
+
 	return nil
 }
 
@@ -307,7 +307,7 @@ func main() {
 	}
 
 	command := os.Args[1]
-	
+
 	switch command {
 	case "run":
 		if len(os.Args) < 3 {
@@ -316,7 +316,7 @@ func main() {
 			os.Exit(1)
 		}
 		runScraper(os.Args[2])
-		
+
 	case "validate":
 		if len(os.Args) < 3 {
 			fmt.Fprintf(os.Stderr, "Error: config file required\n")
@@ -324,7 +324,7 @@ func main() {
 			os.Exit(1)
 		}
 		validateConfig(os.Args[2])
-		
+
 	case "template":
 		template, err := generateTemplate(os.Args[2:])
 		if err != nil {
@@ -332,13 +332,13 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Print(template)
-		
+
 	case "version", "--version", "-v":
 		printVersion()
-		
+
 	case "help", "--help", "-h":
 		printUsage()
-		
+
 	default:
 		fmt.Fprintf(os.Stderr, "Error: unknown command '%s'\n", command)
 		printUsage()
@@ -362,7 +362,7 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("Template types:")
 	fmt.Println("  basic       Basic scraping template (default)")
-	fmt.Println("  ecommerce   E-commerce scraping template") 
+	fmt.Println("  ecommerce   E-commerce scraping template")
 	fmt.Println("  news        News article scraping template")
 }
 

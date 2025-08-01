@@ -61,7 +61,7 @@ extraction:
         transform:
           - type: "extract_pattern"
             pattern: "MLS#?\\s*([A-Z0-9]+)"
-      
+
       - name: "address"
         selector: ".property-address, .listing-address, address"
         type: "complex"
@@ -81,7 +81,7 @@ extraction:
             transform:
               - type: "validate_pattern"
                 pattern: "^\\d{5}(-\\d{4})?$"
-      
+
       - name: "price"
         selector: ".listing-price, .property-price, [itemprop='price']"
         type: "text"
@@ -91,13 +91,13 @@ extraction:
           - type: "validate_range"
             min: 10000
             max: 100000000
-      
+
       - name: "price_per_sqft"
         selector: ".price-per-sqft, .ppsf"
         type: "text"
         transform:
           - type: "extract_number"
-      
+
       - name: "property_type"
         selector: ".property-type, .listing-type"
         type: "text"
@@ -108,28 +108,28 @@ extraction:
           "Multi Family": "multi_family"
           "Land": "land"
           "Commercial": "commercial"
-      
+
       - name: "bedrooms"
         selector: ".beds-count, .bedrooms, [data-beds]"
         type: "text"
         transform:
           - type: "extract_number"
           - type: "parse_int"
-      
+
       - name: "bathrooms"
         selector: ".baths-count, .bathrooms, [data-baths]"
         type: "text"
         transform:
           - type: "extract_number"
           - type: "parse_float"
-      
+
       - name: "square_feet"
         selector: ".sqft, .square-feet, .living-area"
         type: "text"
         transform:
           - type: "extract_number"
           - type: "parse_int"
-      
+
       - name: "lot_size"
         selector: ".lot-size, .land-area"
         type: "text"
@@ -138,7 +138,7 @@ extraction:
           - type: "convert_units"
             from: "auto"
             to: "sqft"
-      
+
       - name: "year_built"
         selector: ".year-built, .construction-year"
         type: "text"
@@ -148,14 +148,14 @@ extraction:
           - type: "validate_range"
             min: 1800
             max: 2025
-      
+
       - name: "days_on_market"
         selector: ".dom, .days-on-market"
         type: "text"
         transform:
           - type: "extract_number"
           - type: "parse_int"
-      
+
       - name: "status"
         selector: ".listing-status, .property-status"
         type: "text"
@@ -165,14 +165,14 @@ extraction:
           "Contingent": "contingent"
           "Coming Soon": "coming_soon"
           "Sold": "sold"
-      
+
       - name: "listing_date"
         selector: ".listing-date, time[datetime]"
         attribute: "datetime"
         transform:
           - type: "parse_date"
             format: "auto"
-      
+
       - name: "images"
         selector: ".property-photos img, .gallery img"
         attribute: "src"
@@ -182,13 +182,13 @@ extraction:
           - type: "extract_high_res"
           - type: "limit"
             max: 25
-      
+
       - name: "virtual_tour_url"
         selector: "a.virtual-tour, .tour-link"
         attribute: "href"
         transform:
           - type: "absolute_url"
-      
+
       - name: "agent_info"
         selector: ".listing-agent, .agent-info"
         type: "complex"
@@ -204,30 +204,30 @@ extraction:
           - name: "brokerage"
             selector: ".brokerage-name"
             type: "text"
-      
+
       - name: "features"
         selector: ".property-features li, .amenities span"
         type: "list"
         transform:
           - type: "trim"
           - type: "deduplicate"
-      
+
       - name: "school_district"
         selector: ".school-district, .schools"
         type: "text"
-      
+
       - name: "hoa_fee"
         selector: ".hoa-fee, .association-fee"
         type: "text"
         transform:
           - type: "extract_number"
-      
+
       - name: "property_tax"
         selector: ".property-tax, .annual-taxes"
         type: "text"
         transform:
           - type: "extract_number"
-      
+
       - name: "listing_url"
         selector: "a.property-link, .details-link"
         attribute: "href"
@@ -267,12 +267,12 @@ extraction:
 output:
   format: "json"
   path: "outputs/real-estate/${DATE}/${MARKET}_properties_${TIMESTAMP}.json"
-  
+
   # Schema validation
   schema:
     required_fields: ["mls_number", "address", "price", "property_type"]
     unique_keys: ["mls_number"]
-  
+
   # Enrichment
   enrich:
     - type: "geocoding"
@@ -292,14 +292,14 @@ analysis:
     - name: "market_inventory"
       groupBy: ["property_type", "bedrooms"]
       calculate: ["count", "median_price", "average_price"]
-    
+
     - name: "price_distribution"
       buckets: [100000, 200000, 300000, 500000, 750000, 1000000]
-      
+
     - name: "new_listings"
       period: "daily"
       alert_threshold: 20  # Alert if more than 20 new listings
-    
+
     - name: "price_changes"
       track: true
       alert_on_reduction: 5  # Alert on 5% price reduction
@@ -313,7 +313,7 @@ history:
     - "price"
     - "status"
     - "days_on_market"
-  
+
   snapshots:
     frequency: "daily"
     time: "06:00"
@@ -326,14 +326,14 @@ monitoring:
         price: "< 500000"
         bedrooms: ">= 3"
         property_type: "single_family"
-    
+
     - type: "price_reduction"
       threshold: 10000
-      
+
     - type: "status_change"
       from: "active"
       to: ["pending", "contingent"]
-    
+
     - type: "hot_property"
       criteria:
         days_on_market: "< 3"
@@ -354,7 +354,7 @@ export:
       format: "csv"
       encoding: "utf-8"
       field_mapping: "configs/mls-field-mapping.json"
-    
+
     - type: "crm_import"
       format: "xlsx"
       sheets:
@@ -362,7 +362,7 @@ export:
           data: "listings"
         - name: "Market Analysis"
           data: "analytics"
-    
+
     - type: "map_data"
       format: "geojson"
       coordinate_fields:

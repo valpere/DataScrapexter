@@ -29,7 +29,7 @@ const (
 keepCount := int(float64(MaxHealthErrors) * HealthErrorsRetentionRatio)
 ```
 
-**Rationale**: 
+**Rationale**:
 - Named constant `HealthErrorsRetentionRatio` makes intent clear
 - 50% retention prevents frequent re-truncation while maintaining memory bounds
 - Configurable ratio allows easy tuning for different memory constraints
@@ -65,7 +65,7 @@ func TestAdaptiveRateLimiter_ConsecutiveErrorMultiplier(t *testing.T) {
     // 15 consecutive errors with limit of 5 should result in 3.0x multiplier
     expectedMinInterval := time.Duration(float64(config.BaseInterval) * 3.0)
     if stats.CurrentInterval < expectedMinInterval {
-        t.Errorf("Expected interval >= %v due to consecutive errors, got %v", 
+        t.Errorf("Expected interval >= %v due to consecutive errors, got %v",
             expectedMinInterval, stats.CurrentInterval)
     }
 }
@@ -136,7 +136,7 @@ func (s *Service) executeAlternativeOperation(operationName, alternative string)
         }, nil
     case "api_fallback":
         return map[string]interface{}{
-            "source": "api_fallback", 
+            "source": "api_fallback",
             "message": "Using API as fallback to HTML scraping",
             "operation": operationName,
         }, nil
@@ -188,7 +188,7 @@ func TestService_AlternativeOperation_Strategies(t *testing.T) {
 
 ### Test Coverage Statistics
 - **Rate Limiter**: 15/15 tests passing
-- **Error Recovery**: 13/13 tests passing  
+- **Error Recovery**: 13/13 tests passing
 - **Engine Configuration**: All tests passing
 - **Integration Tests**: All scenarios covered
 
@@ -199,7 +199,7 @@ func TestService_AlternativeOperation_Strategies(t *testing.T) {
 - **After**: Strict bounds with configurable retention ratio
 - **Impact**: Predictable memory usage, 50% reduction in max memory after truncation
 
-### CPU Efficiency  
+### CPU Efficiency
 - **Before**: Frequent slice allocations during cleanup
 - **After**: In-place filtering with periodic cleanup
 - **Impact**: Reduced allocation pressure, better cache locality

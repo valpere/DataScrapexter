@@ -47,7 +47,7 @@ func WriteCSVToFile(filename string, data []map[string]interface{}) error {
 			value := record[header]
 			row = append(row, fmt.Sprintf("%v", value))
 		}
-		
+
 		if err := writer.Write(row); err != nil {
 			logger.WithFields(map[string]interface{}{
 				"row_index": i,

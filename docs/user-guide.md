@@ -103,11 +103,11 @@ fields:
     selector: ".quote .text"
     type: "list"
     required: true
-    
+
   - name: "authors"
     selector: ".quote .author"
     type: "list"
-    
+
   - name: "tags"
     selector: ".quote .tags .tag"
     type: "list"
@@ -228,7 +228,7 @@ Sensitive information such as API keys and proxy credentials should not be store
 ```yaml
 proxy:
   url: "${PROXY_URL}"
-  
+
 output:
   database:
     url: "${DATABASE_URL}"

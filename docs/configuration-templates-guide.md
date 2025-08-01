@@ -240,7 +240,7 @@ extraction:
   - name: "listing_page"
     type: "listing"
     fields: [...]
-    
+
   - name: "detail_page"
     type: "detail"
     follow_field: "product_url"

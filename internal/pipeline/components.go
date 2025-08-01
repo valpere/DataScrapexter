@@ -41,19 +41,26 @@ type MediaContentExtractor struct {
 	ExtractAudio  bool `yaml:"extract_audio" json:"extract_audio"`
 }
 
-// Extract processes raw data and extracts structured information
+// Extract processes raw data and extracts structured information.
+//
+// Currently passes data through unchanged as primary extraction is handled by the scraper engine.
+// This component is designed for additional post-scraping extraction such as complex field processing,
+// nested data extraction, or custom transformation rules that require domain-specific logic.
+//
+// Future implementations will support:
+//   - Configurable extraction rules
+//   - Nested data structure processing
+//   - Custom field transformations
+//   - Multi-source data merging
 func (de *DataExtractor) Extract(ctx context.Context, rawData map[string]interface{}) (map[string]interface{}, error) {
 	extracted := make(map[string]interface{})
-	
-	// Copy raw data as base
+
+	// Copy raw data as base - currently a pass-through operation
+	// TODO: Implement actual extraction logic as described in the method documentation above.
 	for k, v := range rawData {
 		extracted[k] = v
 	}
-	
-	// TODO: Implement actual extraction logic
-	// This would involve using the selector engines to extract data
-	// based on configuration rules
-	
+
 	return extracted, nil
 }
 
@@ -78,16 +85,16 @@ type ValidationRule struct {
 // Validate validates data against defined rules
 func (dv *DataValidator) Validate(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
 	validated := make(map[string]interface{})
-	
+
 	// Copy input data
 	for k, v := range data {
 		validated[k] = v
 	}
-	
+
 	// Apply validation rules
 	for _, rule := range dv.Rules {
 		value, exists := validated[rule.Field]
-		
+
 		if !exists {
 			if rule.Required {
 				if dv.StrictMode {
@@ -100,7 +107,7 @@ func (dv *DataValidator) Validate(ctx context.Context, data map[string]interface
 			}
 			continue
 		}
-		
+
 		// Validate field type and constraints
 		if err := dv.validateField(rule, value); err != nil {
 			if dv.StrictMode {
@@ -114,7 +121,7 @@ func (dv *DataValidator) Validate(ctx context.Context, data map[string]interface
 			}
 		}
 	}
-	
+
 	return validated, nil
 }
 
@@ -158,7 +165,7 @@ func (dv *DataValidator) validateField(rule ValidationRule, value interface{}) e
 	default:
 		return fmt.Errorf("unknown validation type: %s", rule.Type)
 	}
-	
+
 	return nil
 }
 
@@ -168,7 +175,7 @@ type RecordDeduplicator struct {
 	Fields       []string `yaml:"fields,omitempty" json:"fields,omitempty"` // Fields to use for deduplication
 	Threshold    float64  `yaml:"threshold,omitempty" json:"threshold,omitempty"` // Similarity threshold
 	CacheSize    int      `yaml:"cache_size" json:"cache_size"`     // Size of deduplication cache
-	
+
 	seenHashes   map[string]bool
 	seenRecords  []map[string]interface{}
 }
@@ -178,7 +185,7 @@ func (rd *RecordDeduplicator) Deduplicate(ctx context.Context, data map[string]i
 	if rd.seenHashes == nil {
 		rd.seenHashes = make(map[string]bool)
 	}
-	
+
 	switch rd.Method {
 	case "hash":
 		return rd.deduplicateByHash(data)
@@ -191,24 +198,67 @@ func (rd *RecordDeduplicator) Deduplicate(ctx context.Context, data map[string]i
 	}
 }
 
-// deduplicateByHash uses hash-based deduplication
+// deduplicateByHash performs hash-based duplicate detection and removal.
+//
+// Currently passes data through unchanged as hash-based deduplication is not yet implemented.
+// This method is designed to identify duplicate records by generating cryptographic hashes
+// of record content and maintaining a hash registry for comparison.
+//
+// Future implementation will support:
+//   - SHA256 hash generation for entire records or specified fields
+//   - In-memory hash set with configurable size limits
+//   - Persistent hash storage for cross-session deduplication
+//   - Configurable hash collision handling
 func (rd *RecordDeduplicator) deduplicateByHash(data map[string]interface{}) (map[string]interface{}, error) {
-	// TODO: Implement hash-based deduplication
-	// This would generate a hash of the entire record or specific fields
+	// NOTE: Hash-based deduplication not yet implemented.
+	// Future implementation would:
+	// 1. Generate SHA256 hash of entire record or specified fields
+	// 2. Maintain hash set in memory or persistent storage
+	// 3. Skip records with duplicate hashes
+	// Currently passes all data through unchanged.
 	return data, nil
 }
 
-// deduplicateByField uses field-based deduplication
+// deduplicateByField performs field-based duplicate detection using specific field combinations.
+//
+// Currently passes data through unchanged as field-based deduplication is not yet implemented.
+// This method is designed to identify duplicate records by comparing values from specified
+// fields such as URLs, IDs, titles, or other unique identifiers.
+//
+// Future implementation will support:
+//   - Configurable field selection for uniqueness checking
+//   - Composite field combinations (e.g., URL + title)
+//   - Field value normalization and preprocessing
+//   - Memory-efficient field value storage with LRU eviction
 func (rd *RecordDeduplicator) deduplicateByField(data map[string]interface{}) (map[string]interface{}, error) {
-	// TODO: Implement field-based deduplication
-	// This would check specific fields for duplicates
+	// NOTE: Field-based deduplication not yet implemented.
+	// Future implementation would:
+	// 1. Extract values from specified fields (e.g., URL, ID, title)
+	// 2. Maintain field value sets in memory or persistent storage
+	// 3. Skip records with duplicate field combinations
+	// Currently passes all data through unchanged.
 	return data, nil
 }
 
-// deduplicateBySimilarity uses similarity-based deduplication
+// deduplicateBySimilarity performs advanced similarity-based duplicate detection using fuzzy matching.
+//
+// Currently passes data through unchanged as similarity-based deduplication is not yet implemented.
+// This method is designed to identify near-duplicate records using fuzzy string matching algorithms
+// and configurable similarity thresholds for intelligent duplicate detection.
+//
+// Future implementation will support:
+//   - Multiple similarity algorithms (Levenshtein distance, Jaccard similarity, cosine similarity)
+//   - Machine learning techniques for semantic similarity detection
+//   - Configurable similarity thresholds per field type
+//   - Performance-optimized similarity computation with indexing
 func (rd *RecordDeduplicator) deduplicateBySimilarity(data map[string]interface{}) (map[string]interface{}, error) {
-	// TODO: Implement similarity-based deduplication
-	// This would use ML/fuzzy matching to detect similar records
+	// NOTE: Similarity-based deduplication not yet implemented.
+	// Future implementation would:
+	// 1. Use fuzzy string matching (Levenshtein distance, Jaccard similarity)
+	// 2. Apply ML techniques for semantic similarity detection
+	// 3. Define similarity thresholds for different field types
+	// 4. Skip records that are too similar to existing ones
+	// Currently passes all data through unchanged.
 	return data, nil
 }
 
@@ -228,16 +278,16 @@ type Enricher interface {
 // Enrich enriches data using configured enrichers
 func (de *DataEnricher) Enrich(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
 	enriched := make(map[string]interface{})
-	
+
 	// Copy original data
 	for k, v := range data {
 		enriched[k] = v
 	}
-	
+
 	if de.Parallel {
 		return de.enrichParallel(ctx, enriched)
 	}
-	
+
 	return de.enrichSequential(ctx, enriched)
 }
 
@@ -255,8 +305,13 @@ func (de *DataEnricher) enrichSequential(ctx context.Context, data map[string]in
 
 // enrichParallel enriches data in parallel
 func (de *DataEnricher) enrichParallel(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
-	// TODO: Implement parallel enrichment
-	// This would run enrichers concurrently and merge results
+	// NOTE: Parallel enrichment not yet implemented.
+	// Future implementation would:
+	// 1. Run enrichers concurrently using goroutines
+	// 2. Use context for timeout and cancellation
+	// 3. Collect and merge results from all enrichers
+	// 4. Handle partial failures gracefully
+	// Currently falls back to sequential enrichment.
 	return de.enrichSequential(ctx, data)
 }
 
@@ -290,7 +345,7 @@ func (om *OutputManager) Close() error {
 			errors = append(errors, err)
 		}
 	}
-	
+
 	if len(errors) > 0 {
 		return fmt.Errorf("failed to close outputs: %v", errors)
 	}

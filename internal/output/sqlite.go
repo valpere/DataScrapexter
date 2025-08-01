@@ -21,7 +21,7 @@ const (
 	DefaultSQLiteBusyTimeout = 5000    // milliseconds
 	DefaultSQLiteJournalMode = "WAL"   // Write-Ahead Logging for better concurrency
 	DefaultSQLiteForeignKeys = "on"    // Enable foreign key constraints
-	
+
 	// PRAGMA optimization parameters
 	DefaultSQLiteSynchronous = "NORMAL" // Balance between safety and performance
 	DefaultSQLiteCacheSize   = 10000    // Number of pages to cache
@@ -66,12 +66,12 @@ func NewSQLiteWriter(options SQLiteOptions) (*SQLiteWriter, error) {
 	if options.OnConflict == "" {
 		options.OnConflict = ConflictIgnore
 	}
-	
+
 	// Validate conflict strategy
 	if !IsValidConflictStrategy(options.OnConflict) {
 		return nil, fmt.Errorf("invalid conflict strategy: %s", options.OnConflict)
 	}
-	
+
 	// Validate table name using SQLite-specific validation
 	if err := ValidateSQLiteIdentifier(options.Table); err != nil {
 		return nil, fmt.Errorf("invalid table name: %w", err)
@@ -185,7 +185,7 @@ func (w *SQLiteWriter) createTable(data []map[string]interface{}) error {
 		UserTypes:   w.config.ColumnTypes,
 		QuoteFunc:   w.quoteIdentifier,
 	}
-	
+
 	columnDefs, err := builder.BuildColumnDefinitions()
 	if err != nil {
 		return err
@@ -334,7 +334,7 @@ func (w *SQLiteWriter) insertBatch(tx *sql.Tx, batch []map[string]interface{}) e
 	for _, col := range w.systemColumns {
 		systemColumnMap[col] = true
 	}
-	
+
 	for _, column := range w.columns {
 		if !systemColumnMap[column] {
 			insertColumns = append(insertColumns, column)
@@ -354,7 +354,7 @@ func (w *SQLiteWriter) insertBatch(tx *sql.Tx, batch []map[string]interface{}) e
 	switch w.config.OnConflict {
 	case ConflictIgnore:
 		query = fmt.Sprintf(`
-			INSERT OR IGNORE INTO %s (%s) 
+			INSERT OR IGNORE INTO %s (%s)
 			VALUES (%s)`,
 			w.quoteIdentifier(w.table),
 			strings.Join(columnList, ", "),
@@ -362,7 +362,7 @@ func (w *SQLiteWriter) insertBatch(tx *sql.Tx, batch []map[string]interface{}) e
 		)
 	case ConflictReplace:
 		query = fmt.Sprintf(`
-			INSERT OR REPLACE INTO %s (%s) 
+			INSERT OR REPLACE INTO %s (%s)
 			VALUES (%s)`,
 			w.quoteIdentifier(w.table),
 			strings.Join(columnList, ", "),
@@ -370,7 +370,7 @@ func (w *SQLiteWriter) insertBatch(tx *sql.Tx, batch []map[string]interface{}) e
 		)
 	default: // ConflictError or any other value
 		query = fmt.Sprintf(`
-			INSERT INTO %s (%s) 
+			INSERT INTO %s (%s)
 			VALUES (%s)`,
 			w.quoteIdentifier(w.table),
 			strings.Join(columnList, ", "),
@@ -447,7 +447,7 @@ func (w *SQLiteWriter) convertValue(value interface{}) interface{} {
 }
 
 // Close closes the SQLite connection
-// 
+//
 // IMPORTANT PERFORMANCE NOTE: If OptimizeOnClose is enabled, this method
 // will run PRAGMA optimize and incremental VACUUM operations before closing.
 // Full VACUUM can be EXTREMELY slow for large databases (minutes to hours) and will
@@ -515,19 +515,19 @@ func (w *SQLiteWriter) performDatabaseOptimization() error {
 	if _, err := w.db.Exec("PRAGMA optimize"); err != nil {
 		return fmt.Errorf("PRAGMA optimize failed: %w", err)
 	}
-	
+
 	// Use incremental_vacuum instead of full VACUUM for better performance
 	// This is non-blocking and more suitable for production environments
 	if _, err := w.db.Exec("PRAGMA incremental_vacuum"); err != nil {
 		// If incremental_vacuum fails, log but don't fail the close operation
 		log.Printf("Warning: PRAGMA incremental_vacuum failed: %v", err)
-		
+
 		// Note: A full VACUUM fallback is not implemented here because:
 		// 1. SQLite doesn't support VACUUM timeouts, making it potentially blocking
 		// 2. Full VACUUM can take minutes/hours on large databases
 		// 3. incremental_vacuum is the recommended approach for production
 		// For critical space recovery, run full VACUUM manually during maintenance windows.
 	}
-	
+
 	return nil
 }

@@ -57,7 +57,7 @@ func NewProxyManager(config *ProxyConfig) *ProxyManager {
 		managerLogger.Warn(fmt.Sprintf("Failed to build TLS config, using defaults: %v", err))
 		tlsConfig = GetDefaultTLSConfig()
 	}
-	
+
 	transport := &http.Transport{
 		TLSClientConfig: tlsConfig,
 	}
@@ -96,7 +96,7 @@ func (pm *ProxyManager) initializeProxies() error {
 
 	for _, provider := range pm.config.Providers {
 		if !provider.Enabled {
-			managerLogger.Debug(fmt.Sprintf("Skipping disabled proxy provider: %s (%s:%d)", 
+			managerLogger.Debug(fmt.Sprintf("Skipping disabled proxy provider: %s (%s:%d)",
 				provider.Name, provider.Host, provider.Port))
 			continue
 		}
@@ -214,7 +214,7 @@ func (pm *ProxyManager) getRoundRobinProxy() (*ProxyInstance, error) {
 	for i := 0; i < len(pm.proxies); i++ {
 		index := (startIndex + i) % len(pm.proxies)
 		proxy := pm.proxies[index]
-		
+
 		proxy.mu.RLock()
 		available := proxy.Status.Available && proxy.Status.FailureCount < pm.config.FailureThreshold
 		proxy.mu.RUnlock()
@@ -238,7 +238,7 @@ func (pm *ProxyManager) getRandomProxy() (*ProxyInstance, error) {
 	pm.rngMu.Lock()
 	index := pm.rng.Intn(len(availableProxies))
 	pm.rngMu.Unlock()
-	
+
 	return availableProxies[index], nil
 }
 
@@ -267,7 +267,7 @@ func (pm *ProxyManager) getWeightedProxy() (*ProxyInstance, error) {
 	pm.rngMu.Lock()
 	random := pm.rng.Intn(totalWeight)
 	pm.rngMu.Unlock()
-	
+
 	currentWeight := 0
 
 	for _, proxy := range availableProxies {
@@ -297,7 +297,7 @@ func (pm *ProxyManager) getHealthyProxy() (*ProxyInstance, error) {
 		availableProxies[j].mu.RLock()
 		defer availableProxies[i].mu.RUnlock()
 		defer availableProxies[j].mu.RUnlock()
-		
+
 		return availableProxies[i].Status.ResponseTime < availableProxies[j].Status.ResponseTime
 	})
 
@@ -307,13 +307,13 @@ func (pm *ProxyManager) getHealthyProxy() (*ProxyInstance, error) {
 // getAvailableProxies returns list of available proxies
 func (pm *ProxyManager) getAvailableProxies() []*ProxyInstance {
 	var available []*ProxyInstance
-	
+
 	for _, proxy := range pm.proxies {
 		proxy.mu.RLock()
 		isAvailable := proxy.Status.Available && proxy.Status.FailureCount < pm.config.FailureThreshold
 		lastFailure := proxy.Status.LastFailure
 		proxy.mu.RUnlock()
-		
+
 		// Check if proxy is in recovery period
 		if !isAvailable && time.Since(lastFailure) > pm.config.RecoveryTime {
 			proxy.mu.Lock()
@@ -362,7 +362,7 @@ func (pm *ProxyManager) ReportFailure(proxy *ProxyInstance, err error) {
 	proxy.mu.Lock()
 	proxy.Status.FailureCount++
 	proxy.Status.LastFailure = time.Now()
-	
+
 	// Mark proxy as unavailable if failure threshold exceeded
 	if proxy.Status.FailureCount >= pm.config.FailureThreshold {
 		proxy.Status.Available = false
@@ -500,7 +500,7 @@ func (pm *ProxyManager) HealthCheck() error {
 		wg.Add(1)
 		go func(p *ProxyInstance) {
 			defer wg.Done()
-			
+
 			start := time.Now()
 			err := pm.checkProxyHealth(p, checkURL)
 			duration := time.Since(start)
@@ -508,7 +508,7 @@ func (pm *ProxyManager) HealthCheck() error {
 			p.mu.Lock()
 			p.Status.LastChecked = time.Now()
 			p.Status.ResponseTime = duration
-			
+
 			if err != nil {
 				p.Status.FailureCount++
 				if p.Status.FailureCount >= pm.config.FailureThreshold {

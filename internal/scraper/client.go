@@ -151,7 +151,7 @@ func (c *HTTPClient) Do(req *http.Request) (*HTTPResponse, error) {
 	for attempt := 0; attempt <= c.config.RetryAttempts; attempt++ {
 		// Clone request for retry
 		reqClone := req.Clone(req.Context())
-		
+
 		// Set headers
 		c.setRequestHeaders(reqClone)
 
@@ -165,7 +165,7 @@ func (c *HTTPClient) Do(req *http.Request) (*HTTPResponse, error) {
 
 		if err != nil {
 			lastErr = fmt.Errorf("attempt %d failed: %w", attempt+1, err)
-			
+
 			if attempt < c.config.RetryAttempts {
 				backoff := c.calculateBackoff(attempt)
 				select {
@@ -183,7 +183,7 @@ func (c *HTTPClient) Do(req *http.Request) (*HTTPResponse, error) {
 		if readErr != nil {
 			resp.Body.Close()
 			lastErr = fmt.Errorf("failed to read response body: %w", readErr)
-			
+
 			if attempt < c.config.RetryAttempts {
 				backoff := c.calculateBackoff(attempt)
 				select {
@@ -208,7 +208,7 @@ func (c *HTTPClient) Do(req *http.Request) (*HTTPResponse, error) {
 		if c.shouldRetry(resp.StatusCode) && attempt < c.config.RetryAttempts {
 			resp.Body.Close()
 			lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
-			
+
 			backoff := c.calculateBackoff(attempt)
 			select {
 			case <-time.After(backoff):
@@ -233,7 +233,7 @@ func (c *HTTPClient) setRequestHeaders(req *http.Request) {
 		userAgent := c.config.UserAgents[c.userAgentIdx%len(c.config.UserAgents)]
 		c.userAgentIdx++
 		c.userAgentMux.Unlock()
-		
+
 		req.Header.Set("User-Agent", userAgent)
 	}
 
@@ -310,14 +310,14 @@ func (c *HTTPClient) shouldRetry(statusCode int) bool {
 // calculateBackoff calculates exponential backoff with jitter
 func (c *HTTPClient) calculateBackoff(attempt int) time.Duration {
 	backoff := time.Duration(math.Pow(2, float64(attempt))) * c.config.RetryBackoffBase
-	
+
 	if backoff > c.config.RetryBackoffMax {
 		backoff = c.config.RetryBackoffMax
 	}
-	
+
 	// Add jitter (up to 25% of backoff time)
 	jitter := time.Duration(float64(backoff) * 0.25 * (0.5 + (float64(time.Now().UnixNano()%1000) / 1000.0)))
-	
+
 	return backoff + jitter
 }
 
@@ -424,10 +424,10 @@ func (c *HTTPClient) SetCookie(name, value string) {
 func (c *HTTPClient) GetCurrentUserAgent() string {
 	c.userAgentMux.Lock()
 	defer c.userAgentMux.Unlock()
-	
+
 	if len(c.config.UserAgents) == 0 {
 		return "DataScrapexter/1.0"
 	}
-	
+
 	return c.config.UserAgents[c.userAgentIdx%len(c.config.UserAgents)]
 }

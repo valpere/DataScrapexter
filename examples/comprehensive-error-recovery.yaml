@@ -7,23 +7,23 @@ base_url: "https://unreliable-api.example.com"
 # Enhanced error recovery configuration
 error_recovery:
   enabled: true
-  
+
   # Circuit breakers for different operations
   circuit_breakers:
     fetch_document:
       max_failures: 3                   # Open circuit after 3 consecutive failures
       reset_timeout: "30s"              # Try again after 30 seconds
-    
+
     extract_field:
       max_failures: 5                   # More tolerant for field extraction
       reset_timeout: "60s"              # Longer recovery time
-  
+
   # Fallback strategies
   fallbacks:
     fetch_document:
       strategy: "cached"                # Use cached content if available
       cache_timeout: "5m"               # Cache is valid for 5 minutes
-    
+
     product_price:
       strategy: "default"               # Use default value if extraction fails
       default_value: 0.0
@@ -57,32 +57,32 @@ base_url: "https://shop.example.com"
 
 error_recovery:
   enabled: true
-  
+
   circuit_breakers:
     fetch_document:
       max_failures: 2                   # Very sensitive to fetch failures
       reset_timeout: "2m"               # Long recovery time for stability
-    
+
     extract_reviews:
       max_failures: 10                  # Reviews are optional, be tolerant
       reset_timeout: "5m"
-  
+
   fallbacks:
     fetch_document:
       strategy: "alternative"           # Try alternative scraping method
       alternative: "mobile_version"     # Could be a mobile version of the site
-    
+
     product_images:
       strategy: "cached"                # Use cached images if fetch fails
       cache_timeout: "1h"               # Images don't change often
-    
+
     product_reviews:
       strategy: "degrade"               # Return degraded response
       degraded:
         message: "Reviews temporarily unavailable"
         count: 0
         average_rating: null
-    
+
     product_availability:
       strategy: "default"
       default_value: false              # Assume out of stock if uncertain
@@ -93,7 +93,7 @@ fields:
     selector: "h1.product-name"
     type: "text"
     required: true
-    
+
   - name: "price"
     selector: ".price-current"
     type: "number"
@@ -102,16 +102,16 @@ fields:
         pattern: "\\$([0-9,]+\\.?[0-9]*)"
         replacement: "$1"
       - type: "remove_commas"
-    
+
   - name: "availability"
     selector: ".stock-status"
     type: "boolean"
-    
+
   - name: "images"
     selector: ".product-gallery img"
     type: "list"
     attribute: "src"
-    
+
   - name: "reviews"
     selector: ".review-item"
     type: "array"
@@ -122,7 +122,7 @@ browser:
   headless: true
   timeout: "45s"
   wait_for_element: ".product-details"
-  
+
 # Proxy with health checks
 proxy:
   enabled: true
@@ -143,29 +143,29 @@ base_url: "https://news.example.com"
 
 error_recovery:
   enabled: true
-  
+
   circuit_breakers:
     fetch_document:
       max_failures: 1                   # Fail fast for news sites
       reset_timeout: "10s"              # Quick recovery
-      
+
     extract_article_content:
       max_failures: 3
       reset_timeout: "30s"
-  
+
   fallbacks:
     fetch_document:
       strategy: "cached"
       cache_timeout: "30m"              # News can be cached longer
-      
+
     article_author:
       strategy: "default"
       default_value: "Unknown Author"
-      
+
     article_publish_date:
       strategy: "default"
       default_value: "Unknown Date"
-      
+
     article_tags:
       strategy: "degrade"
       degraded:
@@ -188,22 +188,22 @@ fields:
     selector: "h1.article-title"
     type: "text"
     required: true
-    
+
   - name: "content"
     selector: ".article-content"
     type: "text"
     required: true
-    
+
   - name: "author"
     selector: ".article-author"
     type: "text"
     required: false
-    
+
   - name: "publish_date"
     selector: ".publish-date"
     type: "text"
     required: false
-    
+
   - name: "tags"
     selector: ".article-tags .tag"
     type: "list"
@@ -217,21 +217,21 @@ base_url: "https://api.data-provider.com"
 
 error_recovery:
   enabled: true
-  
+
   circuit_breakers:
     fetch_document:
       max_failures: 5                   # APIs can be more flaky
       reset_timeout: "5m"               # Longer recovery for rate-limited APIs
-      
+
     parse_json_response:
       max_failures: 3
       reset_timeout: "1m"
-  
+
   fallbacks:
     fetch_document:
       strategy: "cached"
       cache_timeout: "15m"              # API responses can be cached
-      
+
     api_response:
       strategy: "degrade"
       degraded:
@@ -271,38 +271,38 @@ base_url: "https://aggregator.example.com"
 
 error_recovery:
   enabled: true
-  
+
   # Different recovery strategies for different content types
   circuit_breakers:
     fetch_document:
       max_failures: 3
       reset_timeout: "1m"
-      
+
     extract_product_info:
       max_failures: 2                   # Products are critical
       reset_timeout: "30s"
-      
+
     extract_reviews:
       max_failures: 8                   # Reviews are optional
       reset_timeout: "10m"
-      
+
     extract_images:
       max_failures: 5                   # Images are nice-to-have
       reset_timeout: "5m"
-  
+
   fallbacks:
     fetch_document:
       strategy: "cached"
       cache_timeout: "10m"
-      
+
     product_price:
       strategy: "default"
       default_value: "Price not available"
-      
+
     product_images:
       strategy: "cached"
       cache_timeout: "1h"
-      
+
     product_reviews:
       strategy: "degrade"
       degraded:
@@ -310,7 +310,7 @@ error_recovery:
         average_rating: null
         reviews: []
         message: "Reviews temporarily unavailable"
-        
+
     product_specifications:
       strategy: "alternative"
       alternative: "basic_specs_only"
@@ -332,23 +332,23 @@ fields:
     selector: "h1.product-title"
     type: "text"
     required: true
-    
+
   - name: "price"
     selector: ".price"
     type: "text"
     required: false
-    
+
   - name: "images"
     selector: ".product-images img"
     type: "list"
     attribute: "src"
     required: false
-    
+
   - name: "reviews"
     selector: ".review"
     type: "array"
     required: false
-    
+
   - name: "specifications"
     selector: ".specs-table tr"
     type: "array"
