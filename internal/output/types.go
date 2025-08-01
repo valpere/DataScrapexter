@@ -284,7 +284,16 @@ func ValidateColumnType(columnType string, dbType string) error {
 	return nil
 }
 
-// ColumnDefinitionBuilder helps build CREATE TABLE column definitions
+// ColumnDefinitionBuilder assists in constructing column definitions for SQL CREATE TABLE statements.
+// 
+// It is designed to support multiple database backends (such as PostgreSQL and SQLite) by managing
+// column names, types, user-defined types, and identifier quoting. The struct's fields allow you to
+// specify the target database type (DBType), the list of column names (Columns), a mapping of column
+// names to their SQL types (ColumnTypes), any user-defined types (UserTypes), and a function for
+// quoting identifiers (QuoteFunc) according to the database's requirements.
+//
+// Use the BuildColumnDefinitions method to generate a slice of column definition strings suitable
+// for inclusion in a CREATE TABLE statement, with appropriate validation and quoting.
 type ColumnDefinitionBuilder struct {
 	DBType      string
 	Columns     []string
