@@ -17,7 +17,9 @@ const (
 	VarcharLengthMultiplier = 2 // Multiplier for VARCHAR length to provide extra space
 )
 
-// PostgreSQLWriter writes data to PostgreSQL database
+// PostgreSQLWriter provides methods for writing data to a PostgreSQL database.
+// It manages the connection, table creation, and batch insertion of records.
+// Use NewPostgreSQLWriter to create an instance, then call Write to insert data.
 type PostgreSQLWriter struct {
 	db            *sql.DB
 	config        PostgreSQLOptions
