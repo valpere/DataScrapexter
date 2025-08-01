@@ -41,20 +41,24 @@ type MediaContentExtractor struct {
 	ExtractAudio  bool `yaml:"extract_audio" json:"extract_audio"`
 }
 
-// Extract processes raw data and extracts structured information
+// Extract processes raw data and extracts structured information.
+// 
+// Currently passes data through unchanged as primary extraction is handled by the scraper engine.
+// This component is designed for additional post-scraping extraction such as complex field processing,
+// nested data extraction, or custom transformation rules that require domain-specific logic.
+//
+// Future implementations will support:
+//   - Configurable extraction rules
+//   - Nested data structure processing  
+//   - Custom field transformations
+//   - Multi-source data merging
 func (de *DataExtractor) Extract(ctx context.Context, rawData map[string]interface{}) (map[string]interface{}, error) {
 	extracted := make(map[string]interface{})
 	
-	// Copy raw data as base
+	// Copy raw data as base - currently a pass-through operation
 	for k, v := range rawData {
 		extracted[k] = v
 	}
-	
-	// NOTE: Data extraction logic is currently handled by the scraper engine.
-	// This component is designed for additional post-scraping extraction
-	// such as complex field processing, nested data extraction, or 
-	// custom transformation rules. Currently passes data through unchanged.
-	// Future enhancement: Implement configurable extraction rules.
 	
 	return extracted, nil
 }
@@ -193,7 +197,17 @@ func (rd *RecordDeduplicator) Deduplicate(ctx context.Context, data map[string]i
 	}
 }
 
-// deduplicateByHash uses hash-based deduplication
+// deduplicateByHash performs hash-based duplicate detection and removal.
+//
+// Currently passes data through unchanged as hash-based deduplication is not yet implemented.
+// This method is designed to identify duplicate records by generating cryptographic hashes
+// of record content and maintaining a hash registry for comparison.
+//
+// Future implementation will support:
+//   - SHA256 hash generation for entire records or specified fields
+//   - In-memory hash set with configurable size limits
+//   - Persistent hash storage for cross-session deduplication
+//   - Configurable hash collision handling
 func (rd *RecordDeduplicator) deduplicateByHash(data map[string]interface{}) (map[string]interface{}, error) {
 	// NOTE: Hash-based deduplication not yet implemented.
 	// Future implementation would:
@@ -204,7 +218,17 @@ func (rd *RecordDeduplicator) deduplicateByHash(data map[string]interface{}) (ma
 	return data, nil
 }
 
-// deduplicateByField uses field-based deduplication
+// deduplicateByField performs field-based duplicate detection using specific field combinations.
+//
+// Currently passes data through unchanged as field-based deduplication is not yet implemented.
+// This method is designed to identify duplicate records by comparing values from specified
+// fields such as URLs, IDs, titles, or other unique identifiers.
+//
+// Future implementation will support:
+//   - Configurable field selection for uniqueness checking
+//   - Composite field combinations (e.g., URL + title)
+//   - Field value normalization and preprocessing
+//   - Memory-efficient field value storage with LRU eviction
 func (rd *RecordDeduplicator) deduplicateByField(data map[string]interface{}) (map[string]interface{}, error) {
 	// NOTE: Field-based deduplication not yet implemented.
 	// Future implementation would:
@@ -215,7 +239,17 @@ func (rd *RecordDeduplicator) deduplicateByField(data map[string]interface{}) (m
 	return data, nil
 }
 
-// deduplicateBySimilarity uses similarity-based deduplication
+// deduplicateBySimilarity performs advanced similarity-based duplicate detection using fuzzy matching.
+//
+// Currently passes data through unchanged as similarity-based deduplication is not yet implemented.
+// This method is designed to identify near-duplicate records using fuzzy string matching algorithms
+// and configurable similarity thresholds for intelligent duplicate detection.
+//
+// Future implementation will support:
+//   - Multiple similarity algorithms (Levenshtein distance, Jaccard similarity, cosine similarity)
+//   - Machine learning techniques for semantic similarity detection
+//   - Configurable similarity thresholds per field type
+//   - Performance-optimized similarity computation with indexing
 func (rd *RecordDeduplicator) deduplicateBySimilarity(data map[string]interface{}) (map[string]interface{}, error) {
 	// NOTE: Similarity-based deduplication not yet implemented.
 	// Future implementation would:
