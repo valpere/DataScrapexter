@@ -21,7 +21,14 @@ const (
 	FormatSQLite     OutputFormat = "sqlite"
 )
 
-// ConflictStrategy represents database conflict resolution strategies
+// ConflictStrategy defines strategies for handling conflicts during database operations,
+// such as inserting or updating rows. Conflict strategies determine how the database
+// should behave when a constraint violation (e.g., unique key conflict) occurs.
+//
+// Supported strategies include:
+//   - ConflictIgnore: Ignore the conflicting row (e.g., ON CONFLICT DO NOTHING, INSERT OR IGNORE).
+//   - ConflictError:  Fail the operation on conflict (default behavior).
+//   - ConflictReplace: Replace the existing row (SQLite only).
 type ConflictStrategy string
 
 // Common conflict strategies (supported by both PostgreSQL and SQLite)
