@@ -38,7 +38,9 @@ func buildDefaultConnectionParams() string {
 	)
 }
 
-// SQLiteWriter writes data to SQLite database
+// SQLiteWriter provides methods for writing data to a SQLite database.
+// It manages the database connection, table schema, and handles insertion of records.
+// Use NewSQLiteWriter to create an instance, then call its methods to insert data and manage the database lifecycle.
 type SQLiteWriter struct {
 	db            *sql.DB
 	config        SQLiteOptions
