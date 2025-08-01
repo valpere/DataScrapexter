@@ -226,19 +226,19 @@ func TestGenerateTemplate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.templateType, func(t *testing.T) {
 			config := GenerateTemplate(tt.templateType)
-			
+
 			if config.Name != tt.expectedName {
 				t.Errorf("expected name %s, got %s", tt.expectedName, config.Name)
 			}
-			
+
 			if config.BaseURL != tt.expectedURL {
 				t.Errorf("expected URL %s, got %s", tt.expectedURL, config.BaseURL)
 			}
-			
+
 			if len(config.Fields) == 0 {
 				t.Error("expected at least one field")
 			}
-			
+
 			// Validate the generated config
 			if err := config.Validate(); err != nil {
 				t.Errorf("generated config is invalid: %v", err)

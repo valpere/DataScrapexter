@@ -93,15 +93,15 @@ func setupTestServerWithRateLimit() *httptest.Server {
 
 func setupRoutes() http.Handler {
     r := mux.NewRouter()
-    
+
     r.HandleFunc("/health", healthHandler).Methods("GET")
     r.HandleFunc("/metrics", metricsHandler).Methods("GET")
-    
+
     api := r.PathPrefix("/api/v1").Subrouter()
     api.HandleFunc("/scrapers", createScraperHandler).Methods("POST")
     api.HandleFunc("/scrapers", listScrapersHandler).Methods("GET")
     api.HandleFunc("/scrapers/{id}", getScraperHandler).Methods("GET")
-    
+
     return r
 }
 
@@ -112,25 +112,25 @@ func authMiddleware(next http.Handler) http.Handler {
             http.Error(w, "Unauthorized", http.StatusUnauthorized)
             return
         }
-        
+
         if !strings.HasPrefix(authHeader, "Bearer ") {
             http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
             return
         }
-        
+
         token := strings.TrimPrefix(authHeader, "Bearer ")
         if !isValidAPIKey(token) {
             http.Error(w, "Invalid API key", http.StatusUnauthorized)
             return
         }
-        
+
         next.ServeHTTP(w, r)
     })
 }
 
 func rateLimitMiddleware(next http.Handler) http.Handler {
     limiter := rate.NewLimiter(rate.Limit(10), 20)
-    
+
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         if !limiter.Allow() {
             http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
@@ -183,7 +183,7 @@ func listScrapersHandler(w http.ResponseWriter, r *http.Request) {
 func getScraperHandler(w http.ResponseWriter, r *http.Request) {
     vars := mux.Vars(r)
     id := vars["id"]
-    
+
     w.Header().Set("Content-Type", "application/json")
     response := map[string]interface{}{
         "id":   id,

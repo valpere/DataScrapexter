@@ -63,7 +63,7 @@ func TestFieldExtractor_EnhancedTypes(t *testing.T) {
 			expected: int64(42),
 			wantErr:  false,
 		},
-		
+
 		// Boolean extraction
 		{
 			name: "Extract Boolean True",
@@ -164,7 +164,7 @@ func TestFieldExtractor_EnhancedTypes(t *testing.T) {
 			expected: true, // Checked attribute indicates true
 			wantErr:  false,
 		},
-		
+
 		// Date/Time extraction
 		{
 			name: "Extract Date",
@@ -188,7 +188,7 @@ func TestFieldExtractor_EnhancedTypes(t *testing.T) {
 			expected: "2023-12-25T15:30:00Z",
 			wantErr:  false,
 		},
-		
+
 		// URL extraction
 		{
 			name: "Extract URL from href",
@@ -234,7 +234,7 @@ func TestFieldExtractor_EnhancedTypes(t *testing.T) {
 			expected: "https://example.com/relative/page",
 			wantErr:  false,
 		},
-		
+
 		// Email extraction
 		{
 			name: "Extract Email from text",
@@ -258,7 +258,7 @@ func TestFieldExtractor_EnhancedTypes(t *testing.T) {
 			expected: "support@example.com",
 			wantErr:  false,
 		},
-		
+
 		// Phone extraction
 		{
 			name: "Extract Phone",
@@ -282,7 +282,7 @@ func TestFieldExtractor_EnhancedTypes(t *testing.T) {
 			expected: "0123456789",
 			wantErr:  false,
 		},
-		
+
 		// JSON extraction
 		{
 			name: "Extract JSON",
@@ -295,7 +295,7 @@ func TestFieldExtractor_EnhancedTypes(t *testing.T) {
 			expected: map[string]interface{}{"name": "John", "age": float64(30)},
 			wantErr:  false,
 		},
-		
+
 		// Table extraction
 		{
 			name: "Extract Table",
@@ -325,7 +325,7 @@ func TestFieldExtractor_EnhancedTypes(t *testing.T) {
 			},
 			wantErr: false,
 		},
-		
+
 		// Utility types
 		{
 			name: "Count Elements",
@@ -382,35 +382,35 @@ func TestFieldExtractor_EnhancedTypes(t *testing.T) {
 					t.Errorf("Expected result is not a map[string]interface{}")
 					return
 				}
-				
+
 				actualMap, ok := result.(map[string]interface{})
 				if !ok {
 					t.Errorf("Actual result is not a map[string]interface{}")
 					return
 				}
-				
+
 				// Safe assertion for headers
 				expectedHeaders, ok := expectedMap["headers"].([]string)
 				if !ok {
 					t.Errorf("Expected headers is not []string")
 					return
 				}
-				
+
 				actualHeaders, ok := actualMap["headers"].([]string)
 				if !ok {
 					t.Errorf("Actual headers is not []string")
 					return
 				}
-				
+
 				if len(actualHeaders) != len(expectedHeaders) {
-					t.Errorf("Headers length mismatch: expected %d, got %d", 
+					t.Errorf("Headers length mismatch: expected %d, got %d",
 						len(expectedHeaders), len(actualHeaders))
 				}
-				
+
 				if actualMap["count"] != expectedMap["count"] {
 					t.Errorf("Row count mismatch: expected %v, got %v", expectedMap["count"], actualMap["count"])
 				}
-				
+
 			case "json":
 				// Safe type assertions for JSON comparison
 				expectedMap, ok := tt.expected.(map[string]interface{})
@@ -418,20 +418,20 @@ func TestFieldExtractor_EnhancedTypes(t *testing.T) {
 					t.Errorf("Expected result is not a map[string]interface{}")
 					return
 				}
-				
+
 				actualMap, ok := result.(map[string]interface{})
 				if !ok {
 					t.Errorf("Actual result is not a map[string]interface{}")
 					return
 				}
-				
+
 				if expectedMap["name"] != actualMap["name"] {
 					t.Errorf("JSON name mismatch: expected %v, got %v", expectedMap["name"], actualMap["name"])
 				}
 				if expectedMap["age"] != actualMap["age"] {
 					t.Errorf("JSON age mismatch: expected %v, got %v", expectedMap["age"], actualMap["age"])
 				}
-				
+
 			default:
 				if result != tt.expected {
 					t.Errorf("Expected %v (%T), got %v (%T)", tt.expected, tt.expected, result, result)
@@ -463,7 +463,7 @@ func TestAdvancedTransformations(t *testing.T) {
 			expected: "banana",
 			wantErr:  false,
 		},
-		
+
 		// Substring transformation
 		{
 			name:  "Substring",
@@ -477,7 +477,7 @@ func TestAdvancedTransformations(t *testing.T) {
 			expected: "World",
 			wantErr:  false,
 		},
-		
+
 		// Truncate transformation
 		{
 			name:  "Truncate with ellipsis",
@@ -491,7 +491,7 @@ func TestAdvancedTransformations(t *testing.T) {
 			expected: "This is a very lo...",
 			wantErr:  false,
 		},
-		
+
 		// Title case transformation
 		{
 			name:  "Title Case",
@@ -502,7 +502,7 @@ func TestAdvancedTransformations(t *testing.T) {
 			expected: "Hello World From Go",
 			wantErr:  false,
 		},
-		
+
 		// Currency formatting
 		{
 			name:  "Format Currency USD",
@@ -557,7 +557,7 @@ func TestAdvancedTransformations(t *testing.T) {
 			expected: "€1500.75",
 			wantErr:  false,
 		},
-		
+
 		// Domain extraction
 		{
 			name:  "Extract Domain",
@@ -568,7 +568,7 @@ func TestAdvancedTransformations(t *testing.T) {
 			expected: "www.example.com",
 			wantErr:  false,
 		},
-		
+
 		// Filename extraction
 		{
 			name:  "Extract Filename",
@@ -579,7 +579,7 @@ func TestAdvancedTransformations(t *testing.T) {
 			expected: "photo.jpg",
 			wantErr:  false,
 		},
-		
+
 		// Capitalize words
 		{
 			name:  "Capitalize Words",
@@ -590,7 +590,7 @@ func TestAdvancedTransformations(t *testing.T) {
 			expected: "Hello World From Go",
 			wantErr:  false,
 		},
-		
+
 		// Remove duplicates
 		{
 			name:  "Remove Duplicates",
@@ -604,7 +604,7 @@ func TestAdvancedTransformations(t *testing.T) {
 			expected: "apple,banana,orange",
 			wantErr:  false,
 		},
-		
+
 		// Padding
 		{
 			name:  "Pad Left",
@@ -630,7 +630,7 @@ func TestAdvancedTransformations(t *testing.T) {
 			expected: "test....",
 			wantErr:  false,
 		},
-		
+
 		// Complex transformation chain
 		{
 			name:  "Complex Chain: Clean, Extract, Format",

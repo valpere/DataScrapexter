@@ -31,34 +31,34 @@ fields:
     transform:
       - type: "trim"
       - type: "normalize_spaces"
-  
+
   - name: "company_name"
     selector: ".company-name, .employer, .company"
     type: "list"
     required: true
     transform:
       - type: "trim"
-  
+
   - name: "job_url"
     selector: ".job-title a, .job-link, h2 a"
     type: "list"
     attribute: "href"
     required: true
-  
+
   - name: "location"
     selector: ".location, .job-location, .where"
     type: "list"
     transform:
       - type: "trim"
       - type: "normalize_spaces"
-  
+
   - name: "remote_type"
     selector: ".remote-type, .work-type"
     type: "list"
     transform:
       - type: "trim"
       - type: "lowercase"
-  
+
   # Salary information
   - name: "salary_range"
     selector: ".salary, .compensation, .pay-range"
@@ -66,7 +66,7 @@ fields:
     transform:
       - type: "trim"
       - type: "normalize_spaces"
-  
+
   - name: "salary_min"
     selector: ".salary"
     type: "list"
@@ -78,7 +78,7 @@ fields:
         pattern: ","
         replacement: ""
       - type: "parse_int"
-  
+
   - name: "salary_max"
     selector: ".salary"
     type: "list"
@@ -90,7 +90,7 @@ fields:
         pattern: ","
         replacement: ""
       - type: "parse_int"
-  
+
   # Job details
   - name: "job_type"
     selector: ".job-type, .employment-type"
@@ -98,28 +98,28 @@ fields:
     transform:
       - type: "trim"
       - type: "lowercase"
-  
+
   - name: "experience_level"
     selector: ".experience-level, .seniority"
     type: "list"
     transform:
       - type: "trim"
       - type: "lowercase"
-  
+
   - name: "posted_date"
     selector: ".posted-date, .date-posted, time"
     type: "list"
     attribute: "datetime"
     transform:
       - type: "trim"
-  
+
   - name: "posted_relative"
     selector: ".posted-date, .date-posted"
     type: "list"
     transform:
       - type: "trim"
       - type: "normalize_spaces"
-  
+
   # Job description and requirements
   - name: "description_summary"
     selector: ".job-summary, .description-preview"
@@ -127,20 +127,20 @@ fields:
     transform:
       - type: "trim"
       - type: "normalize_spaces"
-  
+
   - name: "key_skills"
     selector: ".skills .skill, .tag, .skill-tag"
     type: "list"
     transform:
       - type: "trim"
       - type: "lowercase"
-  
+
   # Application information
   - name: "application_url"
     selector: ".apply-button, .apply-link"
     type: "list"
     attribute: "href"
-  
+
   - name: "easy_apply"
     selector: ".easy-apply, .quick-apply"
     type: "list"
@@ -148,26 +148,26 @@ fields:
       - type: "regex"
         pattern: ".*"
         replacement: "true"
-  
+
   # Company information
   - name: "company_logo"
     selector: ".company-logo img, .employer-logo"
     type: "list"
     attribute: "src"
-  
+
   - name: "company_size"
     selector: ".company-size, .employees"
     type: "list"
     transform:
       - type: "trim"
-  
+
   - name: "industry"
     selector: ".industry, .company-industry"
     type: "list"
     transform:
       - type: "trim"
       - type: "lowercase"
-  
+
   # Benefits and perks
   - name: "benefits"
     selector: ".benefits li, .perks li"

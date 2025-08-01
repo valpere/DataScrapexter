@@ -244,12 +244,12 @@ func (d *Duration) UnmarshalJSON(data []byte) error {
     if err := json.Unmarshal(data, &s); err != nil {
         return err
     }
-    
+
     duration, err := time.ParseDuration(s)
     if err != nil {
         return fmt.Errorf("invalid duration format: %s", s)
     }
-    
+
     *d = Duration(duration)
     return nil
 }
@@ -288,17 +288,17 @@ func (u *URL) UnmarshalJSON(data []byte) error {
     if err := json.Unmarshal(data, &s); err != nil {
         return err
     }
-    
+
     if s == "" {
         u.URL = nil
         return nil
     }
-    
+
     parsed, err := url.Parse(s)
     if err != nil {
         return fmt.Errorf("invalid URL format: %s", s)
     }
-    
+
     u.URL = parsed
     return nil
 }
@@ -324,12 +324,12 @@ func NewURL(s string) (*URL, error) {
     if s == "" {
         return &URL{}, nil
     }
-    
+
     parsed, err := url.Parse(s)
     if err != nil {
         return nil, fmt.Errorf("invalid URL: %s", s)
     }
-    
+
     return &URL{URL: parsed}, nil
 }
 
@@ -359,12 +359,12 @@ func (r *Regex) UnmarshalJSON(data []byte) error {
     if err := json.Unmarshal(data, &pattern); err != nil {
         return err
     }
-    
+
     compiled, err := regexp.Compile(pattern)
     if err != nil {
         return fmt.Errorf("invalid regex pattern: %s", pattern)
     }
-    
+
     r.Regexp = compiled
     r.Pattern = pattern
     return nil
@@ -385,12 +385,12 @@ func NewRegex(pattern string) (*Regex, error) {
     if pattern == "" {
         return nil, fmt.Errorf("regex pattern cannot be empty")
     }
-    
+
     compiled, err := regexp.Compile(pattern)
     if err != nil {
         return nil, fmt.Errorf("invalid regex pattern: %s", pattern)
     }
-    
+
     return &Regex{
         Regexp:  compiled,
         Pattern: pattern,

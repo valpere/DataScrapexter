@@ -934,7 +934,7 @@ fields:
   - name: "price"
     selector: ".price-now, .current-price, .product-price, [itemprop='price']"
     type: "text"
-    
+
 # Set reasonable defaults
     transform:
       - type: "trim"

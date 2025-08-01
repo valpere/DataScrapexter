@@ -1,6 +1,6 @@
 {
     "// .vscode/settings.json": "VSCode workspace settings for DataScrapexter project",
-    
+
     "// Go language settings": "",
     "go.useLanguageServer": true,
     "go.lintTool": "golangci-lint",
@@ -56,7 +56,7 @@
             "useany": true
         }
     },
-    
+
     "// Editor settings": "",
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
@@ -91,7 +91,7 @@
     "editor.folding": true,
     "editor.foldingStrategy": "indentation",
     "editor.showFoldingControls": "mouseover",
-    
+
     "// File settings": "",
     "files.trimTrailingWhitespace": true,
     "files.insertFinalNewline": true,
@@ -131,7 +131,7 @@
         "go.mod": "go-mod",
         "go.sum": "go-sum"
     },
-    
+
     "// Search settings": "",
     "search.exclude": {
         "**/node_modules": true,
@@ -142,7 +142,7 @@
         "**/outputs": true,
         "**/cache": true
     },
-    
+
     "// Terminal settings": "",
     "terminal.integrated.env.linux": {
         "GO111MODULE": "on",
@@ -162,13 +162,13 @@
     "terminal.integrated.scrollback": 10000,
     "terminal.integrated.fontSize": 14,
     "terminal.integrated.fontFamily": "'JetBrains Mono', 'Fira Code', monospace",
-    
+
     "// Git settings": "",
     "git.ignoreLimitWarning": true,
     "git.confirmSync": false,
     "git.enableSmartCommit": true,
     "git.autofetch": true,
-    
+
     "// YAML settings": "",
     "yaml.schemas": {
         "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml",
@@ -178,12 +178,12 @@
     "yaml.validate": true,
     "yaml.hover": true,
     "yaml.completion": true,
-    
+
     "// Docker settings": "",
     "docker.images.label": "Tag",
     "docker.containers.label": "ContainerName",
     "docker.containers.description": ["Status"],
-    
+
     "// Language-specific settings": "",
     "[markdown]": {
         "editor.wordWrap": "on",
@@ -233,12 +233,12 @@
             "strings": true
         }
     },
-    
+
     "// Testing settings": "",
     "go.testEnvFile": "${workspaceFolder}/.env.test",
     "go.testExplorer.enable": true,
     "testing.automaticallyOpenPeekView": "failureInVisibleDocument",
-    
+
     "// Code coverage settings": "",
     "coverage-gutters.showGutterCoverage": true,
     "coverage-gutters.showLineCoverage": true,
@@ -251,22 +251,22 @@
         "coverage.json"
     ],
     "coverage-gutters.coverageReportFileName": "coverage/index.html",
-    
+
     "// Task settings": "",
     "task.autoDetect": "on",
     "task.quickOpen.history": 10,
-    
+
     "// Debug settings": "",
     "debug.console.fontSize": 14,
     "debug.console.wordWrap": false,
-    
+
     "// Problems settings": "",
     "problems.autoReveal": true,
     "problems.decorations.enabled": true,
-    
+
     "// Extensions settings": "",
     "extensions.ignoreRecommendations": false,
-    
+
     "// Spelling settings": "",
     "cSpell.words": [
         "datascrapexter",
@@ -397,7 +397,7 @@
             "addWords": true
         }
     },
-    
+
     "// Better Comments settings": "",
     "better-comments.tags": [
         {
@@ -446,7 +446,7 @@
             "italic": false
         }
     ],
-    
+
     "// Todo Tree settings": "",
     "todo-tree.tree.showScanModeButton": false,
     "todo-tree.highlights.enabled": true,
@@ -476,7 +476,7 @@
             "iconColour": "#98C379"
         }
     },
-    
+
     "// REST Client settings": "",
     "rest-client.environmentVariables": {
         "$shared": {
@@ -493,11 +493,11 @@
             "baseUrl": "https://api.datascrapexter.com"
         }
     },
-    
+
     "// Thunder Client settings": "",
     "thunder-client.saveToWorkspace": true,
     "thunder-client.workspaceRelativePath": ".thunder-client",
-    
+
     "// Error Lens settings": "",
     "errorLens.enabledDiagnosticLevels": [
         "error",
@@ -507,11 +507,11 @@
     "errorLens.excludeBySource": [],
     "errorLens.delay": 300,
     "errorLens.followCursor": "allLines",
-    
+
     "// SQL Tools settings": "",
     "sqltools.connections": [],
     "sqltools.useNodeRuntime": true,
-    
+
     "// Makefile Tools settings": "",
     "makefile.extensionOutputFolder": "./.vscode",
     "makefile.launchConfigurations": [
@@ -522,7 +522,7 @@
         }
     ],
     "makefile.makePath": "make",
-    
+
     "// Shell format settings": "",
     "shellformat.flag": "-i 4 -ci -sr",
     "shellformat.effectLanguages": [
@@ -535,45 +535,45 @@
         "properties",
         "jvmoptions"
     ],
-    
+
     "// Perl settings": "",
     "perl.perlInc": [],
     "perl.enableWarnings": true,
     "perl.perltidyProfile": "",
     "perl.perlcriticProfile": "",
-    
+
     "// Live Share settings": "",
     "liveshare.presence": true,
     "liveshare.showInStatusBar": "whileCollaborating",
-    
+
     "// GitLens settings": "",
     "gitlens.hovers.currentLine.over": "line",
     "gitlens.currentLine.enabled": false,
     "gitlens.codeLens.enabled": false,
     "gitlens.statusBar.enabled": false,
-    
+
     "// Project Manager settings": "",
     "projectManager.git.baseFolders": [
         "${workspaceFolder}"
     ],
-    
+
     "// Remote development settings": "",
     "remote.autoForwardPorts": true,
     "remote.restoreForwardedPorts": true,
-    
+
     "// Security settings": "",
     "security.workspace.trust.untrustedFiles": "open",
     "security.workspace.trust.banner": "always",
-    
+
     "// Telemetry settings": "",
     "telemetry.telemetryLevel": "off",
-    
+
     "// Update settings": "",
     "update.mode": "manual",
-    
+
     "// Window settings": "",
     "window.confirmBeforeClose": "keyboardOnly",
-    
+
     "// Workbench settings": "",
     "workbench.editor.enablePreview": true,
     "workbench.editor.highlightModifiedTabs": true,
@@ -581,14 +581,14 @@
     "workbench.editor.limit.value": 10,
     "workbench.editor.tabCloseButton": "right",
     "workbench.editor.tabSizing": "shrink",
-    
+
     "// Explorer settings": "",
     "explorer.confirmDelete": false,
     "explorer.confirmDragAndDrop": false,
-    
+
     "// Breadcrumbs settings": "",
     "breadcrumbs.enabled": true,
-    
+
     "// Outline settings": "",
     "outline.showVariables": true,
     "outline.showFunctions": true,

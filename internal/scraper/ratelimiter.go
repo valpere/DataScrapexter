@@ -43,7 +43,7 @@ const (
 	MaxHealthErrors           = 1000  // Maximum health errors to track (memory protection)
 	HealthCleanupInterval     = 100   // Clean up after every N error reports
 	// Retain 50% of entries when truncating to avoid frequent re-truncation.
-	// This approach minimizes the need for frequent re-truncation, which can be 
+	// This approach minimizes the need for frequent re-truncation, which can be
 	// computationally expensive, by proactively retaining only the most relevant entries.
 	HealthErrorsRetentionRatio = 0.5
 )
@@ -53,7 +53,7 @@ type AdaptiveRateLimiter struct {
 	// Core rate limiting
 	limiter *rate.Limiter
 	mu      sync.RWMutex
-	
+
 	// Configuration
 	baseInterval        time.Duration
 	baseBurstSize       int
@@ -63,7 +63,7 @@ type AdaptiveRateLimiter struct {
 	errorRateThreshold  float64
 	consecutiveErrLimit int
 	minChangeThreshold  float64
-	
+
 	// Adaptive behavior
 	errorCount      int
 	successCount    int
@@ -71,16 +71,16 @@ type AdaptiveRateLimiter struct {
 	lastAdaptation  time.Time
 	currentInterval time.Duration
 	currentBurst    int
-	
+
 	// Burst control
 	burstTokens     int
 	burstRefillRate time.Duration
 	lastBurstRefill time.Time
 	burstMu         sync.Mutex
-	
+
 	// Rate limiting strategies
 	strategy        RateLimitStrategy
-	
+
 	// Health tracking
 	healthWindow    time.Duration
 	healthErrors    []time.Time
@@ -107,7 +107,7 @@ type RateLimiterConfig struct {
 	Strategy             RateLimitStrategy `yaml:"strategy" json:"strategy"`
 	BurstRefillRate      time.Duration     `yaml:"burst_refill_rate" json:"burst_refill_rate"`
 	HealthWindow         time.Duration     `yaml:"health_window" json:"health_window"`
-	
+
 	// Adaptation sensitivity controls
 	AdaptationThreshold  time.Duration     `yaml:"adaptation_threshold" json:"adaptation_threshold"`   // Minimum time between adaptations
 	ErrorRateThreshold   float64           `yaml:"error_rate_threshold" json:"error_rate_threshold"`   // Error rate that triggers adaptation
@@ -169,7 +169,7 @@ func NewAdaptiveRateLimiter(config *RateLimiterConfig) *AdaptiveRateLimiter {
 		strategy:            config.Strategy,
 		burstRefillRate:     config.BurstRefillRate,
 		healthWindow:        config.HealthWindow,
-		
+
 		currentInterval: config.BaseInterval,
 		currentBurst:    config.BurstSize,
 		burstTokens:     config.BurstSize,
@@ -207,18 +207,18 @@ func (rl *AdaptiveRateLimiter) waitFixed(ctx context.Context, n int) error {
 	rl.mu.RLock()
 	limiter := rl.limiter
 	rl.mu.RUnlock()
-	
+
 	return limiter.WaitN(ctx, n)
 }
 
 // waitAdaptive implements adaptive rate limiting based on error rates
 func (rl *AdaptiveRateLimiter) waitAdaptive(ctx context.Context, n int) error {
 	rl.updateAdaptiveRate()
-	
+
 	rl.mu.RLock()
 	limiter := rl.limiter
 	rl.mu.RUnlock()
-	
+
 	return limiter.WaitN(ctx, n)
 }
 
@@ -228,7 +228,7 @@ func (rl *AdaptiveRateLimiter) waitBurst(ctx context.Context, n int) error {
 	if rl.tryConsumeBurstTokens(n) {
 		return nil
 	}
-	
+
 	// Fall back to regular rate limiting
 	return rl.waitFixed(ctx, n)
 }
@@ -237,17 +237,17 @@ func (rl *AdaptiveRateLimiter) waitBurst(ctx context.Context, n int) error {
 func (rl *AdaptiveRateLimiter) waitHybrid(ctx context.Context, n int) error {
 	// Update adaptive rate based on recent performance
 	rl.updateAdaptiveRate()
-	
+
 	// Try burst tokens first if available
 	if rl.tryConsumeBurstTokens(n) {
 		return nil
 	}
-	
+
 	// Use adaptive rate limiting
 	rl.mu.RLock()
 	limiter := rl.limiter
 	rl.mu.RUnlock()
-	
+
 	return limiter.WaitN(ctx, n)
 }
 
@@ -270,11 +270,11 @@ func (rl *AdaptiveRateLimiter) AllowN(n int) bool {
 		// Fall back to rate limiter
 		break
 	}
-	
+
 	rl.mu.RLock()
 	allowed := rl.limiter.AllowN(time.Now(), n)
 	rl.mu.RUnlock()
-	
+
 	return allowed
 }
 
@@ -292,15 +292,15 @@ func (rl *AdaptiveRateLimiter) ReportError() {
 	rl.errorCount++
 	rl.consecutiveErrs++
 	rl.mu.Unlock()
-	
+
 	// Track for health window with efficient memory management
 	rl.healthMu.Lock()
 	now := time.Now()
-	
+
 	// Add new error
 	rl.healthErrors = append(rl.healthErrors, now)
 	rl.healthErrorCount++
-	
+
 	// Implement memory protection: enforce maximum size
 	if len(rl.healthErrors) > MaxHealthErrors {
 		// Keep only the most recent entries based on retention ratio
@@ -308,12 +308,12 @@ func (rl *AdaptiveRateLimiter) ReportError() {
 		copy(rl.healthErrors, rl.healthErrors[len(rl.healthErrors)-keepCount:])
 		rl.healthErrors = rl.healthErrors[:keepCount]
 	}
-	
+
 	// Periodic cleanup based on counter (more efficient than every time)
 	if rl.healthErrorCount%HealthCleanupInterval == 0 {
 		rl.cleanupHealthErrors(now)
 	}
-	
+
 	rl.healthMu.Unlock()
 }
 
@@ -322,7 +322,7 @@ func (rl *AdaptiveRateLimiter) ReportError() {
 func (rl *AdaptiveRateLimiter) cleanupHealthErrors(now time.Time) {
 	cutoff := now.Add(-rl.healthWindow)
 	writeIndex := 0
-	
+
 	// Use in-place filtering to avoid slice allocation
 	for readIndex := 0; readIndex < len(rl.healthErrors); readIndex++ {
 		if rl.healthErrors[readIndex].After(cutoff) {
@@ -330,7 +330,7 @@ func (rl *AdaptiveRateLimiter) cleanupHealthErrors(now time.Time) {
 			writeIndex++
 		}
 	}
-	
+
 	// Truncate slice to new size and clear unused entries to prevent memory leaks
 	for i := writeIndex; i < len(rl.healthErrors); i++ {
 		rl.healthErrors[i] = time.Time{} // Zero value to help GC
@@ -342,20 +342,20 @@ func (rl *AdaptiveRateLimiter) cleanupHealthErrors(now time.Time) {
 func (rl *AdaptiveRateLimiter) tryConsumeBurstTokens(n int) bool {
 	rl.burstMu.Lock()
 	defer rl.burstMu.Unlock()
-	
+
 	// Refill burst tokens if enough time has passed
 	now := time.Now()
 	if now.Sub(rl.lastBurstRefill) >= rl.burstRefillRate {
 		rl.burstTokens = rl.currentBurst
 		rl.lastBurstRefill = now
 	}
-	
+
 	// Check if we have enough tokens
 	if rl.burstTokens >= n {
 		rl.burstTokens -= n
 		return true
 	}
-	
+
 	return false
 }
 
@@ -363,30 +363,30 @@ func (rl *AdaptiveRateLimiter) tryConsumeBurstTokens(n int) bool {
 func (rl *AdaptiveRateLimiter) updateAdaptiveRate() {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
-	
+
 	now := time.Now()
 	if now.Sub(rl.lastAdaptation) < rl.adaptationThreshold {
 		return // Don't adapt too frequently
 	}
-	
+
 	rl.lastAdaptation = now
-	
+
 	totalOperations := rl.successCount + rl.errorCount
 	if totalOperations == 0 {
 		return
 	}
-	
+
 	// Calculate error rate from total operations
 	errorRate := float64(rl.errorCount) / float64(totalOperations)
-	
+
 	// Adjust rate based on error rate and consecutive errors
 	var multiplier float64 = 1.0
-	
+
 	// Increase delays only if error rate exceeds threshold
 	if errorRate > rl.errorRateThreshold {
 		multiplier = 1 + (errorRate * ErrorRateMultiplier) // Up to 4x slower at 100% error rate
 	}
-	
+
 	// Additional penalty for consecutive errors
 	if rl.consecutiveErrs > rl.consecutiveErrLimit {
 		// Calculate ratio and apply it as an additional multiplier
@@ -394,20 +394,20 @@ func (rl *AdaptiveRateLimiter) updateAdaptiveRate() {
 		consecutiveMultiplier := math.Min(consecutiveRatio, MaxConsecutiveMultiplier)
 		multiplier *= consecutiveMultiplier
 	}
-	
+
 	// Calculate new interval
 	newInterval := time.Duration(float64(rl.baseInterval) * multiplier)
 	if newInterval > rl.maxInterval {
 		newInterval = rl.maxInterval
 	}
-	
+
 	// Only update if change is significant enough
 	changeRatio := math.Abs(float64(newInterval-rl.currentInterval)) / float64(rl.currentInterval)
 	if changeRatio >= rl.minChangeThreshold {
 		rl.currentInterval = newInterval
 		rl.limiter.SetLimit(rate.Every(newInterval))
 	}
-	
+
 	// Adjust burst size based on performance
 	newBurst := rl.baseBurstSize
 	if errorRate < BurstIncreaseThreshold { // Less than 5% errors - allow larger bursts
@@ -418,7 +418,7 @@ func (rl *AdaptiveRateLimiter) updateAdaptiveRate() {
 			newBurst = 1
 		}
 	}
-	
+
 	if newBurst != rl.currentBurst {
 		rl.currentBurst = newBurst
 		rl.limiter.SetBurst(newBurst)
@@ -429,7 +429,7 @@ func (rl *AdaptiveRateLimiter) updateAdaptiveRate() {
 func (rl *AdaptiveRateLimiter) GetStats() *RateLimiterStats {
 	rl.mu.RLock()
 	rl.healthMu.Lock()
-	
+
 	stats := &RateLimiterStats{
 		Strategy:         rl.strategy,
 		BaseInterval:     rl.baseInterval,
@@ -442,11 +442,11 @@ func (rl *AdaptiveRateLimiter) GetStats() *RateLimiterStats {
 		RecentErrors:     len(rl.healthErrors),
 		BurstTokens:      rl.burstTokens,
 	}
-	
+
 	if rl.successCount+rl.errorCount > 0 {
 		stats.ErrorRate = float64(rl.errorCount) / float64(rl.successCount+rl.errorCount)
 	}
-	
+
 	rl.healthMu.Unlock()
 	rl.mu.RUnlock()
 	return stats
@@ -479,7 +479,7 @@ func (rl *AdaptiveRateLimiter) Reset() {
 	rl.limiter.SetLimit(rate.Every(rl.baseInterval))
 	rl.limiter.SetBurst(rl.baseBurstSize)
 	rl.mu.Unlock()
-	
+
 	rl.healthMu.Lock()
 	// Clear health errors - use nil to free memory since this is a reset operation
 	// and we don't expect frequent resets that would benefit from capacity retention

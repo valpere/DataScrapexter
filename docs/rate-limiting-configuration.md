@@ -180,7 +180,7 @@ fmt.Printf("Burst tokens: %d\n", stats.BurstTokens)
 
 ### Too Aggressive Adaptation
 **Symptoms**: Frequent rate changes, slow scraping
-**Solutions**: 
+**Solutions**:
 - Increase `error_rate_threshold` (e.g., 0.15)
 - Increase `adaptation_threshold` (e.g., 2s)
 - Increase `min_change_threshold` (e.g., 0.2)

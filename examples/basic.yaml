@@ -5,7 +5,7 @@ fields:
     selector: ".quote .text"
     type: "text"
     required: true
-  - name: "author" 
+  - name: "author"
     selector: ".quote .author"
     type: "text"
     required: true

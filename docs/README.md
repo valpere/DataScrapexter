@@ -45,7 +45,7 @@ Welcome to the comprehensive documentation for DataScrapexter, a professional we
 ### 🚀 **User Documentation**
 Documentation for end users who want to use DataScrapexter for web scraping.
 
-### 🔧 **Developer Documentation** 
+### 🔧 **Developer Documentation**
 Documentation for developers who want to contribute to or extend DataScrapexter.
 
 ### 🏗️ **Architecture Documentation**

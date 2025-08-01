@@ -42,24 +42,24 @@ type MediaContentExtractor struct {
 }
 
 // Extract processes raw data and extracts structured information.
-// 
+//
 // Currently passes data through unchanged as primary extraction is handled by the scraper engine.
 // This component is designed for additional post-scraping extraction such as complex field processing,
 // nested data extraction, or custom transformation rules that require domain-specific logic.
 //
 // Future implementations will support:
 //   - Configurable extraction rules
-//   - Nested data structure processing  
+//   - Nested data structure processing
 //   - Custom field transformations
 //   - Multi-source data merging
 func (de *DataExtractor) Extract(ctx context.Context, rawData map[string]interface{}) (map[string]interface{}, error) {
 	extracted := make(map[string]interface{})
-	
+
 	// Copy raw data as base - currently a pass-through operation
 	for k, v := range rawData {
 		extracted[k] = v
 	}
-	
+
 	return extracted, nil
 }
 
@@ -84,16 +84,16 @@ type ValidationRule struct {
 // Validate validates data against defined rules
 func (dv *DataValidator) Validate(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
 	validated := make(map[string]interface{})
-	
+
 	// Copy input data
 	for k, v := range data {
 		validated[k] = v
 	}
-	
+
 	// Apply validation rules
 	for _, rule := range dv.Rules {
 		value, exists := validated[rule.Field]
-		
+
 		if !exists {
 			if rule.Required {
 				if dv.StrictMode {
@@ -106,7 +106,7 @@ func (dv *DataValidator) Validate(ctx context.Context, data map[string]interface
 			}
 			continue
 		}
-		
+
 		// Validate field type and constraints
 		if err := dv.validateField(rule, value); err != nil {
 			if dv.StrictMode {
@@ -120,7 +120,7 @@ func (dv *DataValidator) Validate(ctx context.Context, data map[string]interface
 			}
 		}
 	}
-	
+
 	return validated, nil
 }
 
@@ -164,7 +164,7 @@ func (dv *DataValidator) validateField(rule ValidationRule, value interface{}) e
 	default:
 		return fmt.Errorf("unknown validation type: %s", rule.Type)
 	}
-	
+
 	return nil
 }
 
@@ -174,7 +174,7 @@ type RecordDeduplicator struct {
 	Fields       []string `yaml:"fields,omitempty" json:"fields,omitempty"` // Fields to use for deduplication
 	Threshold    float64  `yaml:"threshold,omitempty" json:"threshold,omitempty"` // Similarity threshold
 	CacheSize    int      `yaml:"cache_size" json:"cache_size"`     // Size of deduplication cache
-	
+
 	seenHashes   map[string]bool
 	seenRecords  []map[string]interface{}
 }
@@ -184,7 +184,7 @@ func (rd *RecordDeduplicator) Deduplicate(ctx context.Context, data map[string]i
 	if rd.seenHashes == nil {
 		rd.seenHashes = make(map[string]bool)
 	}
-	
+
 	switch rd.Method {
 	case "hash":
 		return rd.deduplicateByHash(data)
@@ -277,16 +277,16 @@ type Enricher interface {
 // Enrich enriches data using configured enrichers
 func (de *DataEnricher) Enrich(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
 	enriched := make(map[string]interface{})
-	
+
 	// Copy original data
 	for k, v := range data {
 		enriched[k] = v
 	}
-	
+
 	if de.Parallel {
 		return de.enrichParallel(ctx, enriched)
 	}
-	
+
 	return de.enrichSequential(ctx, enriched)
 }
 
@@ -344,7 +344,7 @@ func (om *OutputManager) Close() error {
 			errors = append(errors, err)
 		}
 	}
-	
+
 	if len(errors) > 0 {
 		return fmt.Errorf("failed to close outputs: %v", errors)
 	}

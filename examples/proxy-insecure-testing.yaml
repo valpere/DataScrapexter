@@ -7,14 +7,14 @@ proxy:
   rotation: "round_robin"
   health_check: false  # Disabled for testing
   timeout: "15s"
-  
+
   # WARNING: INSECURE TLS Configuration - FOR TESTING ONLY!
   tls:
     # DANGER: This skips TLS certificate verification!
     # This makes connections vulnerable to man-in-the-middle attacks!
     # Only use this for testing with self-signed certificates or internal proxies!
     insecure_skip_verify: true
-  
+
   providers:
     - name: "test_proxy"
       type: "http"

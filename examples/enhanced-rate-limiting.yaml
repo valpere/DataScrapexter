@@ -28,7 +28,7 @@ rate_limiter:
   strategy: 1                   # 0=Fixed, 1=Adaptive, 2=Burst, 3=Hybrid
   burst_refill_rate: "10s"      # Refill burst tokens every 10 seconds
   health_window: "5m"           # Track errors over 5-minute window
-  
+
   # Adaptation sensitivity controls (optional - production defaults shown)
   adaptation_threshold: "1s"    # Minimum time between adaptations
   error_rate_threshold: 0.1     # Error rate that triggers adaptation (10%)
@@ -142,7 +142,7 @@ rate_limiter:
   strategy: 1                   # Pure adaptive strategy
   burst_refill_rate: "30s"      # Slow burst refill
   health_window: "30m"          # Long error tracking
-  
+
   # Very sensitive adaptation for fragile sites
   adaptation_threshold: "2s"    # Slower adaptation (don't overreact)
   error_rate_threshold: 0.05    # 5% error rate triggers adaptation (very sensitive)

@@ -33,7 +33,7 @@ fields:
     transform:
       - type: "trim"
       - type: "normalize_spaces"
-  
+
   - name: "price"
     selector: ".listing-price, .property-price, .price"
     type: "list"
@@ -41,7 +41,7 @@ fields:
     transform:
       - type: "clean_price"
       - type: "parse_int"  # Real estate prices are usually whole numbers
-  
+
   - name: "price_per_sqft"
     selector: ".price-per-sqft, .sqft-price"
     type: "list"
@@ -50,20 +50,20 @@ fields:
         pattern: ","
         replacement: ""
       - type: "parse_int"
-  
+
   - name: "property_type"
     selector: ".property-type, .home-type"
     type: "list"
     transform:
       - type: "trim"
       - type: "lowercase"
-  
+
   - name: "listing_url"
     selector: ".property-card a, .listing-link"
     type: "list"
     attribute: "href"
     required: true
-  
+
   # Property details
   - name: "bedrooms"
     selector: ".beds, .bedrooms, .bed-count"
@@ -73,7 +73,7 @@ fields:
         pattern: "(\\d+)\\s*(?:bed|bd)"
         replacement: "$1"
       - type: "parse_int"
-  
+
   - name: "bathrooms"
     selector: ".baths, .bathrooms, .bath-count"
     type: "list"
@@ -82,7 +82,7 @@ fields:
         pattern: "(\\d+(?:\\.\\d+)?)\\s*(?:bath|ba)"
         replacement: "$1"
       - type: "parse_float"
-  
+
   - name: "square_feet"
     selector: ".sqft, .square-feet, .area"
     type: "list"
@@ -94,7 +94,7 @@ fields:
         pattern: ","
         replacement: ""
       - type: "parse_int"
-  
+
   - name: "lot_size"
     selector: ".lot-size, .land-area"
     type: "list"
@@ -106,7 +106,7 @@ fields:
         pattern: ","
         replacement: ""
       - type: "parse_float"
-  
+
   - name: "year_built"
     selector: ".year-built, .built-year"
     type: "list"
@@ -115,7 +115,7 @@ fields:
         pattern: "(\\d{4})"
         replacement: "$1"
       - type: "parse_int"
-  
+
   # Listing information
   - name: "mls_number"
     selector: ".mls-number, .listing-id"
@@ -124,14 +124,14 @@ fields:
       - type: "regex"
         pattern: "MLS\\s*#?\\s*([A-Z0-9]+)"
         replacement: "$1"
-  
+
   - name: "listing_status"
     selector: ".status, .listing-status"
     type: "list"
     transform:
       - type: "trim"
       - type: "lowercase"
-  
+
   - name: "days_on_market"
     selector: ".days-on-market, .dom"
     type: "list"
@@ -140,14 +140,14 @@ fields:
         pattern: "(\\d+)\\s*days?"
         replacement: "$1"
       - type: "parse_int"
-  
+
   - name: "listing_date"
     selector: ".listing-date, time.listed"
     type: "list"
     attribute: "datetime"
     transform:
       - type: "trim"
-  
+
   # Property features
   - name: "property_description"
     selector: ".property-description, .listing-remarks"
@@ -155,13 +155,13 @@ fields:
     transform:
       - type: "trim"
       - type: "normalize_spaces"
-  
+
   - name: "features"
     selector: ".property-features li, .amenities li"
     type: "list"
     transform:
       - type: "trim"
-  
+
   - name: "garage_spaces"
     selector: ".garage, .parking"
     type: "list"
@@ -170,27 +170,27 @@ fields:
         pattern: "(\\d+)\\s*(?:car|space)"
         replacement: "$1"
       - type: "parse_int"
-  
+
   - name: "hoa_fee"
     selector: ".hoa-fee, .monthly-hoa"
     type: "list"
     transform:
       - type: "clean_price"
       - type: "parse_int"
-  
+
   # Location details
   - name: "neighborhood"
     selector: ".neighborhood, .area-name"
     type: "list"
     transform:
       - type: "trim"
-  
+
   - name: "school_district"
     selector: ".school-district, .schools"
     type: "list"
     transform:
       - type: "trim"
-  
+
   - name: "walk_score"
     selector: ".walk-score, .walkability"
     type: "list"
@@ -199,13 +199,13 @@ fields:
         pattern: "(\\d+)"
         replacement: "$1"
       - type: "parse_int"
-  
+
   # Images
   - name: "main_image"
     selector: ".property-photo img, .listing-image"
     type: "list"
     attribute: "src"
-  
+
   - name: "image_count"
     selector: ".photo-count, .image-count"
     type: "list"
@@ -214,20 +214,20 @@ fields:
         pattern: "(\\d+)"
         replacement: "$1"
       - type: "parse_int"
-  
+
   # Agent information
   - name: "agent_name"
     selector: ".agent-name, .listing-agent"
     type: "list"
     transform:
       - type: "trim"
-  
+
   - name: "agent_phone"
     selector: ".agent-phone, .contact-phone"
     type: "list"
     transform:
       - type: "trim"
-  
+
   - name: "brokerage"
     selector: ".brokerage-name, .agency"
     type: "list"

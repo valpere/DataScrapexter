@@ -112,7 +112,7 @@ func TestService_ExecuteWithRecovery_CachedFallback(t *testing.T) {
 	successOperation := func() (interface{}, error) {
 		return "cached_data", nil
 	}
-	
+
 	result := service.ExecuteWithRecovery(ctx, "cached_test", successOperation)
 	if !result.Success {
 		t.Fatal("Expected first operation to succeed")
@@ -186,7 +186,7 @@ func TestCircuitBreaker_Recovery(t *testing.T) {
 	failOperation := func() (interface{}, error) {
 		return nil, fmt.Errorf("service error")
 	}
-	
+
 	result := service.ExecuteWithRecovery(ctx, "recovery_test", failOperation)
 	if result.Success {
 		t.Error("Expected first operation to fail")
@@ -459,30 +459,30 @@ func TestService_AlternativeOperation_Strategies(t *testing.T) {
 
 func TestService_DefaultCircuitBreakerConfiguration(t *testing.T) {
 	service := NewService()
-	
+
 	// Trigger circuit breaker creation by executing an operation
 	ctx := context.Background()
 	failOperation := func() (interface{}, error) {
 		return nil, fmt.Errorf("test error")
 	}
-	
+
 	service.ExecuteWithRecovery(ctx, "default_config_test", failOperation)
-	
+
 	// Get circuit breaker stats to verify default configuration
 	stats := service.GetCircuitBreakerStats()
 	cbStats, exists := stats["default_config_test"]
 	if !exists {
 		t.Fatal("Expected circuit breaker to be created")
 	}
-	
+
 	cbStatsMap := cbStats.(map[string]interface{})
-	
+
 	// Verify default max failures
 	maxFailures := cbStatsMap["max_failures"].(int)
 	if maxFailures != DefaultCircuitBreakerMaxFailures {
 		t.Errorf("Expected max failures %d, got %d", DefaultCircuitBreakerMaxFailures, maxFailures)
 	}
-	
+
 	// Verify default reset timeout
 	resetTimeout := cbStatsMap["reset_timeout"].(time.Duration)
 	if resetTimeout != DefaultCircuitBreakerResetTimeout {
@@ -492,7 +492,7 @@ func TestService_DefaultCircuitBreakerConfiguration(t *testing.T) {
 
 func TestService_RetryableErrorPatterns(t *testing.T) {
 	service := NewService()
-	
+
 	testCases := []struct {
 		errorMessage string
 		shouldRetry  bool
@@ -504,14 +504,14 @@ func TestService_RetryableErrorPatterns(t *testing.T) {
 		{"permanent failure", false},       // Should not match any pattern
 		{"invalid request", false},         // Should not match any pattern
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.errorMessage, func(t *testing.T) {
 			err := fmt.Errorf("%s", tc.errorMessage)
 			shouldRetry := service.shouldRetry(err, 0) // First attempt
-			
+
 			if shouldRetry != tc.shouldRetry {
-				t.Errorf("Error '%s' - expected shouldRetry=%t, got %t", 
+				t.Errorf("Error '%s' - expected shouldRetry=%t, got %t",
 					tc.errorMessage, tc.shouldRetry, shouldRetry)
 			}
 		})

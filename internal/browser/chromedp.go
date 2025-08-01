@@ -71,7 +71,7 @@ func NewChromeClient(config *BrowserConfig) (*ChromeClient, error) {
 		config: config,
 		stats:  &BrowserStats{},
 	}
-	
+
 	// Initialize navigation state with proper synchronization
 	client.navMu.Lock()
 	client.navigationSuccess = false
@@ -103,7 +103,7 @@ func (c *ChromeClient) initialize() error {
 // Navigate navigates to a URL and waits for page load
 func (c *ChromeClient) Navigate(ctx context.Context, url string) error {
 	start := time.Now()
-	
+
 	tasks := []chromedp.Action{
 		chromedp.Navigate(url),
 		chromedp.WaitReady("body"),
@@ -121,7 +121,7 @@ func (c *ChromeClient) Navigate(ctx context.Context, url string) error {
 
 	err := chromedp.Run(c.ctx, tasks...)
 	loadTime := time.Since(start)
-	
+
 	if err != nil {
 		c.stats.Errors++
 		c.navMu.Lock()
@@ -149,11 +149,11 @@ func (c *ChromeClient) GetHTML(ctx context.Context) (string, error) {
 	c.navMu.RLock()
 	navSuccess := c.navigationSuccess
 	c.navMu.RUnlock()
-	
+
 	if !navSuccess {
 		return "", fmt.Errorf("cannot extract HTML: navigation has not completed successfully")
 	}
-	
+
 	var html string
 	err := chromedp.Run(c.ctx, chromedp.OuterHTML("html", &html))
 	if err != nil {
@@ -204,7 +204,7 @@ func (c *ChromeClient) SetViewport(ctx context.Context, width, height int) error
 	if err != nil {
 		return fmt.Errorf("viewport change failed: %w", err)
 	}
-	
+
 	c.config.ViewportWidth = width
 	c.config.ViewportHeight = height
 	return nil
@@ -238,7 +238,7 @@ func NewBrowserManager(config *BrowserConfig) (*BrowserManager, error) {
 	// Only create browser client if browser is enabled
 	var client BrowserClient
 	var err error
-	
+
 	if config.Enabled {
 		client, err = NewChromeClient(config)
 		if err != nil {

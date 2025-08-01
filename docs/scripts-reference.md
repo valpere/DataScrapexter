@@ -282,7 +282,7 @@ chmod +x .git/hooks/pre-commit
    ```bash
    # Edit crontab
    crontab -e
-   
+
    # Add scheduled tasks
    0 6 * * * cd /path/to/datascrapexter && ./scripts/daily_scrape.sh
    0 */4 * * * cd /path/to/datascrapexter && ./scripts/scrape_new_products.pl --listings outputs/latest.csv --history outputs/products --config configs/product.yaml

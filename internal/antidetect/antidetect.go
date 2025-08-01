@@ -35,7 +35,7 @@ func NewUserAgentRotator(agents []string) *UserAgentRotator {
 func (r *UserAgentRotator) GetNext() string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	agent := r.agents[r.index]
 	r.index = (r.index + 1) % len(r.agents)
 	return agent
@@ -45,7 +45,7 @@ func (r *UserAgentRotator) GetNext() string {
 func (r *UserAgentRotator) GetRandom() string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	return r.agents[rand.Intn(len(r.agents))]
 }
 
@@ -80,7 +80,7 @@ func NewProxyRotator(proxies []string) *ProxyRotator {
 	for _, proxy := range proxies {
 		healthy[proxy] = true
 	}
-	
+
 	return &ProxyRotator{
 		proxies: proxies,
 		healthy: healthy,
@@ -91,16 +91,16 @@ func NewProxyRotator(proxies []string) *ProxyRotator {
 func (pr *ProxyRotator) GetNext() string {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
-	
+
 	startIndex := pr.index
 	for {
 		proxy := pr.proxies[pr.index]
 		pr.index = (pr.index + 1) % len(pr.proxies)
-		
+
 		if pr.healthy[proxy] {
 			return proxy
 		}
-		
+
 		// If we've checked all proxies and none are healthy, return the first one
 		if pr.index == startIndex {
 			return pr.proxies[0]
@@ -137,7 +137,7 @@ func NewHeaderRotator() *HeaderRotator {
 // GetHeaders returns a set of headers
 func (hr *HeaderRotator) GetHeaders() http.Header {
 	headers := make(http.Header)
-	
+
 	headers.Set("User-Agent", hr.userAgentRotator.GetRandom())
 	headers.Set("Accept", getRandomAccept())
 	headers.Set("Accept-Language", getRandomAcceptLanguage())
@@ -145,7 +145,7 @@ func (hr *HeaderRotator) GetHeaders() http.Header {
 	headers.Set("DNT", "1")
 	headers.Set("Connection", "keep-alive")
 	headers.Set("Upgrade-Insecure-Requests", "1")
-	
+
 	return headers
 }
 
@@ -192,7 +192,7 @@ func NewSessionManager() *SessionManager {
 func (sm *SessionManager) CreateSession(id string) *Session {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	
+
 	jar, _ := cookiejar.New(nil)
 	session := &Session{
 		ID:       id,
@@ -201,7 +201,7 @@ func (sm *SessionManager) CreateSession(id string) *Session {
 		Created:  time.Now(),
 		LastUsed: time.Now(),
 	}
-	
+
 	sm.sessions[id] = session
 	return session
 }
@@ -210,7 +210,7 @@ func (sm *SessionManager) CreateSession(id string) *Session {
 func (sm *SessionManager) GetSession(id string) *Session {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
-	
+
 	if session, exists := sm.sessions[id]; exists {
 		session.LastUsed = time.Now()
 		return session
@@ -253,7 +253,7 @@ func (bf *BrowserFingerprinter) Generate() *BrowserFingerprint {
 	viewports := []Viewport{
 		{1920, 1080}, {1366, 768}, {1536, 864}, {1440, 900}, {1280, 720},
 	}
-	
+
 	languages := [][]string{
 		{"en-US", "en"},
 		{"en-GB", "en"},
@@ -261,15 +261,15 @@ func (bf *BrowserFingerprinter) Generate() *BrowserFingerprint {
 		{"de-DE", "de"},
 		{"es-ES", "es"},
 	}
-	
+
 	platforms := []string{
 		"Win32", "MacIntel", "Linux x86_64",
 	}
-	
+
 	timezones := []string{
 		"America/New_York", "Europe/London", "Europe/Paris", "Asia/Tokyo",
 	}
-	
+
 	return &BrowserFingerprint{
 		UserAgent: NewUserAgentRotator(nil).GetRandom(),
 		Viewport:  viewports[rand.Intn(len(viewports))],
@@ -301,23 +301,23 @@ func NewCaptchaDetector() *CaptchaDetector {
 // Detect detects CAPTCHA type in HTML content
 func (cd *CaptchaDetector) Detect(html string) (CaptchaType, bool) {
 	html = strings.ToLower(html)
-	
+
 	if strings.Contains(html, "g-recaptcha") {
 		return RecaptchaV2, true
 	}
-	
+
 	if strings.Contains(html, "recaptcha/api.js?render=") {
 		return RecaptchaV3, true
 	}
-	
+
 	if strings.Contains(html, "h-captcha") {
 		return HCaptcha, true
 	}
-	
+
 	if strings.Contains(html, "funcaptcha") || strings.Contains(html, "arkoselabs") {
 		return FunCaptcha, true
 	}
-	
+
 	return NoCaptcha, false
 }
 
@@ -364,12 +364,12 @@ func NewAntiDetectionClient(config *AntiDetectionConfig) *AntiDetectionClient {
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 	}
-	
+
 	var proxyRotator *ProxyRotator
 	if config.ProxyConfig.Enabled && len(config.ProxyConfig.URLs) > 0 {
 		proxyRotator = NewProxyRotator(config.ProxyConfig.URLs)
 	}
-	
+
 	return &AntiDetectionClient{
 		client:           client,
 		config:           config,
@@ -386,7 +386,7 @@ func (adc *AntiDetectionClient) Do(req *http.Request) (*http.Response, error) {
 	if adc.config.UserAgentRotation {
 		req.Header.Set("User-Agent", adc.userAgentRotator.GetRandom())
 	}
-	
+
 	if adc.config.HeaderRotation {
 		headers := adc.headerRotator.GetHeaders()
 		for key, values := range headers {
@@ -395,13 +395,13 @@ func (adc *AntiDetectionClient) Do(req *http.Request) (*http.Response, error) {
 			}
 		}
 	}
-	
+
 	// Add random delay
 	if adc.delayRandomizer != nil {
 		delay := adc.delayRandomizer.GetDelay()
 		time.Sleep(delay)
 	}
-	
+
 	// Execute request with retry logic
 	return adc.executeWithRetry(req)
 }
@@ -409,30 +409,30 @@ func (adc *AntiDetectionClient) Do(req *http.Request) (*http.Response, error) {
 // executeWithRetry executes a request with retry logic
 func (adc *AntiDetectionClient) executeWithRetry(req *http.Request) (*http.Response, error) {
 	var lastErr error
-	
+
 	for attempt := 0; attempt <= adc.config.RetryConfig.MaxRetries; attempt++ {
 		if attempt > 0 {
 			// Backoff delay
 			backoff := adc.calculateBackoff(attempt)
 			time.Sleep(backoff)
 		}
-		
+
 		resp, err := adc.client.Do(req)
 		if err != nil {
 			lastErr = err
 			continue
 		}
-		
+
 		// Check if we should retry based on status code
 		if adc.shouldRetry(resp.StatusCode) {
 			resp.Body.Close()
 			lastErr = fmt.Errorf("received status code %d", resp.StatusCode)
 			continue
 		}
-		
+
 		return resp, nil
 	}
-	
+
 	return nil, fmt.Errorf("request failed after %d attempts: %v", adc.config.RetryConfig.MaxRetries+1, lastErr)
 }
 

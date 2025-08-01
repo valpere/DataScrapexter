@@ -5,7 +5,7 @@
 ecommerce_advanced:
   name: "Advanced E-commerce Scraping"
   base_url: "https://shop.example.com/products/laptop-123"
-  
+
   fields:
     # Text with advanced transformations
     - name: "product_title"
@@ -19,7 +19,7 @@ ecommerce_advanced:
           params:
             length: 100
             suffix: "..."
-    
+
     # Number extraction and formatting
     - name: "price"
       selector: ".price-current"
@@ -33,26 +33,26 @@ ecommerce_advanced:
         - type: "format_currency"
           params:
             symbol: "$"
-    
+
     # Integer extraction
     - name: "stock_quantity"
       selector: ".stock-count"
       type: "integer"
       required: false
       default: 0
-    
+
     # Boolean availability
     - name: "in_stock"
       selector: ".stock-status"
       type: "boolean"
       required: true
-    
+
     # Date parsing
     - name: "release_date"
       selector: ".release-date"
       type: "date"
       required: false
-    
+
     # URL extraction and manipulation
     - name: "image_url"
       selector: ".product-image img"
@@ -60,37 +60,37 @@ ecommerce_advanced:
       required: false
       transform:
         - type: "extract_domain"
-    
+
     # Email extraction
     - name: "support_email"
       selector: ".contact-info a[href^='mailto:']"
       type: "email"
       required: false
-    
+
     # Phone number extraction
     - name: "support_phone"
       selector: ".contact-phone"
       type: "phone"
       required: false
-    
+
     # JSON data extraction
     - name: "product_specs"
       selector: "script[type='application/ld+json']"
       type: "json"
       required: false
-    
+
     # Table extraction
     - name: "specifications"
       selector: ".specs-table"
       type: "table"
       required: false
-    
+
     # Count utility
     - name: "review_count"
       selector: ".review-item"
       type: "count"
       required: false
-    
+
     # Exists utility
     - name: "has_warranty"
       selector: ".warranty-info"
@@ -103,7 +103,7 @@ ecommerce_advanced:
 news_advanced:
   name: "Advanced News Article Scraping"
   base_url: "https://news.example.com/article/123"
-  
+
   fields:
     # Title with text formatting
     - name: "headline"
@@ -113,7 +113,7 @@ news_advanced:
       transform:
         - type: "trim"
         - type: "title_case"
-    
+
     # Author extraction with cleanup
     - name: "author"
       selector: ".author-name"
@@ -124,13 +124,13 @@ news_advanced:
           pattern: "By\\s+(.+)"
           replacement: "$1"
         - type: "trim"
-    
+
     # Date/time parsing
     - name: "publish_date"
       selector: "time.publish-date"
       type: "datetime"
       required: true
-    
+
     # Content with length management
     - name: "summary"
       selector: ".article-summary"
@@ -142,7 +142,7 @@ news_advanced:
           params:
             length: 200
             suffix: "..."
-    
+
     # Tag extraction with deduplication
     - name: "tags"
       selector: ".tag-list .tag"
@@ -152,7 +152,7 @@ news_advanced:
         - type: "remove_duplicates"
           params:
             delimiter: ","
-    
+
     # Social media links
     - name: "share_urls"
       selector: ".social-share a"
@@ -167,7 +167,7 @@ news_advanced:
 real_estate_advanced:
   name: "Advanced Real Estate Scraping"
   base_url: "https://realestate.example.com/property/456"
-  
+
   fields:
     # Property title
     - name: "property_title"
@@ -177,7 +177,7 @@ real_estate_advanced:
       transform:
         - type: "trim"
         - type: "capitalize_words"
-    
+
     # Price with currency formatting
     - name: "price"
       selector: ".price"
@@ -191,7 +191,7 @@ real_estate_advanced:
         - type: "format_currency"
           params:
             symbol: "$"
-    
+
     # Square footage as number
     - name: "square_feet"
       selector: ".sqft"
@@ -199,18 +199,18 @@ real_estate_advanced:
       required: false
       transform:
         - type: "extract_numbers"
-    
+
     # Number of bedrooms/bathrooms
     - name: "bedrooms"
       selector: ".bedrooms"
       type: "integer"
       required: false
-    
+
     - name: "bathrooms"
       selector: ".bathrooms"
       type: "number"
       required: false
-    
+
     # Address with formatting
     - name: "address"
       selector: ".address"
@@ -219,30 +219,30 @@ real_estate_advanced:
       transform:
         - type: "trim"
         - type: "capitalize_words"
-    
+
     # Agent contact info
     - name: "agent_email"
       selector: ".agent-contact"
       type: "email"
       required: false
-    
+
     - name: "agent_phone"
       selector: ".agent-phone"
       type: "phone"
       required: false
-    
+
     # Property features as table
     - name: "features"
       selector: ".features-table"
       type: "table"
       required: false
-    
+
     # Virtual tour availability
     - name: "has_virtual_tour"
       selector: ".virtual-tour-link"
       type: "exists"
       required: false
-    
+
     # Photo count
     - name: "photo_count"
       selector: ".property-photos img"
@@ -255,7 +255,7 @@ real_estate_advanced:
 job_listing_advanced:
   name: "Advanced Job Listing Scraping"
   base_url: "https://jobs.example.com/job/789"
-  
+
   fields:
     # Job title
     - name: "job_title"
@@ -265,7 +265,7 @@ job_listing_advanced:
       transform:
         - type: "trim"
         - type: "title_case"
-    
+
     # Company name
     - name: "company"
       selector: ".company-name"
@@ -274,7 +274,7 @@ job_listing_advanced:
       transform:
         - type: "trim"
         - type: "capitalize_words"
-    
+
     # Salary range processing
     - name: "salary_min"
       selector: ".salary-range"
@@ -286,7 +286,7 @@ job_listing_advanced:
           replacement: "$1"
         - type: "remove_commas"
         - type: "parse_int"
-    
+
     - name: "salary_max"
       selector: ".salary-range"
       type: "text"
@@ -297,7 +297,7 @@ job_listing_advanced:
           replacement: "$1"
         - type: "remove_commas"
         - type: "parse_int"
-    
+
     # Location processing
     - name: "location"
       selector: ".job-location"
@@ -306,13 +306,13 @@ job_listing_advanced:
       transform:
         - type: "trim"
         - type: "capitalize_words"
-    
+
     # Remote work availability
     - name: "is_remote"
       selector: ".remote-badge"
       type: "exists"
       required: false
-    
+
     # Job type
     - name: "job_type"
       selector: ".job-type"
@@ -321,7 +321,7 @@ job_listing_advanced:
       transform:
         - type: "lowercase"
         - type: "capitalize_words"
-    
+
     # Skills required (list processing)
     - name: "required_skills"
       selector: ".skills-list .skill"
@@ -332,19 +332,19 @@ job_listing_advanced:
           params:
             delimiter: ","
         - type: "capitalize_words"
-    
+
     # Posted date
     - name: "posted_date"
       selector: ".posted-date"
       type: "date"
       required: false
-    
+
     # Application deadline
     - name: "deadline"
       selector: ".application-deadline"
       type: "date"
       required: false
-    
+
     # Description with length control
     - name: "description"
       selector: ".job-description"
@@ -357,19 +357,19 @@ job_listing_advanced:
           params:
             length: 500
             suffix: "..."
-    
+
     # Benefits table
     - name: "benefits"
       selector: ".benefits-table"
       type: "table"
       required: false
-    
+
     # Contact information
     - name: "hr_email"
       selector: ".contact-info"
       type: "email"
       required: false
-    
+
     # Application URL
     - name: "apply_url"
       selector: ".apply-button"
@@ -382,7 +382,7 @@ job_listing_advanced:
 electronics_comprehensive:
   name: "Comprehensive Electronics Scraping"
   base_url: "https://electronics.example.com/product/smartphone-xyz"
-  
+
   fields:
     # Product identification
     - name: "sku"
@@ -395,7 +395,7 @@ electronics_comprehensive:
           params:
             length: 10
             char: "0"
-    
+
     # Product name with cleanup
     - name: "product_name"
       selector: "h1.product-name"
@@ -408,25 +408,25 @@ electronics_comprehensive:
           params:
             length: 80
             suffix: "..."
-    
+
     # Price handling
     - name: "current_price"
       selector: ".price-current"
       type: "number"
       required: true
-    
+
     - name: "original_price"
       selector: ".price-original"
       type: "number"
       required: false
-    
+
     # Rating extraction
     - name: "rating"
       selector: ".rating-value"
       type: "number"
       required: false
       default: 0.0
-    
+
     # Review count
     - name: "review_count"
       selector: ".review-link"
@@ -436,19 +436,19 @@ electronics_comprehensive:
         - type: "regex"
           pattern: "\\((\\d+)\\s+reviews?\\)"
           replacement: "$1"
-    
+
     # Availability
     - name: "available"
       selector: ".availability"
       type: "boolean"
       required: true
-    
+
     # Technical specifications
     - name: "specifications"
       selector: ".tech-specs"
       type: "table"
       required: false
-    
+
     # Product images
     - name: "image_urls"
       selector: ".product-images img"
@@ -458,7 +458,7 @@ electronics_comprehensive:
         - type: "remove_duplicates"
           params:
             delimiter: ","
-    
+
     # Warranty information
     - name: "warranty_period"
       selector: ".warranty-info"
@@ -468,31 +468,31 @@ electronics_comprehensive:
         - type: "regex"
           pattern: "(\\d+)\\s+(?:year|month)s?"
           replacement: "$1"
-    
+
     # Shipping info
     - name: "free_shipping"
       selector: ".shipping-info"
       type: "boolean"
       required: false
-    
+
     # Related products count
     - name: "related_products_count"
       selector: ".related-products .product-card"
       type: "count"
       required: false
-    
+
     # Promotional offers
     - name: "has_promotion"
       selector: ".promotion-badge"
       type: "exists"
       required: false
-    
+
     # Delivery date
     - name: "estimated_delivery"
       selector: ".delivery-date"
       type: "date"
       required: false
-    
+
     # Brand information
     - name: "brand"
       selector: ".brand-name"
@@ -500,7 +500,7 @@ electronics_comprehensive:
       required: false
       transform:
         - type: "capitalize_words"
-    
+
     # Category breadcrumb
     - name: "category_path"
       selector: ".breadcrumb a"
@@ -510,7 +510,7 @@ electronics_comprehensive:
         - type: "remove_duplicates"
           params:
             delimiter: " > "
-    
+
     # Q&A section
     - name: "qa_count"
       selector: ".qa-section .question"

@@ -19,7 +19,7 @@ func TestPaginationIntegration(t *testing.T) {
 		if page == "" {
 			page = "1"
 		}
-		
+
 		var content string
 		switch page {
 		case "1":
@@ -52,7 +52,7 @@ func TestPaginationIntegration(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		
+
 		html := fmt.Sprintf(`
 			<!DOCTYPE html>
 			<html>
@@ -60,7 +60,7 @@ func TestPaginationIntegration(t *testing.T) {
 			<body>%s</body>
 			</html>
 		`, page, content)
-		
+
 		w.Header().Set("Content-Type", "text/html")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(html))
@@ -135,13 +135,13 @@ func TestPaginationIntegration(t *testing.T) {
 		}
 	})
 
-	// Test offset pagination  
+	// Test offset pagination
 	t.Run("Offset Pagination", func(t *testing.T) {
 		// Create a server for offset pagination
 		offsetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			offset := r.URL.Query().Get("offset")
 			limit := r.URL.Query().Get("limit")
-			
+
 			if offset == "" {
 				offset = "0"
 			}
@@ -344,7 +344,7 @@ func TestPaginationValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			configCopy := tt.config // Make a copy since we're passing a pointer
 			err := ValidatePaginationConfig(&configCopy)
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("Expected error but got none")

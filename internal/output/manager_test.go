@@ -48,7 +48,7 @@ func TestGetWriter(t *testing.T) {
 			expectedType: "*output.JSONWriter",
 		},
 		{
-			name:         "CSV writer", 
+			name:         "CSV writer",
 			format:       "csv",
 			expectError:  false,
 			expectedType: "*output.CSVWriter",

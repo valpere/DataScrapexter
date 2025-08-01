@@ -425,7 +425,7 @@ output:
   format: "json"
   file: "test-output.json"
 
-# config-prod.yaml  
+# config-prod.yaml
 rate_limit: "1s"      # Faster for production
 max_retries: 5        # More resilient
 output:

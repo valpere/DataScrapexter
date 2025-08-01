@@ -170,7 +170,7 @@ func (tr *TransformRule) Transform(ctx context.Context, input string) (string, e
 		// Extract numeric value handling various currency formats
 		// Step 1: Try to extract any reasonable numeric pattern using pre-compiled regex
 		numericMatch := currencyNumericRegex.FindString(strings.TrimSpace(input))
-		
+
 		if numericMatch == "" {
 			return input, nil
 		}

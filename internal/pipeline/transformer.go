@@ -118,12 +118,12 @@ func transformRegex(value, pattern, replacement string) (string, error) {
 	if pattern == "" {
 		return "", fmt.Errorf("regex pattern cannot be empty")
 	}
-	
+
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		return "", fmt.Errorf("invalid regex pattern: %w", err)
 	}
-	
+
 	return re.ReplaceAllString(value, replacement), nil
 }
 
@@ -132,12 +132,12 @@ func transformPrefix(value string, params map[string]interface{}) (string, error
 	if !ok {
 		return "", fmt.Errorf("prefix requires 'value' parameter")
 	}
-	
+
 	prefix, ok := prefixVal.(string)
 	if !ok {
 		return "", fmt.Errorf("prefix value must be string")
 	}
-	
+
 	return prefix + value, nil
 }
 
@@ -146,12 +146,12 @@ func transformSuffix(value string, params map[string]interface{}) (string, error
 	if !ok {
 		return "", fmt.Errorf("suffix requires 'value' parameter")
 	}
-	
+
 	suffix, ok := suffixVal.(string)
 	if !ok {
 		return "", fmt.Errorf("suffix value must be string")
 	}
-	
+
 	return value + suffix, nil
 }
 
@@ -160,22 +160,22 @@ func transformReplace(value string, params map[string]interface{}) (string, erro
 	if !ok {
 		return "", fmt.Errorf("replace requires 'old' parameter")
 	}
-	
+
 	newVal, ok := params["new"]
 	if !ok {
 		return "", fmt.Errorf("replace requires 'new' parameter")
 	}
-	
+
 	old, ok := oldVal.(string)
 	if !ok {
 		return "", fmt.Errorf("replace 'old' value must be string")
 	}
-	
+
 	new, ok := newVal.(string)
 	if !ok {
 		return "", fmt.Errorf("replace 'new' value must be string")
 	}
-	
+
 	return strings.ReplaceAll(value, old, new), nil
 }
 
@@ -192,16 +192,16 @@ func transformParseInt(value string) (string, error) {
 	cleaned := strings.TrimSpace(value)
 	re := regexp.MustCompile(`[^0-9-]`)
 	cleaned = re.ReplaceAllString(cleaned, "")
-	
+
 	if cleaned == "" {
 		return "0", nil
 	}
-	
+
 	_, err := strconv.ParseInt(cleaned, 10, 64)
 	if err != nil {
 		return "", fmt.Errorf("cannot parse as integer: %w", err)
 	}
-	
+
 	return cleaned, nil
 }
 
@@ -209,15 +209,15 @@ func transformParseFloat(value string) (string, error) {
 	cleaned := strings.TrimSpace(value)
 	re := regexp.MustCompile(`[^0-9.-]`)
 	cleaned = re.ReplaceAllString(cleaned, "")
-	
+
 	if cleaned == "" {
 		return "0", nil
 	}
-	
+
 	_, err := strconv.ParseFloat(cleaned, 64)
 	if err != nil {
 		return "", fmt.Errorf("cannot parse as float: %w", err)
 	}
-	
+
 	return cleaned, nil
 }

@@ -40,7 +40,7 @@ error_recovery:
     fetch_document:
       max_failures: 5                 # Open after 5 consecutive failures
       reset_timeout: "60s"            # Try again after 60 seconds
-    
+
     extract_field:
       max_failures: 3                 # More sensitive for critical operations
       reset_timeout: "30s"
@@ -111,7 +111,7 @@ The system automatically retries failed operations with intelligent backoff:
 ### Retryable Errors
 - Network timeouts
 - Connection refused
-- DNS resolution failures  
+- DNS resolution failures
 - HTTP 5xx errors
 - HTTP 429 (rate limit) errors
 - Temporary service unavailable
@@ -166,12 +166,12 @@ const (
 ```yaml
 error_recovery:
   enabled: true                       # Enable error recovery system
-  
+
   circuit_breakers:
     operation_name:
       max_failures: 5                 # Failures before opening circuit
       reset_timeout: "60s"            # Time before trying again
-  
+
   fallbacks:
     operation_name:
       strategy: "cached"              # Strategy: cached, default, alternative, degrade
@@ -206,7 +206,7 @@ circuit_breakers:
   fetch_document:
     max_failures: 2                   # Critical operation - fail fast
     reset_timeout: "60s"
-  
+
   extract_reviews:
     max_failures: 10                  # Optional data - more tolerant
     reset_timeout: "5m"
@@ -338,11 +338,11 @@ error_recovery:
     primary_source:
       strategy: "alternative"
       alternative: "secondary_source"
-    
+
     secondary_source:
       strategy: "cached"
       cache_timeout: "1h"
-    
+
     optional_data:
       strategy: "degrade"
       degraded:
@@ -359,11 +359,11 @@ error_recovery:
     high_res_images:
       strategy: "alternative"
       alternative: "low_res_images"
-    
+
     low_res_images:
       strategy: "default"
       default_value: "/images/placeholder.jpg"
-    
+
     detailed_specs:
       strategy: "degrade"
       degraded:

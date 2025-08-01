@@ -104,7 +104,7 @@ browser:
   timeout: "30s"
 
 ---
-# test/configs/news_test.yaml  
+# test/configs/news_test.yaml
 name: "news_test_scraper"
 base_url: "https://example-news.com"
 

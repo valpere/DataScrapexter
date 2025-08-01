@@ -139,34 +139,34 @@ func (hp *HTMLParser) ExtractTable(selector string) ([]map[string]string, error)
 // GetLinks extracts all links from the document
 func (hp *HTMLParser) GetLinks() []map[string]string {
 	var links []map[string]string
-	
+
 	hp.document.Find("a[href]").Each(func(i int, s *goquery.Selection) {
 		href, _ := s.Attr("href")
 		text := strings.TrimSpace(s.Text())
-		
+
 		links = append(links, map[string]string{
 			"href": href,
 			"text": text,
 		})
 	})
-	
+
 	return links
 }
 
 // GetImages extracts all images from the document
 func (hp *HTMLParser) GetImages() []map[string]string {
 	var images []map[string]string
-	
+
 	hp.document.Find("img[src]").Each(func(i int, s *goquery.Selection) {
 		src, _ := s.Attr("src")
 		alt, _ := s.Attr("alt")
-		
+
 		images = append(images, map[string]string{
 			"src": src,
 			"alt": alt,
 		})
 	})
-	
+
 	return images
 }
 
@@ -175,7 +175,7 @@ func (hp *HTMLParser) getDefaultValue(config FieldConfig) interface{} {
 	if config.Default != nil {
 		return config.Default
 	}
-	
+
 	switch config.Type {
 	case "text", "html", "attr":
 		return ""

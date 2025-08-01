@@ -132,11 +132,11 @@ func AssertFieldValue(data map[string]interface{}, fieldName string, expected in
 	if !exists {
 		return fmt.Errorf("field %s not found in data", fieldName)
 	}
-	
+
 	if actual != expected {
 		return fmt.Errorf("field %s: expected %v, got %v", fieldName, expected, actual)
 	}
-	
+
 	return nil
 }
 

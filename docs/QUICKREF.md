@@ -94,11 +94,11 @@ anti_detection:
     providers:
       - "http://proxy1:8080"
       - "http://proxy2:8080"
-  
+
   captcha:
     solver: "2captcha"         # 2captcha|anticaptcha|capmonster
     api_key: "${CAPTCHA_KEY}"
-  
+
   fingerprinting:
     randomize_viewport: true
     spoof_canvas: true
@@ -143,7 +143,7 @@ pagination:
   type: "next_button"          # next_button|url_pattern|offset|cursor
   selector: ".pagination .next"
   max_pages: 100
-  
+
   # URL pattern pagination
   # type: "url_pattern"
   # url_template: "https://site.com/page/{page}"
@@ -159,16 +159,16 @@ fields:
   - name: "title"
     selector: "h1"
     type: "text"               # Extract text content
-  
+
   - name: "link"
     selector: "a"
     type: "attr"               # Extract attribute
     attribute: "href"
-  
+
   - name: "content"
     selector: ".content"
     type: "html"               # Extract HTML content
-  
+
   - name: "tags"
     selector: ".tag"
     type: "list"               # Extract multiple elements
@@ -180,23 +180,23 @@ fields:
   - name: "price"
     selector: ".price"
     type: "number"             # Extract and parse number
-  
+
   - name: "in_stock"
     selector: ".stock"
     type: "boolean"            # Extract boolean value
-  
+
   - name: "published"
     selector: ".date"
     type: "date"               # Extract and parse date
-  
+
   - name: "url"
     selector: "a"
     type: "url"                # Extract and resolve URL
-  
+
   - name: "email"
     selector: ".contact"
     type: "email"              # Extract email address
-  
+
   - name: "phone"
     selector: ".phone"
     type: "phone"              # Extract phone number
@@ -212,19 +212,19 @@ transform:
   - type: "lowercase"          # Convert to lowercase
   - type: "uppercase"          # Convert to uppercase
   - type: "title_case"         # Convert to Title Case
-  
+
   - type: "regex"              # Regular expression replacement
     pattern: "\\$([0-9,]+)"
     replacement: "$1"
-  
+
   - type: "substring"          # Extract substring
     start: 0
     length: 100
-  
+
   - type: "split"              # Split string
     delimiter: ","
     index: 0                   # Take first part
-  
+
   - type: "parse_int"          # Parse as integer
   - type: "parse_float"        # Parse as float
   - type: "format_currency"    # Format as currency

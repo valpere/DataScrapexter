@@ -13,10 +13,10 @@
 //
 //	// URL manipulation
 //	absoluteURL := utils.ResolveURL(baseURL, relativeURL)
-//	
+//
 //	// String cleaning
 //	cleaned := utils.CleanString(dirtyHTML)
-//	
+//
 //	// Rate limiting
 //	limiter := utils.NewRateLimiter(2) // 2 requests per second
 //	limiter.Wait(ctx)
@@ -58,19 +58,19 @@ func CleanString(s string) string {
 	if s == "" {
 		return ""
 	}
-	
+
 	// Decode HTML entities
 	s = html.UnescapeString(s)
-	
+
 	// Remove zero-width characters
 	s = removeZeroWidth(s)
-	
+
 	// Normalize whitespace
 	s = normalizeWhitespace(s)
-	
+
 	// Trim leading and trailing whitespace
 	s = strings.TrimSpace(s)
-	
+
 	return s
 }
 
@@ -85,7 +85,7 @@ func removeZeroWidth(s string) string {
 		'\ufeff', // Zero-width no-break space (BOM)
 		'\u2060', // Word joiner
 	}
-	
+
 	// Build regex pattern
 	var pattern strings.Builder
 	pattern.WriteString("[")
@@ -93,7 +93,7 @@ func removeZeroWidth(s string) string {
 		pattern.WriteRune(r)
 	}
 	pattern.WriteString("]")
-	
+
 	re := regexp.MustCompile(pattern.String())
 	return re.ReplaceAllString(s, "")
 }
@@ -120,13 +120,13 @@ func TruncateString(s string, maxLen int) string {
 	if maxLen <= 0 || len(s) <= maxLen {
 		return s
 	}
-	
+
 	// Account for ellipsis
 	const ellipsis = "..."
 	if maxLen <= len(ellipsis) {
 		return ellipsis[:maxLen]
 	}
-	
+
 	// Truncate at rune boundary
 	truncated := truncateAtRuneBoundary(s, maxLen-len(ellipsis))
 	return truncated + ellipsis
@@ -137,13 +137,13 @@ func truncateAtRuneBoundary(s string, maxBytes int) string {
 	if len(s) <= maxBytes {
 		return s
 	}
-	
+
 	// Find the last valid rune boundary before maxBytes
 	truncated := s[:maxBytes]
 	for !utf8.ValidString(truncated) && len(truncated) > 0 {
 		truncated = truncated[:len(truncated)-1]
 	}
-	
+
 	return truncated
 }
 
@@ -153,7 +153,7 @@ func NormalizeSpace(s string) string {
 	// Convert newlines to spaces first
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = strings.ReplaceAll(s, "\r", " ")
-	
+
 	// Then normalize whitespace
 	return CleanString(s)
 }
@@ -181,19 +181,19 @@ func ResolveURL(baseURL, relativeURL string) string {
 	if relativeURL == "" {
 		return baseURL
 	}
-	
+
 	// Parse base URL
 	base, err := url.Parse(baseURL)
 	if err != nil {
 		return relativeURL
 	}
-	
+
 	// Parse relative URL
 	rel, err := url.Parse(relativeURL)
 	if err != nil {
 		return relativeURL
 	}
-	
+
 	// Resolve relative to base
 	resolved := base.ResolveReference(rel)
 	return resolved.String()
@@ -217,25 +217,25 @@ func IsValidURL(s string) bool {
 	if s == "" {
 		return false
 	}
-	
+
 	u, err := url.Parse(s)
 	if err != nil {
 		return false
 	}
-	
+
 	// Check scheme
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return false
 	}
-	
+
 	// Check host
 	if u.Host == "" {
 		return false
 	}
-	
+
 	// Additional validation can be added here
 	// e.g., checking for valid TLD, IP address format, etc.
-	
+
 	return true
 }
 
@@ -258,11 +258,11 @@ func NormalizeURL(rawURL string) string {
 	if err != nil {
 		return rawURL
 	}
-	
+
 	// Lowercase scheme and host
 	u.Scheme = strings.ToLower(u.Scheme)
 	u.Host = strings.ToLower(u.Host)
-	
+
 	// Remove default ports
 	if (u.Scheme == "http" && strings.HasSuffix(u.Host, ":80")) ||
 	   (u.Scheme == "https" && strings.HasSuffix(u.Host, ":443")) {
@@ -270,20 +270,20 @@ func NormalizeURL(rawURL string) string {
 			u.Host = u.Host[:idx]
 		}
 	}
-	
+
 	// Remove trailing slash from path
 	if u.Path != "/" {
 		u.Path = strings.TrimSuffix(u.Path, "/")
 	}
-	
+
 	// Clean and sort query parameters
 	if u.RawQuery != "" {
 		u.RawQuery = cleanQueryParams(u.Query())
 	}
-	
+
 	// Remove fragment
 	u.Fragment = ""
-	
+
 	return u.String()
 }
 
@@ -301,7 +301,7 @@ func cleanQueryParams(params url.Values) string {
 		"ref":          true,
 		"source":       true,
 	}
-	
+
 	// Filter out tracking parameters
 	cleaned := url.Values{}
 	for key, values := range params {
@@ -309,7 +309,7 @@ func cleanQueryParams(params url.Values) string {
 			cleaned[key] = values
 		}
 	}
-	
+
 	return cleaned.Encode()
 }
 
@@ -324,7 +324,7 @@ func ExtractDomain(rawURL string) string {
 	if err != nil {
 		return ""
 	}
-	
+
 	// Remove port if present
 	host := u.Hostname()
 	return strings.ToLower(host)
@@ -361,13 +361,13 @@ func IsNumeric(s string) bool {
 	if s == "" {
 		return false
 	}
-	
+
 	for _, r := range s {
 		if !unicode.IsDigit(r) {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -416,13 +416,13 @@ func GenerateID(length int) string {
 	if length <= 0 {
 		length = 16 // Default to 16 bytes (32 hex characters)
 	}
-	
+
 	bytes := make([]byte, length)
 	if _, err := rand.Read(bytes); err != nil {
 		// Fallback to timestamp-based ID if random fails
 		return fmt.Sprintf("%d", time.Now().UnixNano())
 	}
-	
+
 	return hex.EncodeToString(bytes)
 }
 
@@ -449,21 +449,21 @@ func HashString(s string) string {
 func GenerateSlug(s string) string {
 	// Convert to lowercase
 	s = strings.ToLower(s)
-	
+
 	// Replace spaces with hyphens
 	s = strings.ReplaceAll(s, " ", "-")
-	
+
 	// Remove non-alphanumeric characters except hyphens
 	re := regexp.MustCompile(`[^a-z0-9-]+`)
 	s = re.ReplaceAllString(s, "")
-	
+
 	// Remove multiple consecutive hyphens
 	re = regexp.MustCompile(`-+`)
 	s = re.ReplaceAllString(s, "-")
-	
+
 	// Trim hyphens from start and end
 	s = strings.Trim(s, "-")
-	
+
 	return s
 }
 
@@ -512,12 +512,12 @@ func CopyWithTimeout(dst io.Writer, src io.Reader, timeout time.Duration) (int64
 	done := make(chan struct{})
 	var n int64
 	var err error
-	
+
 	go func() {
 		n, err = io.Copy(dst, src)
 		close(done)
 	}()
-	
+
 	select {
 	case <-done:
 		return n, err
@@ -545,18 +545,18 @@ func Retry(fn RetryableFunc, maxAttempts int) error {
 	if maxAttempts <= 0 {
 		maxAttempts = 1
 	}
-	
+
 	var lastErr error
 	baseDelay := time.Second
 	maxDelay := 30 * time.Second
-	
+
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		if err := fn(); err == nil {
 			return nil
 		} else {
 			lastErr = err
 		}
-		
+
 		// Don't sleep after the last attempt
 		if attempt < maxAttempts-1 {
 			// Calculate exponential backoff
@@ -564,11 +564,11 @@ func Retry(fn RetryableFunc, maxAttempts int) error {
 			if delay > maxDelay {
 				delay = maxDelay
 			}
-			
+
 			time.Sleep(delay)
 		}
 	}
-	
+
 	return fmt.Errorf("failed after %d attempts: %w", maxAttempts, lastErr)
 }
 
@@ -587,25 +587,25 @@ func Parallel(funcs []func() error, maxConcurrent int) []error {
 	if maxConcurrent <= 0 {
 		maxConcurrent = len(funcs)
 	}
-	
+
 	semaphore := make(chan struct{}, maxConcurrent)
 	errors := make([]error, len(funcs))
 	var wg sync.WaitGroup
-	
+
 	for i, fn := range funcs {
 		wg.Add(1)
 		go func(index int, f func() error) {
 			defer wg.Done()
-			
+
 			// Acquire semaphore
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
-			
+
 			// Execute function
 			errors[index] = f()
 		}(i, fn)
 	}
-	
+
 	wg.Wait()
 	return errors
 }

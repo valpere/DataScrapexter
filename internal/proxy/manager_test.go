@@ -90,7 +90,7 @@ func TestProxyManager_GetProxy_RoundRobin(t *testing.T) {
 	// Debug: Check proxy initialization
 	stats := manager.GetStats()
 	t.Logf("Total proxies: %d, Healthy proxies: %d", stats.TotalProxies, stats.HealthyProxies)
-	
+
 	// Test round-robin rotation
 	seenProxies := make(map[string]bool)
 	for i := 0; i < 6; i++ { // Test 2 full rotations
@@ -136,7 +136,7 @@ func TestProxyManager_GetProxy_Random(t *testing.T) {
 		if proxy == nil {
 			t.Fatalf("GetProxy() returned nil proxy")
 		}
-		
+
 		// Check that proxy name is one of our configured proxies
 		validName := proxy.Provider.Name == "proxy1" || proxy.Provider.Name == "proxy2"
 		if !validName {
@@ -330,7 +330,7 @@ func TestBuildProxyURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url, err := manager.buildProxyURL(tt.provider)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("buildProxyURL() should return error for %s", tt.name)

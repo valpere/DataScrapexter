@@ -41,22 +41,22 @@ func DefaultBrowserConfig() *BrowserConfig {
 type BrowserClient interface {
 	// Navigate to a URL and wait for page load
 	Navigate(ctx context.Context, url string) error
-	
+
 	// GetHTML returns the current page HTML
 	GetHTML(ctx context.Context) (string, error)
-	
+
 	// WaitForElement waits for an element to appear
 	WaitForElement(ctx context.Context, selector string, timeout time.Duration) error
-	
+
 	// ExecuteScript runs JavaScript code
 	ExecuteScript(ctx context.Context, script string) (*interface{}, error)
-	
+
 	// Screenshot takes a screenshot of the page
 	Screenshot(ctx context.Context) ([]byte, error)
-	
+
 	// SetViewport sets the browser viewport size
 	SetViewport(ctx context.Context, width, height int) error
-	
+
 	// Close closes the browser
 	Close() error
 }
@@ -65,13 +65,13 @@ type BrowserClient interface {
 type Pool interface {
 	// Get retrieves a browser from the pool
 	Get(ctx context.Context) (BrowserClient, error)
-	
+
 	// Put returns a browser to the pool
 	Put(browser BrowserClient) error
-	
+
 	// Close closes all browsers in the pool
 	Close() error
-	
+
 	// Size returns the current pool size
 	Size() int
 }

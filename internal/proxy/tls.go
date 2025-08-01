@@ -44,7 +44,7 @@ func BuildTLSConfig(config *TLSConfig) (*tls.Config, error) {
 				logger.Error(fmt.Sprintf("Failed to read root CA file %s: %v", caFile, err))
 				return nil, fmt.Errorf("failed to read root CA file %s: %v", caFile, err)
 			}
-			
+
 			if !rootCAs.AppendCertsFromPEM(caCert) {
 				logger.Error(fmt.Sprintf("Failed to parse root CA certificate from %s", caFile))
 				return nil, fmt.Errorf("failed to parse root CA certificate from %s", caFile)
@@ -76,7 +76,7 @@ func ValidateTLSConfig(config *TLSConfig) error {
 	}
 
 	// Validate client certificate configuration
-	if (config.ClientCert != "" && config.ClientKey == "") || 
+	if (config.ClientCert != "" && config.ClientKey == "") ||
 	   (config.ClientCert == "" && config.ClientKey != "") {
 		return fmt.Errorf("both client_cert and client_key must be provided for mutual TLS")
 	}

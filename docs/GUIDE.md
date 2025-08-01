@@ -246,7 +246,7 @@ Found a gap in our documentation? We welcome contributions!
 
 ---
 
-**Need help navigating the documentation?** 
+**Need help navigating the documentation?**
 - Check our [FAQ](faq.md)
 - Join [GitHub Discussions](https://github.com/valpere/DataScrapexter/discussions)
 - Open an [Issue](https://github.com/valpere/DataScrapexter/issues) for documentation improvements

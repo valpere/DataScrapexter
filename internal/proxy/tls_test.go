@@ -130,11 +130,11 @@ func TestValidateTLSConfig_IncompleteClientAuth(t *testing.T) {
 
 func TestGetDefaultTLSConfig(t *testing.T) {
 	tlsConfig := GetDefaultTLSConfig()
-	
+
 	if tlsConfig.InsecureSkipVerify {
 		t.Errorf("Default TLS config should be secure")
 	}
-	
+
 	if tlsConfig.MinVersion == 0 {
 		t.Errorf("Default TLS config should specify minimum TLS version")
 	}

@@ -85,17 +85,17 @@ proxy:
   tls:
     insecure_skip_verify: false  # Always verify certificates
     min_version: "1.2"           # Minimum TLS version
-    
+
 # Database security
 database:
   connection_string: "${DATABASE_URL}"  # Use environment variables
-  
+
 # Rate limiting for protection
 rate_limit:
   strategy: "adaptive"
   base_delay: "2s"
   max_delay: "30s"
-  
+
 # Compliance settings
 compliance:
   respect_robots_txt: true

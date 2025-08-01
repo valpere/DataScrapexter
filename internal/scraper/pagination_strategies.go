@@ -15,10 +15,10 @@ import (
 type PaginationStrategy interface {
 	// GetNextURL returns the next URL to scrape, or empty string if done
 	GetNextURL(ctx context.Context, currentURL string, doc *goquery.Document, pageNum int) (string, error)
-	
+
 	// IsComplete returns true if pagination is complete
 	IsComplete(ctx context.Context, currentURL string, doc *goquery.Document, pageNum int) bool
-	
+
 	// GetName returns the strategy name
 	GetName() string
 }
@@ -58,7 +58,7 @@ func (os *OffsetStrategy) GetNextURL(ctx context.Context, currentURL string, doc
 
 	// Calculate next offset
 	nextOffset := os.StartOffset + (pageNum * os.Limit)
-	
+
 	// Check if we've reached the maximum offset
 	if os.MaxOffset > 0 && nextOffset >= os.MaxOffset {
 		return "", nil
@@ -98,12 +98,12 @@ type CursorStrategy struct {
 	LimitParam  string `yaml:"limit_param" json:"limit_param"`   // Default: "limit"
 	Limit       int    `yaml:"limit" json:"limit"`               // Items per page
 	MaxPages    int    `yaml:"max_pages" json:"max_pages"`       // Maximum pages to prevent infinite loops
-	
+
 	// Cursor extraction configuration
 	CursorSelector string `yaml:"cursor_selector" json:"cursor_selector"`     // CSS selector to find next cursor
 	CursorAttr     string `yaml:"cursor_attr" json:"cursor_attr"`             // Attribute containing cursor value
 	CursorPattern  string `yaml:"cursor_pattern" json:"cursor_pattern"`       // Regex pattern to extract cursor
-	
+
 	lastCursor string // Internal state to track the last cursor
 }
 
@@ -144,7 +144,7 @@ func (cs *CursorStrategy) GetNextURL(ctx context.Context, currentURL string, doc
 	if nextCursor == cs.lastCursor {
 		return "", nil
 	}
-	
+
 	cs.lastCursor = nextCursor
 
 	// Parse the base URL
@@ -328,7 +328,7 @@ func (nps *NumberedPagesStrategy) GetNextURL(ctx context.Context, currentURL str
 	}
 
 	nextPageNum := nps.StartPage + pageNum
-	
+
 	if nps.MaxPages > 0 && nextPageNum > nps.MaxPages {
 		return "", nil
 	}
@@ -385,7 +385,7 @@ func CreatePaginationStrategy(config PaginationConfig) (PaginationStrategy, erro
 			Limit:       config.PageSize,
 			MaxOffset:   config.MaxPages * config.PageSize,
 		}, nil
-		
+
 	case PaginationTypePages, "numbered":
 		return &NumberedPagesStrategy{
 			BaseURL:   "",
@@ -393,13 +393,13 @@ func CreatePaginationStrategy(config PaginationConfig) (PaginationStrategy, erro
 			StartPage: config.StartPage,
 			MaxPages:  config.MaxPages,
 		}, nil
-		
+
 	case PaginationTypeNextButton:
 		return &NextButtonStrategy{
 			Selector: config.NextSelector,
 			MaxPages: config.MaxPages,
 		}, nil
-		
+
 	case PaginationTypeURLPattern:
 		return &NumberedPagesStrategy{
 			BaseURL:   config.URLTemplate,
@@ -407,7 +407,7 @@ func CreatePaginationStrategy(config PaginationConfig) (PaginationStrategy, erro
 			StartPage: config.StartPage,
 			MaxPages:  config.MaxPages,
 		}, nil
-		
+
 	case "cursor":
 		return &CursorStrategy{
 			BaseURL:        "",
@@ -417,7 +417,7 @@ func CreatePaginationStrategy(config PaginationConfig) (PaginationStrategy, erro
 			MaxPages:       config.MaxPages,
 			CursorSelector: config.ScrollSelector,
 		}, nil
-		
+
 	default:
 		return nil, fmt.Errorf("unknown pagination strategy: %s", config.Type)
 	}

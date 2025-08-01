@@ -143,12 +143,12 @@ func TestHTTPClient_Get_MaxRetriesExceeded(t *testing.T) {
 	ctx := context.Background()
 
 	resp, _ := client.Get(ctx, server.URL)
-	
+
 	// Should get final response even after retries fail
 	if resp == nil {
 		t.Fatal("Expected response even after retries failed")
 	}
-	
+
 	if resp.StatusCode != 500 {
 		t.Errorf("Expected status 500, got %d", resp.StatusCode)
 	}
@@ -156,7 +156,7 @@ func TestHTTPClient_Get_MaxRetriesExceeded(t *testing.T) {
 	if resp.Attempts != 3 { // 1 initial + 2 retries
 		t.Errorf("Expected 3 attempts, got %d", resp.Attempts)
 	}
-	
+
 	// Since 500 errors return response but no Go error, check status
 	if resp.StatusCode < 400 {
 		t.Error("Expected error status code after max retries exceeded")
@@ -359,7 +359,7 @@ func TestHTTPClient_Stats(t *testing.T) {
 		if attempts == 1 {
 			w.WriteHeader(http.StatusInternalServerError) // 500 - triggers retry
 		} else if attempts == 2 {
-			w.WriteHeader(http.StatusBadGateway) // 502 - triggers retry  
+			w.WriteHeader(http.StatusBadGateway) // 502 - triggers retry
 		} else {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("Success"))

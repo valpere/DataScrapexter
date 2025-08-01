@@ -221,7 +221,7 @@ func TestProxy(provider *ProxyProvider, testURL string, timeout time.Duration) e
 	// Build proxy URL
 	proxyURLStr := fmt.Sprintf("%s://%s:%d", provider.Type, provider.Host, provider.Port)
 	if provider.Username != "" && provider.Password != "" {
-		proxyURLStr = fmt.Sprintf("%s://%s:%s@%s:%d", 
+		proxyURLStr = fmt.Sprintf("%s://%s:%s@%s:%d",
 			provider.Type, provider.Username, provider.Password, provider.Host, provider.Port)
 	}
 

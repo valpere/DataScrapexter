@@ -12,14 +12,14 @@
 
 ## ✨ Key Features
 
-🎯 **Universal Compatibility** - Scrape any website: e-commerce, news, directories, social media  
-🛡️ **Advanced Anti-Detection** - Proxy rotation, browser fingerprinting, CAPTCHA solving  
-⚙️ **Configuration-Driven** - No-code setup through YAML configuration  
-⚡ **High Performance** - Process 10,000+ pages/hour with Go's concurrency  
-🌐 **JavaScript Support** - Headless browser automation for dynamic content  
-⚖️ **Legal Compliance** - Built-in ethical scraping and compliance features  
-📊 **Multiple Outputs** - JSON, CSV, PostgreSQL, SQLite, and more  
-📈 **Real-time Monitoring** - Comprehensive metrics and health monitoring  
+🎯 **Universal Compatibility** - Scrape any website: e-commerce, news, directories, social media
+🛡️ **Advanced Anti-Detection** - Proxy rotation, browser fingerprinting, CAPTCHA solving
+⚙️ **Configuration-Driven** - No-code setup through YAML configuration
+⚡ **High Performance** - Process 10,000+ pages/hour with Go's concurrency
+🌐 **JavaScript Support** - Headless browser automation for dynamic content
+⚖️ **Legal Compliance** - Built-in ethical scraping and compliance features
+📊 **Multiple Outputs** - JSON, CSV, PostgreSQL, SQLite, and more
+📈 **Real-time Monitoring** - Comprehensive metrics and health monitoring
 
 ## 🚀 Quick Start
 
@@ -219,11 +219,11 @@ anti_detection:
     providers:
       - "http://proxy1:8080"
       - "http://proxy2:8080"
-  
+
   captcha:
     solver: "2captcha"
     api_key: "${CAPTCHA_API_KEY}"
-  
+
   fingerprinting:
     randomize_viewport: true
     spoof_canvas: true
@@ -252,7 +252,7 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - CAPTCHA_API_KEY=${CAPTCHA_API_KEY}
     command: run /app/configs/production.yaml
-    
+
   postgres:
     image: postgres:13
     environment:
@@ -271,7 +271,7 @@ package main
 import (
     "context"
     "log"
-    
+
     "github.com/valpere/DataScrapexter/pkg/scraper"
     "github.com/valpere/DataScrapexter/pkg/config"
 )
@@ -282,19 +282,19 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Create scraper
     s, err := scraper.New(cfg)
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Run scraping
     results, err := s.Scrape(context.Background())
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Process results
     for _, result := range results {
         log.Printf("Data: %+v", result.Data)
@@ -310,7 +310,7 @@ func main() {
 datascrapexter validate <config.yaml>     # Validate configuration
 datascrapexter template [--type <type>]   # Generate templates
 
-# Execution  
+# Execution
 datascrapexter run <config.yaml>          # Run scraper
 datascrapexter serve [--port 8080]        # Start API server
 
@@ -324,7 +324,7 @@ datascrapexter health                                 # Health check
 
 **Performance Metrics:**
 - **Throughput**: 10,000+ pages/hour per instance
-- **Concurrency**: 1,000+ concurrent goroutines  
+- **Concurrency**: 1,000+ concurrent goroutines
 - **Memory**: <100MB for typical workloads
 - **Latency**: <1200ns/op for HTTP operations
 
@@ -358,11 +358,11 @@ curl http://localhost:9090/metrics
 
 DataScrapexter includes built-in compliance features:
 
-✅ **Robots.txt Respect** - Automatic parsing and compliance  
-✅ **Rate Limiting** - Configurable delays to prevent overload  
-✅ **Transparent Identification** - Proper User-Agent headers  
-✅ **Data Privacy** - GDPR-compliant handling  
-✅ **Terms Monitoring** - Compliance checking tools  
+✅ **Robots.txt Respect** - Automatic parsing and compliance
+✅ **Rate Limiting** - Configurable delays to prevent overload
+✅ **Transparent Identification** - Proper User-Agent headers
+✅ **Data Privacy** - GDPR-compliant handling
+✅ **Terms Monitoring** - Compliance checking tools
 
 **Best Practices:**
 1. Always check robots.txt before scraping
@@ -411,7 +411,7 @@ curl http://localhost:9090/metrics | grep captcha_solve_rate
 
 **Need Help?** Check our [Troubleshooting Guide](docs/troubleshooting.md) or [FAQ](docs/faq.md).
 
-## 🗺️ Roadmap  
+## 🗺️ Roadmap
 
 | Version | Status | Features |
 |---------|--------|----------|

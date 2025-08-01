@@ -66,7 +66,7 @@ func IsValidConflictStrategy(strategy ConflictStrategy) bool {
 var (
 	// SQL identifier regex: starts with letter or underscore, contains letters, digits, underscores
 	sqlIdentifierRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
-	
+
 	// Reserved SQL keywords for PostgreSQL (from https://www.postgresql.org/docs/current/sql-keywords-appendix.html)
 	postgresReservedWords = map[string]bool{
 		"ALL": true, "ANALYSE": true, "ANALYZE": true, "AND": true, "ANY": true, "ARRAY": true, "AS": true, "ASC": true,
@@ -134,13 +134,13 @@ var (
 		"CIDR": true, "INET": true, "MACADDR": true, "BIT": true, "BIT VARYING": true,
 		"TSVECTOR": true, "TSQUERY": true, "UUID": true, "XML": true, "JSON": true, "JSONB": true,
 	}
-	
+
 	// Valid SQLite column types
 	sqliteColumnTypes = map[string]bool{
 		"NULL": true, "INTEGER": true, "REAL": true, "TEXT": true, "BLOB": true,
 		"NUMERIC": true, "BOOLEAN": true, "DATE": true, "DATETIME": true,
 	}
-	
+
 	// Common column type patterns (for VARCHAR(n), DECIMAL(p,s), DOUBLE PRECISION, etc.)
 	// Allows multi-word types like 'DOUBLE PRECISION' and 'CHARACTER VARYING'
 	columnTypePatternRegex = regexp.MustCompile(`^[A-Z]+(?: [A-Z]+)*(?:\([0-9]+(,[0-9]+)*\))?$`)
@@ -152,7 +152,7 @@ const (
 	SystemColumnCreatedAtType     = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP" // PostgreSQL format
 	SystemColumnCreatedAtSQLiteName = "created_at"                        // SQLite column name
 	SystemColumnCreatedAtSQLiteType = "DATETIME DEFAULT CURRENT_TIMESTAMP" // SQLite column type
-	
+
 	// Database-specific limits
 	MaxPostgreSQLIdentifierLength = 63  // PostgreSQL maximum identifier length
 	MaxSQLiteIdentifierLength     = 999 // SQLite maximum identifier length (much higher than PostgreSQL)
@@ -188,7 +188,7 @@ func HasTimeFormatPattern(s string) bool {
 	if len(s) < 8 || len(s) > 35 { // Reasonable time format length bounds
 		return false
 	}
-	
+
 	for _, pattern := range compiledTimeFormatPatterns {
 		if len(s) >= pattern.minLen && len(s) <= pattern.maxLen {
 			if pattern.pattern.MatchString(s) {
@@ -196,7 +196,7 @@ func HasTimeFormatPattern(s string) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -211,20 +211,20 @@ func ValidatePostgreSQLIdentifier(identifier string) error {
 	if identifier == "" {
 		return fmt.Errorf("identifier cannot be empty")
 	}
-	
+
 	if len(identifier) > MaxPostgreSQLIdentifierLength {
 		return fmt.Errorf("identifier too long (max %d characters): %s", MaxPostgreSQLIdentifierLength, identifier)
 	}
-	
+
 	if !sqlIdentifierRegex.MatchString(identifier) {
 		return fmt.Errorf("invalid identifier format: %s", identifier)
 	}
-	
+
 	upperIdent := strings.ToUpper(identifier)
 	if postgresReservedWords[upperIdent] {
 		return fmt.Errorf("identifier is a reserved SQL keyword: %s", identifier)
 	}
-	
+
 	return nil
 }
 
@@ -233,20 +233,20 @@ func ValidateSQLiteIdentifier(identifier string) error {
 	if identifier == "" {
 		return fmt.Errorf("identifier cannot be empty")
 	}
-	
+
 	if len(identifier) > MaxSQLiteIdentifierLength {
 		return fmt.Errorf("identifier too long (max %d characters): %s", MaxSQLiteIdentifierLength, identifier)
 	}
-	
+
 	if !sqlIdentifierRegex.MatchString(identifier) {
 		return fmt.Errorf("invalid identifier format: %s", identifier)
 	}
-	
+
 	upperIdent := strings.ToUpper(identifier)
 	if sqliteReservedWords[upperIdent] {
 		return fmt.Errorf("identifier is a reserved SQL keyword: %s", identifier)
 	}
-	
+
 	return nil
 }
 
@@ -255,18 +255,18 @@ func ValidateColumnType(columnType string, dbType string) error {
 	if columnType == "" {
 		return fmt.Errorf("column type cannot be empty")
 	}
-	
+
 	// Normalize to uppercase for comparison
 	upperType := strings.ToUpper(strings.TrimSpace(columnType))
-	
+
 	// Check if it matches a pattern (like VARCHAR(255))
 	if !columnTypePatternRegex.MatchString(upperType) {
 		return fmt.Errorf("invalid column type format: %s", columnType)
 	}
-	
+
 	// Extract base type (remove parentheses and parameters)
 	baseType := strings.Split(upperType, "(")[0]
-	
+
 	// Validate against database-specific types
 	switch dbType {
 	case "postgresql":
@@ -280,12 +280,12 @@ func ValidateColumnType(columnType string, dbType string) error {
 	default:
 		return fmt.Errorf("unsupported database type: %s", dbType)
 	}
-	
+
 	return nil
 }
 
 // ColumnDefinitionBuilder assists in constructing column definitions for SQL CREATE TABLE statements.
-// 
+//
 // It is designed to support multiple database backends (such as PostgreSQL and SQLite) by managing
 // column names, types, user-defined types, and identifier quoting. The struct's fields allow you to
 // specify the target database type (DBType), the list of column names (Columns), a mapping of column
@@ -306,7 +306,7 @@ type ColumnDefinitionBuilder struct {
 // Returns the column definitions slice and any validation errors
 func (cdb *ColumnDefinitionBuilder) BuildColumnDefinitions() ([]string, error) {
 	var columnDefs []string
-	
+
 	for _, column := range cdb.Columns {
 		// Validate column name for SQL safety based on database type
 		var err error
@@ -318,11 +318,11 @@ func (cdb *ColumnDefinitionBuilder) BuildColumnDefinitions() ([]string, error) {
 		default:
 			err = ValidateSQLIdentifier(column) // Default validation
 		}
-		
+
 		if err != nil {
 			return nil, fmt.Errorf("invalid column name '%s': %w", column, err)
 		}
-		
+
 		columnType := cdb.ColumnTypes[column]
 		// Override with user-specified types if provided
 		if userType, exists := cdb.UserTypes[column]; exists {
@@ -332,16 +332,16 @@ func (cdb *ColumnDefinitionBuilder) BuildColumnDefinitions() ([]string, error) {
 			}
 			columnType = userType
 		}
-		
+
 		// Use the provided quote function to quote identifiers
 		quotedColumn := column
 		if cdb.QuoteFunc != nil {
 			quotedColumn = cdb.QuoteFunc(column)
 		}
-		
+
 		columnDefs = append(columnDefs, fmt.Sprintf("%s %s", quotedColumn, columnType))
 	}
-	
+
 	return columnDefs, nil
 }
 
@@ -471,7 +471,7 @@ type PostgreSQLOptions struct {
 	ColumnTypes      map[string]string `yaml:"column_types,omitempty" json:"column_types,omitempty"`
 }
 
-// SQLiteOptions defines SQLite-specific options  
+// SQLiteOptions defines SQLite-specific options
 type SQLiteOptions struct {
 	DatabasePath     string            `yaml:"database_path" json:"database_path"`
 	Table            string            `yaml:"table" json:"table"`
