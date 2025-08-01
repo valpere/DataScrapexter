@@ -387,9 +387,9 @@ func (w *SQLiteWriter) insertBatch(tx *sql.Tx, batch []map[string]interface{}) e
 	return nil
 }
 
-// quoteIdentifier quotes SQLite identifiers using square brackets
+// quoteIdentifier quotes SQLite identifiers using double quotes
 func (w *SQLiteWriter) quoteIdentifier(identifier string) string {
-	return "[" + strings.ReplaceAll(identifier, "]", "]]") + "]"
+	return `"` + strings.ReplaceAll(identifier, `"`, `""`) + `"`
 }
 
 // convertValue converts Go values to SQLite-compatible values
