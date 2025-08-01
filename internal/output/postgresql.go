@@ -125,12 +125,13 @@ func (w *PostgreSQLWriter) createTable(data []map[string]interface{}) error {
 		if userType, exists := w.config.ColumnTypes[column]; exists {
 			columnType = userType
 		}
+		// PostgreSQL uses double quotes for identifier quoting (SQL standard)
 		columnDefs = append(columnDefs, fmt.Sprintf("%s %s", w.quoteIdentifier(column), columnType))
 	}
 
 	// Add system columns (created_at timestamp column)
 	columnDefs = append(columnDefs, "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-	// Note: systemColumns are already initialized in constructor, no need to append here
+	// Note: systemColumns are initialized in constructor and handled separately in INSERT operations
 
 	var queryBuilder strings.Builder
 	queryBuilder.WriteString("CREATE TABLE IF NOT EXISTS ")
@@ -300,21 +301,6 @@ func (w *PostgreSQLWriter) insertBatch(batch []map[string]interface{}) error {
 	var query string
 	switch w.config.OnConflict {
 	case "ignore":
-		query = fmt.Sprintf(`
-			INSERT INTO %s.%s (%s) 
-			VALUES %s 
-			ON CONFLICT DO NOTHING`,
-			w.quoteIdentifier(w.schema),
-			w.quoteIdentifier(w.table),
-			strings.Join(quotedColumns, ", "),
-			strings.Join(placeholders, ", "),
-		)
-	case "update":
-		// Use ON CONFLICT DO NOTHING for safety
-		// Since we can't assume which columns have unique constraints,
-		// we use DO NOTHING instead of attempting updates. For true upsert functionality,
-		// users should configure unique constraints in their table schema and use
-		// a different conflict resolution strategy.
 		query = fmt.Sprintf(`
 			INSERT INTO %s.%s (%s) 
 			VALUES %s 

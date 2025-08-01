@@ -149,12 +149,14 @@ func (w *SQLiteWriter) createTable(data []map[string]interface{}) error {
 		if userType, exists := w.config.ColumnTypes[column]; exists {
 			columnType = userType
 		}
+		// SQLite uses square brackets for identifier quoting (also supports double quotes)
+		// but square brackets are more commonly used in SQLite contexts
 		columnDefs = append(columnDefs, fmt.Sprintf("[%s] %s", column, columnType))
 	}
 
 	// Add system columns (created_at timestamp column)
 	columnDefs = append(columnDefs, "created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
-	// Note: systemColumns are already initialized in constructor, no need to append here
+	// Note: systemColumns are initialized in constructor and handled separately in INSERT operations
 
 	query := `
 		CREATE TABLE IF NOT EXISTS [` + w.table + `] (

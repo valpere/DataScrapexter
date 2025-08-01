@@ -145,7 +145,7 @@ type PostgreSQLOptions struct {
 	Schema           string            `yaml:"schema,omitempty" json:"schema,omitempty"`
 	BatchSize        int               `yaml:"batch_size,omitempty" json:"batch_size,omitempty"`
 	CreateTable      bool              `yaml:"create_table,omitempty" json:"create_table,omitempty"`
-	OnConflict       string            `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // PostgreSQL: "ignore", "update", "error". Note: "update" does not perform updates; it uses DO NOTHING to ignore conflicts for safety.
+	OnConflict       string            `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // PostgreSQL: "ignore", "error". Use "ignore" for ON CONFLICT DO NOTHING behavior.
 	ColumnTypes      map[string]string `yaml:"column_types,omitempty" json:"column_types,omitempty"`
 }
 
