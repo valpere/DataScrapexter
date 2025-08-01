@@ -50,9 +50,11 @@ func (de *DataExtractor) Extract(ctx context.Context, rawData map[string]interfa
 		extracted[k] = v
 	}
 	
-	// TODO: Implement actual extraction logic
-	// This would involve using the selector engines to extract data
-	// based on configuration rules
+	// NOTE: Data extraction logic is currently handled by the scraper engine.
+	// This component is designed for additional post-scraping extraction
+	// such as complex field processing, nested data extraction, or 
+	// custom transformation rules. Currently passes data through unchanged.
+	// Future enhancement: Implement configurable extraction rules.
 	
 	return extracted, nil
 }
@@ -193,22 +195,35 @@ func (rd *RecordDeduplicator) Deduplicate(ctx context.Context, data map[string]i
 
 // deduplicateByHash uses hash-based deduplication
 func (rd *RecordDeduplicator) deduplicateByHash(data map[string]interface{}) (map[string]interface{}, error) {
-	// TODO: Implement hash-based deduplication
-	// This would generate a hash of the entire record or specific fields
+	// NOTE: Hash-based deduplication not yet implemented.
+	// Future implementation would:
+	// 1. Generate SHA256 hash of entire record or specified fields
+	// 2. Maintain hash set in memory or persistent storage
+	// 3. Skip records with duplicate hashes
+	// Currently passes all data through unchanged.
 	return data, nil
 }
 
 // deduplicateByField uses field-based deduplication
 func (rd *RecordDeduplicator) deduplicateByField(data map[string]interface{}) (map[string]interface{}, error) {
-	// TODO: Implement field-based deduplication
-	// This would check specific fields for duplicates
+	// NOTE: Field-based deduplication not yet implemented.
+	// Future implementation would:
+	// 1. Extract values from specified fields (e.g., URL, ID, title)
+	// 2. Maintain field value sets in memory or persistent storage
+	// 3. Skip records with duplicate field combinations
+	// Currently passes all data through unchanged.
 	return data, nil
 }
 
 // deduplicateBySimilarity uses similarity-based deduplication
 func (rd *RecordDeduplicator) deduplicateBySimilarity(data map[string]interface{}) (map[string]interface{}, error) {
-	// TODO: Implement similarity-based deduplication
-	// This would use ML/fuzzy matching to detect similar records
+	// NOTE: Similarity-based deduplication not yet implemented.
+	// Future implementation would:
+	// 1. Use fuzzy string matching (Levenshtein distance, Jaccard similarity)
+	// 2. Apply ML techniques for semantic similarity detection
+	// 3. Define similarity thresholds for different field types
+	// 4. Skip records that are too similar to existing ones
+	// Currently passes all data through unchanged.
 	return data, nil
 }
 
@@ -255,8 +270,13 @@ func (de *DataEnricher) enrichSequential(ctx context.Context, data map[string]in
 
 // enrichParallel enriches data in parallel
 func (de *DataEnricher) enrichParallel(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
-	// TODO: Implement parallel enrichment
-	// This would run enrichers concurrently and merge results
+	// NOTE: Parallel enrichment not yet implemented.
+	// Future implementation would:
+	// 1. Run enrichers concurrently using goroutines
+	// 2. Use context for timeout and cancellation
+	// 3. Collect and merge results from all enrichers
+	// 4. Handle partial failures gracefully
+	// Currently falls back to sequential enrichment.
 	return de.enrichSequential(ctx, data)
 }
 

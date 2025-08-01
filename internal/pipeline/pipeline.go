@@ -325,7 +325,7 @@ func (dp *DataPipeline) updateMetrics(result *ProcessedData) {
 	dp.metrics.LastProcessedAt = time.Now()
 	dp.metrics.TotalTime += result.Metadata.Duration
 
-	if len(result.Errors) == 0 || !hassFatalError(result.Errors) {
+	if len(result.Errors) == 0 || !hasFatalError(result.Errors) {
 		dp.metrics.SuccessCount++
 	} else {
 		dp.metrics.ErrorCount++
@@ -337,8 +337,8 @@ func (dp *DataPipeline) updateMetrics(result *ProcessedData) {
 	}
 }
 
-// hassFatalError checks if there are any fatal errors
-func hassFatalError(errors []ProcessingError) bool {
+// hasFatalError checks if there are any fatal errors
+func hasFatalError(errors []ProcessingError) bool {
 	for _, err := range errors {
 		if err.Fatal {
 			return true
