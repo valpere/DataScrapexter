@@ -56,6 +56,7 @@ func (de *DataExtractor) Extract(ctx context.Context, rawData map[string]interfa
 	extracted := make(map[string]interface{})
 
 	// Copy raw data as base - currently a pass-through operation
+	// TODO: Implement actual extraction logic as described in the method documentation above.
 	for k, v := range rawData {
 		extracted[k] = v
 	}
