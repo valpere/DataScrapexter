@@ -60,18 +60,60 @@ var (
 	// SQL identifier regex: starts with letter or underscore, contains letters, digits, underscores
 	sqlIdentifierRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 	
-	// Reserved SQL keywords that should not be used as identifiers
-	sqlReservedWords = map[string]bool{
-		"SELECT": true, "INSERT": true, "UPDATE": true, "DELETE": true, "CREATE": true, "DROP": true,
-		"ALTER": true, "TABLE": true, "INDEX": true, "VIEW": true, "FROM": true, "WHERE": true,
-		"ORDER": true, "GROUP": true, "HAVING": true, "JOIN": true, "INNER": true, "LEFT": true,
-		"RIGHT": true, "FULL": true, "UNION": true, "INTERSECT": true, "EXCEPT": true, "AS": true,
-		"ON": true, "AND": true, "OR": true, "NOT": true, "NULL": true, "TRUE": true, "FALSE": true,
-		"PRIMARY": true, "KEY": true, "FOREIGN": true, "REFERENCES": true, "UNIQUE": true,
-		"CONSTRAINT": true, "DEFAULT": true, "CHECK": true, "GRANT": true, "REVOKE": true,
+	// Reserved SQL keywords for PostgreSQL (from https://www.postgresql.org/docs/current/sql-keywords-appendix.html)
+	postgresReservedWords = map[string]bool{
+		"ALL": true, "ANALYSE": true, "ANALYZE": true, "AND": true, "ANY": true, "ARRAY": true, "AS": true, "ASC": true,
+		"ASYMMETRIC": true, "AUTHORIZATION": true, "BINARY": true, "BOTH": true, "CASE": true, "CAST": true, "CHECK": true,
+		"COLLATE": true, "COLLATION": true, "COLUMN": true, "CONCURRENTLY": true, "CONSTRAINT": true, "CREATE": true,
+		"CROSS": true, "CURRENT_CATALOG": true, "CURRENT_DATE": true, "CURRENT_ROLE": true, "CURRENT_SCHEMA": true,
+		"CURRENT_TIME": true, "CURRENT_TIMESTAMP": true, "CURRENT_USER": true, "DEFAULT": true, "DEFERRABLE": true,
+		"DESC": true, "DISTINCT": true, "DO": true, "ELSE": true, "END": true, "EXCEPT": true, "FALSE": true, "FETCH": true,
+		"FOR": true, "FOREIGN": true, "FREEZE": true, "FROM": true, "FULL": true, "GRANT": true, "GROUP": true, "HAVING": true,
+		"ILIKE": true, "IN": true, "INITIALLY": true, "INNER": true, "INTERSECT": true, "INTO": true, "IS": true, "ISNULL": true,
+		"JOIN": true, "LATERAL": true, "LEADING": true, "LEFT": true, "LIKE": true, "LIMIT": true, "LOCALTIME": true,
+		"LOCALTIMESTAMP": true, "NATURAL": true, "NOT": true, "NOTNULL": true, "NULL": true, "OFFSET": true, "ON": true,
+		"ONLY": true, "OR": true, "ORDER": true, "OUTER": true, "OVERLAPS": true, "PLACING": true, "PRIMARY": true,
+		"REFERENCES": true, "RETURNING": true, "RIGHT": true, "SELECT": true, "SESSION_USER": true, "SIMILAR": true,
+		"SOME": true, "SYMMETRIC": true, "TABLE": true, "TABLESAMPLE": true, "THEN": true, "TO": true, "TRAILING": true,
+		"TRUE": true, "UNION": true, "UNIQUE": true, "USER": true, "USING": true, "VARIADIC": true, "VERBOSE": true,
+		"WHEN": true, "WHERE": true, "WINDOW": true, "WITH": true,
+	}
+
+	// Reserved SQL keywords for SQLite (from https://www.sqlite.org/lang_keywords.html)
+	sqliteReservedWords = map[string]bool{
+		"ABORT": true, "ACTION": true, "ADD": true, "AFTER": true, "ALL": true, "ALTER": true, "ANALYZE": true, "AND": true,
+		"AS": true, "ASC": true, "ATTACH": true, "AUTOINCREMENT": true, "BEFORE": true, "BEGIN": true, "BETWEEN": true,
+		"BY": true, "CASCADE": true, "CASE": true, "CAST": true, "CHECK": true, "COLLATE": true, "COLUMN": true,
+		"COMMIT": true, "CONFLICT": true, "CONSTRAINT": true, "CREATE": true, "CROSS": true, "CURRENT": true,
+		"CURRENT_DATE": true, "CURRENT_TIME": true, "CURRENT_TIMESTAMP": true, "DATABASE": true, "DEFAULT": true,
+		"DEFERRABLE": true, "DEFERRED": true, "DELETE": true, "DESC": true, "DETACH": true, "DISTINCT": true,
+		"DROP": true, "EACH": true, "ELSE": true, "END": true, "ESCAPE": true, "EXCEPT": true, "EXCLUSIVE": true,
+		"EXISTS": true, "EXPLAIN": true, "FAIL": true, "FOR": true, "FOREIGN": true, "FROM": true, "FULL": true,
+		"GLOB": true, "GROUP": true, "HAVING": true, "IF": true, "IGNORE": true, "IMMEDIATE": true, "IN": true,
+		"INDEX": true, "INDEXED": true, "INITIALLY": true, "INNER": true, "INSERT": true, "INSTEAD": true, "INTERSECT": true,
+		"INTO": true, "IS": true, "ISNULL": true, "JOIN": true, "KEY": true, "LEFT": true, "LIKE": true, "LIMIT": true,
+		"MATCH": true, "NATURAL": true, "NO": true, "NOT": true, "NOTNULL": true, "NULL": true, "OF": true, "OFFSET": true,
+		"ON": true, "OR": true, "ORDER": true, "OUTER": true, "PLAN": true, "PRAGMA": true, "PRIMARY": true, "QUERY": true,
+		"RAISE": true, "RECURSIVE": true, "REFERENCES": true, "REGEXP": true, "REINDEX": true, "RELEASE": true,
+		"RENAME": true, "REPLACE": true, "RESTRICT": true, "RIGHT": true, "ROLLBACK": true, "ROW": true, "SAVEPOINT": true,
+		"SELECT": true, "SET": true, "TABLE": true, "TEMP": true, "TEMPORARY": true, "THEN": true, "TO": true, "TRANSACTION": true,
+		"TRIGGER": true, "UNION": true, "UNIQUE": true, "UPDATE": true, "USING": true, "VACUUM": true, "VALUES": true,
+		"VIEW": true, "VIRTUAL": true, "WHEN": true, "WHERE": true, "WITH": true, "WITHOUT": true,
 	}
 )
 
+// GetReservedWords returns the reserved word set for the given SQL dialect.
+// Supported dialects: "postgresql", "sqlite". Defaults to PostgreSQL if unknown.
+func GetReservedWords(dialect string) map[string]bool {
+	switch strings.ToLower(dialect) {
+	case "sqlite":
+		return sqliteReservedWords
+	case "postgresql":
+		fallthrough
+	default:
+		return postgresReservedWords
+	}
+}
 // SQL column type validation
 var (
 	// Valid PostgreSQL column types
