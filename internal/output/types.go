@@ -102,12 +102,15 @@ const (
 	SystemColumnCreatedAt     = "created_at"
 	SystemColumnCreatedAtType = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP" // PostgreSQL format
 	SystemColumnCreatedAtSQLite = "created_at DATETIME DEFAULT CURRENT_TIMESTAMP" // SQLite format
+	
+	// Database-specific limits
+	MaxPostgreSQLIdentifierLength = 63 // PostgreSQL maximum identifier length
 )
 
 // Time format patterns for quick validation before parsing
 // Compiled once at package initialization for better performance
 var (
-	timeFormatPatterns []struct{
+	compiledTimeFormatPatterns []struct{
 		minLen, maxLen int
 		pattern *regexp.Regexp
 	}
@@ -115,7 +118,7 @@ var (
 
 // Initialize time format patterns once at package load
 func init() {
-	timeFormatPatterns = []struct{
+	compiledTimeFormatPatterns = []struct{
 		minLen, maxLen int
 		pattern *regexp.Regexp
 	}{
@@ -128,14 +131,14 @@ func init() {
 	}
 }
 
-// CouldBeTimeFormat performs a quick check to see if a string might be a time format
+// HasTimeFormatPattern performs a quick check to see if a string might be a time format
 // This avoids expensive time.Parse calls on obviously non-time strings
-func CouldBeTimeFormat(s string) bool {
+func HasTimeFormatPattern(s string) bool {
 	if len(s) < 8 || len(s) > 35 { // Reasonable time format length bounds
 		return false
 	}
 	
-	for _, pattern := range timeFormatPatterns {
+	for _, pattern := range compiledTimeFormatPatterns {
 		if len(s) >= pattern.minLen && len(s) <= pattern.maxLen {
 			if pattern.pattern.MatchString(s) {
 				return true

@@ -12,6 +12,11 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL driver
 )
 
+// PostgreSQL column type inference constants
+const (
+	VarcharLengthMultiplier = 2 // Multiplier for VARCHAR length to provide extra space
+)
+
 // PostgreSQLWriter writes data to PostgreSQL database
 type PostgreSQLWriter struct {
 	db            *sql.DB
@@ -223,7 +228,7 @@ func (w *PostgreSQLWriter) inferColumnType(data []map[string]interface{}, column
 				hasInts = true
 			} else if _, err := strconv.ParseFloat(v, 64); err == nil {
 				hasFloats = true
-			} else if CouldBeTimeFormat(v) { // Quick format check before expensive parsing
+			} else if HasTimeFormatPattern(v) { // Quick format check before expensive parsing
 				// Attempt to parse using multiple time formats
 				timeFormats := []string{
 					time.RFC3339,
@@ -261,7 +266,7 @@ func (w *PostgreSQLWriter) inferColumnType(data []map[string]interface{}, column
 		return "TEXT"
 	}
 	if maxTextLength > 0 {
-		return "VARCHAR(" + strconv.Itoa(maxTextLength*2) + ")" // Give some extra space
+		return "VARCHAR(" + strconv.Itoa(maxTextLength*VarcharLengthMultiplier) + ")" // Give some extra space
 	}
 
 	return "TEXT"

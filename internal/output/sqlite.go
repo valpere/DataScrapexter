@@ -16,12 +16,26 @@ import (
 
 // SQLite connection parameter constants
 const (
-	DefaultSQLiteConnectionParams = "?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=on"
-	DefaultSQLiteSynchronous      = "NORMAL"
-	DefaultSQLiteCacheSize        = 10000
-	DefaultSQLiteTempStore        = "memory"
-	DefaultSQLiteMmapSize         = 268435456 // 256MB
+	// Connection string parameters
+	DefaultSQLiteBusyTimeout = 5000    // milliseconds
+	DefaultSQLiteJournalMode = "WAL"   // Write-Ahead Logging for better concurrency
+	DefaultSQLiteForeignKeys = "on"    // Enable foreign key constraints
+	
+	// PRAGMA optimization parameters
+	DefaultSQLiteSynchronous = "NORMAL" // Balance between safety and performance
+	DefaultSQLiteCacheSize   = 10000    // Number of pages to cache
+	DefaultSQLiteTempStore   = "memory" // Store temporary tables in memory
+	DefaultSQLiteMmapSize    = 268435456 // 256MB memory-mapped I/O
 )
+
+// buildDefaultConnectionParams creates the default SQLite connection string
+func buildDefaultConnectionParams() string {
+	return fmt.Sprintf("?_busy_timeout=%d&_journal_mode=%s&_foreign_keys=%s",
+		DefaultSQLiteBusyTimeout,
+		DefaultSQLiteJournalMode,
+		DefaultSQLiteForeignKeys,
+	)
+}
 
 // SQLiteWriter writes data to SQLite database
 type SQLiteWriter struct {
@@ -73,7 +87,7 @@ func NewSQLiteWriter(options SQLiteOptions) (*SQLiteWriter, error) {
 	// Connect to database
 	connectionParams := options.ConnectionParams
 	if connectionParams == "" {
-		connectionParams = DefaultSQLiteConnectionParams
+		connectionParams = buildDefaultConnectionParams()
 	}
 	db, err := sql.Open("sqlite3", options.DatabasePath+connectionParams)
 	if err != nil {
@@ -250,7 +264,7 @@ func (w *SQLiteWriter) inferColumnType(data []map[string]interface{}, column str
 				hasInts = true
 			} else if _, err := strconv.ParseFloat(v, 64); err == nil {
 				hasFloats = true
-			} else if CouldBeTimeFormat(v) { // Quick format check before expensive parsing
+			} else if HasTimeFormatPattern(v) { // Quick format check before expensive parsing
 				timeFormats := []string{
 					time.RFC3339,
 					time.RFC3339Nano,
@@ -433,28 +447,21 @@ func (w *SQLiteWriter) convertValue(value interface{}) interface{} {
 // Close closes the SQLite connection
 // 
 // IMPORTANT PERFORMANCE NOTE: If OptimizeOnClose is enabled, this method
-// will run PRAGMA optimize and VACUUM operations before closing. VACUUM
-// can be EXTREMELY slow for large databases (minutes to hours) and will
-// BLOCK all other database operations during execution. Consider running
-// VACUUM operations during maintenance windows or using incremental_vacuum
-// instead for production systems with large datasets.
+// will run PRAGMA optimize and incremental VACUUM operations before closing.
+// Full VACUUM can be EXTREMELY slow for large databases (minutes to hours) and will
+// BLOCK all other database operations during execution.
 //
 // For better performance in production:
-// 1. Set OptimizeOnClose to false
-// 2. Run VACUUM manually during scheduled maintenance
-// 3. Use PRAGMA incremental_vacuum for regular cleanup
+// 1. Set OptimizeOnClose to false for large databases
+// 2. Run VACUUM manually during scheduled maintenance windows
+// 3. Use PRAGMA incremental_vacuum for regular cleanup (default behavior)
 // 4. Monitor database size and plan VACUUM operations accordingly
 func (w *SQLiteWriter) Close() error {
 	if w.db != nil && !w.closed {
 		// Only optimize database if explicitly configured to do so
-		// WARNING: VACUUM can take a very long time on large databases
 		if w.config.OptimizeOnClose {
-			// Run optimization before closing
-			if _, err := w.db.Exec("PRAGMA optimize"); err != nil {
-				fmt.Printf("Error during PRAGMA optimize: %v\n", err)
-			}
-			if _, err := w.db.Exec("VACUUM"); err != nil {
-				fmt.Printf("Error during VACUUM: %v\n", err)
+			if err := w.performDatabaseOptimization(); err != nil {
+				fmt.Printf("Warning: Database optimization failed: %v\n", err)
 			}
 		}
 
@@ -497,4 +504,26 @@ func (w *SQLiteWriter) GetStats() map[string]interface{} {
 	}
 
 	return stats
+}
+
+// performDatabaseOptimization runs database optimization operations
+// Uses incremental_vacuum for better performance on large databases
+func (w *SQLiteWriter) performDatabaseOptimization() error {
+	// Run PRAGMA optimize first (fast operation)
+	if _, err := w.db.Exec("PRAGMA optimize"); err != nil {
+		return fmt.Errorf("PRAGMA optimize failed: %w", err)
+	}
+	
+	// Use incremental_vacuum instead of full VACUUM for better performance
+	// This is non-blocking and more suitable for production environments
+	if _, err := w.db.Exec("PRAGMA incremental_vacuum"); err != nil {
+		// If incremental_vacuum fails, log but don't fail the close operation
+		fmt.Printf("Warning: PRAGMA incremental_vacuum failed: %v\n", err)
+		
+		// Fallback to a limited VACUUM with timeout protection would be ideal,
+		// but SQLite doesn't support VACUUM timeouts. In production, consider
+		// implementing this as a background goroutine with context cancellation.
+	}
+	
+	return nil
 }
