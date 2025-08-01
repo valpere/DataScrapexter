@@ -69,8 +69,8 @@ func NewSQLiteWriter(options SQLiteOptions) (*SQLiteWriter, error) {
 		return nil, fmt.Errorf("invalid conflict strategy: %s", options.OnConflict)
 	}
 	
-	// Validate table name
-	if err := ValidateSQLIdentifier(options.Table); err != nil {
+	// Validate table name using SQLite-specific validation
+	if err := ValidateSQLiteIdentifier(options.Table); err != nil {
 		return nil, fmt.Errorf("invalid table name: %w", err)
 	}
 	if options.ColumnTypes == nil {
@@ -177,6 +177,11 @@ func (w *SQLiteWriter) createTable(data []map[string]interface{}) error {
 	// Build CREATE TABLE statement
 	var columnDefs []string
 	for _, column := range w.columns {
+		// Validate column name for SQL safety
+		if err := ValidateSQLiteIdentifier(column); err != nil {
+			return fmt.Errorf("invalid column name '%s': %w", column, err)
+		}
+		
 		columnType := columnTypes[column]
 		// Override with user-specified types if provided
 		if userType, exists := w.config.ColumnTypes[column]; exists {
@@ -186,8 +191,7 @@ func (w *SQLiteWriter) createTable(data []map[string]interface{}) error {
 			}
 			columnType = userType
 		}
-		// SQLite uses square brackets for identifier quoting (also supports double quotes)
-		// but square brackets are more commonly used in SQLite contexts
+		// SQLite uses double quotes for identifier quoting for consistency
 		columnDefs = append(columnDefs, fmt.Sprintf("%s %s", w.quoteIdentifier(column), columnType))
 	}
 
@@ -402,6 +406,8 @@ func (w *SQLiteWriter) insertBatch(tx *sql.Tx, batch []map[string]interface{}) e
 }
 
 // quoteIdentifier quotes SQLite identifiers using double quotes
+// SQLite supports both double quotes and square brackets, but double quotes
+// are more standard and consistent with PostgreSQL
 func (w *SQLiteWriter) quoteIdentifier(identifier string) string {
 	return `"` + strings.ReplaceAll(identifier, `"`, `""`) + `"`
 }
@@ -460,15 +466,9 @@ func (w *SQLiteWriter) Close() error {
 	if w.db != nil && !w.closed {
 		// Only optimize database if explicitly configured to do so
 		if w.config.OptimizeOnClose {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel() // Ensure the context is canceled when Close exits
-
-			var wg sync.WaitGroup
-			wg.Add(1)
-			go w.performDatabaseOptimization(ctx, &wg)
-
-			// Optionally, wait for the optimization to complete if needed
-			// wg.Wait()
+			if err := w.performDatabaseOptimization(); err != nil {
+				fmt.Printf("Warning: Database optimization failed: %v\n", err)
+			}
 		}
 
 		err := w.db.Close()

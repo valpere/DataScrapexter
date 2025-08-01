@@ -52,11 +52,11 @@ func NewPostgreSQLWriter(options PostgreSQLOptions) (*PostgreSQLWriter, error) {
 		return nil, fmt.Errorf("invalid conflict strategy: %s", options.OnConflict)
 	}
 	
-	// Validate table and schema names
-	if err := ValidateSQLIdentifier(options.Table); err != nil {
+	// Validate table and schema names using PostgreSQL-specific validation
+	if err := ValidatePostgreSQLIdentifier(options.Table); err != nil {
 		return nil, fmt.Errorf("invalid table name: %w", err)
 	}
-	if err := ValidateSQLIdentifier(options.Schema); err != nil {
+	if err := ValidatePostgreSQLIdentifier(options.Schema); err != nil {
 		return nil, fmt.Errorf("invalid schema name: %w", err)
 	}
 	if options.ColumnTypes == nil {
@@ -138,6 +138,11 @@ func (w *PostgreSQLWriter) createTable(data []map[string]interface{}) error {
 	// Build CREATE TABLE statement
 	var columnDefs []string
 	for _, column := range w.columns {
+		// Validate column name for SQL safety
+		if err := ValidatePostgreSQLIdentifier(column); err != nil {
+			return fmt.Errorf("invalid column name '%s': %w", column, err)
+		}
+		
 		columnType := columnTypes[column]
 		// Override with user-specified types if provided
 		if userType, exists := w.config.ColumnTypes[column]; exists {

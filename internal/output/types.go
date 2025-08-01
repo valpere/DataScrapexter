@@ -104,7 +104,8 @@ const (
 	SystemColumnCreatedAtSQLite = "created_at DATETIME DEFAULT CURRENT_TIMESTAMP" // SQLite format
 	
 	// Database-specific limits
-	MaxPostgreSQLIdentifierLength = 63 // PostgreSQL maximum identifier length
+	MaxPostgreSQLIdentifierLength = 63  // PostgreSQL maximum identifier length
+	MaxSQLiteIdentifierLength     = 999 // SQLite maximum identifier length (much higher than PostgreSQL)
 )
 
 // Time format patterns for quick validation before parsing
@@ -149,14 +150,42 @@ func HasTimeFormatPattern(s string) bool {
 	return false
 }
 
-// ValidateSQLIdentifier validates that a string is a safe SQL identifier
+// ValidateSQLIdentifier validates that a string is a safe SQL identifier using PostgreSQL limits
+// For database-specific validation, use ValidatePostgreSQLIdentifier or ValidateSQLiteIdentifier
 func ValidateSQLIdentifier(identifier string) error {
+	return ValidatePostgreSQLIdentifier(identifier) // Default to more restrictive PostgreSQL limits
+}
+
+// ValidatePostgreSQLIdentifier validates PostgreSQL-specific identifier constraints
+func ValidatePostgreSQLIdentifier(identifier string) error {
 	if identifier == "" {
 		return fmt.Errorf("identifier cannot be empty")
 	}
 	
-	if len(identifier) > MaxPostgreSQLIdentifierLength { // PostgreSQL limit
+	if len(identifier) > MaxPostgreSQLIdentifierLength {
 		return fmt.Errorf("identifier too long (max %d characters): %s", MaxPostgreSQLIdentifierLength, identifier)
+	}
+	
+	if !sqlIdentifierRegex.MatchString(identifier) {
+		return fmt.Errorf("invalid identifier format: %s", identifier)
+	}
+	
+	upperIdent := strings.ToUpper(identifier)
+	if sqlReservedWords[upperIdent] {
+		return fmt.Errorf("identifier is a reserved SQL keyword: %s", identifier)
+	}
+	
+	return nil
+}
+
+// ValidateSQLiteIdentifier validates SQLite-specific identifier constraints
+func ValidateSQLiteIdentifier(identifier string) error {
+	if identifier == "" {
+		return fmt.Errorf("identifier cannot be empty")
+	}
+	
+	if len(identifier) > MaxSQLiteIdentifierLength {
+		return fmt.Errorf("identifier too long (max %d characters): %s", MaxSQLiteIdentifierLength, identifier)
 	}
 	
 	if !sqlIdentifierRegex.MatchString(identifier) {
