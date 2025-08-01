@@ -99,9 +99,10 @@ var (
 
 // System column definitions - consistent across database implementations
 const (
-	SystemColumnCreatedAt     = "created_at"
-	SystemColumnCreatedAtType = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP" // PostgreSQL format
-	SystemColumnCreatedAtSQLite = "created_at DATETIME DEFAULT CURRENT_TIMESTAMP" // SQLite format
+	SystemColumnCreatedAt         = "created_at"
+	SystemColumnCreatedAtType     = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP" // PostgreSQL format
+	SystemColumnCreatedAtSQLiteName = "created_at"                        // SQLite column name
+	SystemColumnCreatedAtSQLiteType = "DATETIME DEFAULT CURRENT_TIMESTAMP" // SQLite column type
 	
 	// Database-specific limits
 	MaxPostgreSQLIdentifierLength = 63  // PostgreSQL maximum identifier length

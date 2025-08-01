@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -196,7 +197,7 @@ func (w *SQLiteWriter) createTable(data []map[string]interface{}) error {
 	}
 
 	// Add system columns (created_at timestamp column)
-	columnDefs = append(columnDefs, SystemColumnCreatedAtSQLite)
+	columnDefs = append(columnDefs, fmt.Sprintf("%s %s", SystemColumnCreatedAtSQLiteName, SystemColumnCreatedAtSQLiteType))
 	// Note: systemColumns are initialized in constructor and handled separately in INSERT operations
 
 	var queryBuilder strings.Builder
@@ -467,7 +468,7 @@ func (w *SQLiteWriter) Close() error {
 		// Only optimize database if explicitly configured to do so
 		if w.config.OptimizeOnClose {
 			if err := w.performDatabaseOptimization(); err != nil {
-				fmt.Printf("Warning: Database optimization failed: %v\n", err)
+				log.Printf("Warning: Database optimization failed: %v", err)
 			}
 		}
 
@@ -524,7 +525,7 @@ func (w *SQLiteWriter) performDatabaseOptimization() error {
 	// This is non-blocking and more suitable for production environments
 	if _, err := w.db.Exec("PRAGMA incremental_vacuum"); err != nil {
 		// If incremental_vacuum fails, log but don't fail the close operation
-		fmt.Printf("Warning: PRAGMA incremental_vacuum failed: %v\n", err)
+		log.Printf("Warning: PRAGMA incremental_vacuum failed: %v", err)
 		
 		// Fallback to a limited VACUUM with timeout protection would be ideal,
 		// but SQLite doesn't support VACUUM timeouts. In production, consider

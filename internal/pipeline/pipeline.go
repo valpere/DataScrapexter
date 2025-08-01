@@ -186,7 +186,6 @@ func (dp *DataPipeline) Process(ctx context.Context, rawData map[string]interfac
 				Fatal:   false, // Non-fatal error
 			})
 			// Continue with original data if deduplication fails
-			result.Validated = result.Validated
 		} else {
 			result.Validated = deduplicated
 		}
