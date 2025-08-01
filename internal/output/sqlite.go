@@ -110,7 +110,7 @@ func NewSQLiteWriter(options SQLiteOptions) (*SQLiteWriter, error) {
 		db:            db,
 		config:        options,
 		table:         options.Table,
-		systemColumns: []string{"created_at"}, // Initialize system columns
+		systemColumns: []string{SystemColumnCreatedAt}, // Initialize system columns
 	}
 
 	return writer, nil
@@ -178,7 +178,7 @@ func (w *SQLiteWriter) createTable(data []map[string]interface{}) error {
 	}
 
 	// Add system columns (created_at timestamp column)
-	columnDefs = append(columnDefs, "created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+	columnDefs = append(columnDefs, SystemColumnCreatedAtSQLite)
 	// Note: systemColumns are initialized in constructor and handled separately in INSERT operations
 
 	var queryBuilder strings.Builder
@@ -250,8 +250,10 @@ func (w *SQLiteWriter) inferColumnType(data []map[string]interface{}, column str
 				hasInts = true
 			} else if _, err := strconv.ParseFloat(v, 64); err == nil {
 				hasFloats = true
-			} else if _, err := time.Parse(time.RFC3339, v); err == nil {
-				hasTime = true
+			} else if CouldBeTimeFormat(v) { // Quick format check before expensive parsing
+				if _, err := time.Parse(time.RFC3339, v); err == nil {
+					hasTime = true
+				}
 			}
 		}
 	}

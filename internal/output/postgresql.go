@@ -80,7 +80,7 @@ func NewPostgreSQLWriter(options PostgreSQLOptions) (*PostgreSQLWriter, error) {
 		config:        options,
 		table:         options.Table,
 		schema:        options.Schema,
-		systemColumns: []string{"created_at"}, // Initialize system columns
+		systemColumns: []string{SystemColumnCreatedAt}, // Initialize system columns
 	}
 
 	return writer, nil
@@ -147,7 +147,7 @@ func (w *PostgreSQLWriter) createTable(data []map[string]interface{}) error {
 	}
 
 	// Add system columns (created_at timestamp column)
-	columnDefs = append(columnDefs, "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+	columnDefs = append(columnDefs, SystemColumnCreatedAtType)
 	// Note: systemColumns are initialized in constructor and handled separately in INSERT operations
 
 	var queryBuilder strings.Builder
@@ -223,8 +223,10 @@ func (w *PostgreSQLWriter) inferColumnType(data []map[string]interface{}, column
 				hasInts = true
 			} else if _, err := strconv.ParseFloat(v, 64); err == nil {
 				hasFloats = true
-			} else if _, err := time.Parse(time.RFC3339, v); err == nil {
-				hasTime = true
+			} else if CouldBeTimeFormat(v) { // Quick format check before expensive parsing
+				if _, err := time.Parse(time.RFC3339, v); err == nil {
+					hasTime = true
+				}
 			}
 		}
 	}

@@ -93,8 +93,50 @@ var (
 	}
 	
 	// Common column type patterns (for VARCHAR(n), DECIMAL(p,s), etc.)
-	columnTypePatternRegex = regexp.MustCompile(`^[A-Z]+(?:\([0-9,\s]+\))?$`)
+	// Only allows digits and commas within parentheses for better validation
+	columnTypePatternRegex = regexp.MustCompile(`^[A-Z]+(?:\([0-9]+(,[0-9]+)*\))?$`)
 )
+
+// System column definitions - consistent across database implementations
+const (
+	SystemColumnCreatedAt     = "created_at"
+	SystemColumnCreatedAtType = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP" // PostgreSQL format
+	SystemColumnCreatedAtSQLite = "created_at DATETIME DEFAULT CURRENT_TIMESTAMP" // SQLite format
+)
+
+// Time format patterns for quick validation before parsing
+var (
+	// Common time format patterns to check before expensive parsing
+	timeFormatPatterns = []struct{
+		minLen, maxLen int
+		pattern *regexp.Regexp
+	}{
+		// RFC3339 format: "2006-01-02T15:04:05Z07:00"
+		{19, 35, regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}`)},
+		// ISO date format: "2006-01-02"
+		{10, 10, regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)},
+		// DateTime format: "2006-01-02 15:04:05"
+		{19, 19, regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$`)},
+	}
+)
+
+// CouldBeTimeFormat performs a quick check to see if a string might be a time format
+// This avoids expensive time.Parse calls on obviously non-time strings
+func CouldBeTimeFormat(s string) bool {
+	if len(s) < 8 || len(s) > 35 { // Reasonable time format length bounds
+		return false
+	}
+	
+	for _, pattern := range timeFormatPatterns {
+		if len(s) >= pattern.minLen && len(s) <= pattern.maxLen {
+			if pattern.pattern.MatchString(s) {
+				return true
+			}
+		}
+	}
+	
+	return false
+}
 
 // ValidateSQLIdentifier validates that a string is a safe SQL identifier
 func ValidateSQLIdentifier(identifier string) error {
