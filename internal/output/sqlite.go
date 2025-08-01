@@ -38,7 +38,17 @@ func NewSQLiteWriter(options SQLiteOptions) (*SQLiteWriter, error) {
 		options.BatchSize = 1000
 	}
 	if options.OnConflict == "" {
-		options.OnConflict = "ignore"
+		options.OnConflict = ConflictIgnore
+	}
+	
+	// Validate conflict strategy
+	if !IsValidConflictStrategy(options.OnConflict) {
+		return nil, fmt.Errorf("invalid conflict strategy: %s", options.OnConflict)
+	}
+	
+	// Validate table name
+	if err := ValidateSQLIdentifier(options.Table); err != nil {
+		return nil, fmt.Errorf("invalid table name: %w", err)
 	}
 	if options.ColumnTypes == nil {
 		options.ColumnTypes = make(map[string]string)
@@ -151,18 +161,23 @@ func (w *SQLiteWriter) createTable(data []map[string]interface{}) error {
 		}
 		// SQLite uses square brackets for identifier quoting (also supports double quotes)
 		// but square brackets are more commonly used in SQLite contexts
-		columnDefs = append(columnDefs, fmt.Sprintf("[%s] %s", column, columnType))
+		columnDefs = append(columnDefs, fmt.Sprintf("%s %s", w.quoteIdentifier(column), columnType))
 	}
 
 	// Add system columns (created_at timestamp column)
 	columnDefs = append(columnDefs, "created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
 	// Note: systemColumns are initialized in constructor and handled separately in INSERT operations
 
-	query := `
-		CREATE TABLE IF NOT EXISTS [` + w.table + `] (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			` + strings.Join(columnDefs, ",\n\t\t\t") + `
-		)`
+	var queryBuilder strings.Builder
+	queryBuilder.WriteString("CREATE TABLE IF NOT EXISTS ")
+	queryBuilder.WriteString(w.quoteIdentifier(w.table))
+	queryBuilder.WriteString(" (\n")
+	queryBuilder.WriteString("\tid INTEGER PRIMARY KEY AUTOINCREMENT,\n")
+	queryBuilder.WriteString("\t")
+	queryBuilder.WriteString(strings.Join(columnDefs, ",\n\t"))
+	queryBuilder.WriteString("\n);")
+
+	query := queryBuilder.String()
 
 	if _, err := w.db.Exec(query); err != nil {
 		return fmt.Errorf("failed to create table '%s': %w", w.table, err)
@@ -289,7 +304,7 @@ func (w *SQLiteWriter) insertBatch(tx *sql.Tx, batch []map[string]interface{}) e
 	// Build INSERT statement with placeholders
 	columnList := make([]string, len(insertColumns))
 	for i, column := range insertColumns {
-		columnList[i] = "[" + column + "]"
+		columnList[i] = w.quoteIdentifier(column)
 	}
 
 	placeholders := strings.Repeat("?,", len(insertColumns))
@@ -297,27 +312,27 @@ func (w *SQLiteWriter) insertBatch(tx *sql.Tx, batch []map[string]interface{}) e
 
 	var query string
 	switch w.config.OnConflict {
-	case "ignore":
+	case ConflictIgnore:
 		query = fmt.Sprintf(`
-			INSERT OR IGNORE INTO [%s] (%s) 
+			INSERT OR IGNORE INTO %s (%s) 
 			VALUES (%s)`,
-			w.table,
+			w.quoteIdentifier(w.table),
 			strings.Join(columnList, ", "),
 			placeholders,
 		)
-	case "replace":
+	case ConflictReplace:
 		query = fmt.Sprintf(`
-			INSERT OR REPLACE INTO [%s] (%s) 
+			INSERT OR REPLACE INTO %s (%s) 
 			VALUES (%s)`,
-			w.table,
+			w.quoteIdentifier(w.table),
 			strings.Join(columnList, ", "),
 			placeholders,
 		)
-	default: // "error" or any other value
+	default: // ConflictError or any other value
 		query = fmt.Sprintf(`
-			INSERT INTO [%s] (%s) 
+			INSERT INTO %s (%s) 
 			VALUES (%s)`,
-			w.table,
+			w.quoteIdentifier(w.table),
 			strings.Join(columnList, ", "),
 			placeholders,
 		)
@@ -344,6 +359,11 @@ func (w *SQLiteWriter) insertBatch(tx *sql.Tx, batch []map[string]interface{}) e
 	}
 
 	return nil
+}
+
+// quoteIdentifier quotes SQLite identifiers using square brackets
+func (w *SQLiteWriter) quoteIdentifier(identifier string) string {
+	return "[" + strings.ReplaceAll(identifier, "]", "]]") + "]"
 }
 
 // convertValue converts Go values to SQLite-compatible values
@@ -439,7 +459,7 @@ func (w *SQLiteWriter) GetStats() map[string]interface{} {
 
 		// Get table row count
 		var count int
-		query := fmt.Sprintf("SELECT COUNT(*) FROM [%s]", w.table)
+		query := fmt.Sprintf("SELECT COUNT(*) FROM %s", w.quoteIdentifier(w.table))
 		if err := w.db.QueryRow(query).Scan(&count); err == nil {
 			stats["row_count"] = count
 		}

@@ -2,6 +2,9 @@
 package output
 
 import (
+	"fmt"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -18,9 +21,76 @@ const (
 	FormatSQLite     OutputFormat = "sqlite"
 )
 
+// ConflictStrategy represents database conflict resolution strategies
+type ConflictStrategy string
+
+const (
+	ConflictIgnore ConflictStrategy = "ignore" // Ignore conflicts (ON CONFLICT DO NOTHING / INSERT OR IGNORE)
+	ConflictError  ConflictStrategy = "error"  // Fail on conflicts (default INSERT behavior)
+)
+
+// PostgreSQL-specific conflict strategies
+const (
+	ConflictReplace ConflictStrategy = "replace" // SQLite only: REPLACE existing row
+)
+
 // ValidOutputFormats returns all valid output format values
 func ValidOutputFormats() []OutputFormat {
 	return []OutputFormat{FormatJSON, FormatCSV, FormatXML, FormatYAML, FormatTSV, FormatPostgreSQL, FormatSQLite}
+}
+
+// ValidConflictStrategies returns all valid conflict strategy values
+func ValidConflictStrategies() []ConflictStrategy {
+	return []ConflictStrategy{ConflictIgnore, ConflictError, ConflictReplace}
+}
+
+// IsValidConflictStrategy checks if a conflict strategy is valid
+func IsValidConflictStrategy(strategy ConflictStrategy) bool {
+	for _, valid := range ValidConflictStrategies() {
+		if strategy == valid {
+			return true
+		}
+	}
+	return false
+}
+
+// SQL identifier validation
+var (
+	// SQL identifier regex: starts with letter or underscore, contains letters, digits, underscores
+	sqlIdentifierRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+	
+	// Reserved SQL keywords that should not be used as identifiers
+	sqlReservedWords = map[string]bool{
+		"SELECT": true, "INSERT": true, "UPDATE": true, "DELETE": true, "CREATE": true, "DROP": true,
+		"ALTER": true, "TABLE": true, "INDEX": true, "VIEW": true, "FROM": true, "WHERE": true,
+		"ORDER": true, "GROUP": true, "HAVING": true, "JOIN": true, "INNER": true, "LEFT": true,
+		"RIGHT": true, "FULL": true, "UNION": true, "INTERSECT": true, "EXCEPT": true, "AS": true,
+		"ON": true, "AND": true, "OR": true, "NOT": true, "NULL": true, "TRUE": true, "FALSE": true,
+		"PRIMARY": true, "KEY": true, "FOREIGN": true, "REFERENCES": true, "UNIQUE": true,
+		"CONSTRAINT": true, "DEFAULT": true, "CHECK": true, "GRANT": true, "REVOKE": true,
+	}
+)
+
+// ValidateSQLIdentifier validates that a string is a safe SQL identifier
+func ValidateSQLIdentifier(identifier string) error {
+	if identifier == "" {
+		return fmt.Errorf("identifier cannot be empty")
+	}
+	
+	if len(identifier) > 63 { // PostgreSQL limit
+		return fmt.Errorf("identifier too long (max 63 characters): %s", identifier)
+	}
+	
+	if !sqlIdentifierRegex.MatchString(identifier) {
+		return fmt.Errorf("invalid identifier format: %s", identifier)
+	}
+	
+	upperIdent := strings.ToUpper(identifier)
+	if sqlReservedWords[upperIdent] {
+		return fmt.Errorf("identifier is a reserved SQL keyword: %s", identifier)
+	}
+	
+	return nil
 }
 
 // IsValid checks if the output format is valid
@@ -145,7 +215,7 @@ type PostgreSQLOptions struct {
 	Schema           string            `yaml:"schema,omitempty" json:"schema,omitempty"`
 	BatchSize        int               `yaml:"batch_size,omitempty" json:"batch_size,omitempty"`
 	CreateTable      bool              `yaml:"create_table,omitempty" json:"create_table,omitempty"`
-	OnConflict       string            `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // PostgreSQL: "ignore", "error". Use "ignore" for ON CONFLICT DO NOTHING behavior.
+	OnConflict       ConflictStrategy  `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // PostgreSQL: ConflictIgnore, ConflictError
 	ColumnTypes      map[string]string `yaml:"column_types,omitempty" json:"column_types,omitempty"`
 }
 
@@ -155,7 +225,7 @@ type SQLiteOptions struct {
 	Table            string            `yaml:"table" json:"table"`
 	BatchSize        int               `yaml:"batch_size,omitempty" json:"batch_size,omitempty"`
 	CreateTable      bool              `yaml:"create_table,omitempty" json:"create_table,omitempty"`
-	OnConflict       string            `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // SQLite: "ignore", "replace", "error"
+	OnConflict       ConflictStrategy  `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // SQLite: ConflictIgnore, ConflictReplace, ConflictError
 	ColumnTypes      map[string]string `yaml:"column_types,omitempty" json:"column_types,omitempty"`
 	OptimizeOnClose  bool              `yaml:"optimize_on_close,omitempty" json:"optimize_on_close,omitempty"` // Run VACUUM and PRAGMA optimize on close
 	ConnectionParams string            `yaml:"connection_params,omitempty" json:"connection_params,omitempty"` // SQLite connection parameters

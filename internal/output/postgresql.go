@@ -39,7 +39,20 @@ func NewPostgreSQLWriter(options PostgreSQLOptions) (*PostgreSQLWriter, error) {
 		options.Schema = "public"
 	}
 	if options.OnConflict == "" {
-		options.OnConflict = "ignore"
+		options.OnConflict = ConflictIgnore
+	}
+	
+	// Validate conflict strategy
+	if !IsValidConflictStrategy(options.OnConflict) {
+		return nil, fmt.Errorf("invalid conflict strategy: %s", options.OnConflict)
+	}
+	
+	// Validate table and schema names
+	if err := ValidateSQLIdentifier(options.Table); err != nil {
+		return nil, fmt.Errorf("invalid table name: %w", err)
+	}
+	if err := ValidateSQLIdentifier(options.Schema); err != nil {
+		return nil, fmt.Errorf("invalid schema name: %w", err)
 	}
 	if options.ColumnTypes == nil {
 		options.ColumnTypes = make(map[string]string)
@@ -300,7 +313,7 @@ func (w *PostgreSQLWriter) insertBatch(batch []map[string]interface{}) error {
 
 	var query string
 	switch w.config.OnConflict {
-	case "ignore":
+	case ConflictIgnore:
 		query = fmt.Sprintf(`
 			INSERT INTO %s.%s (%s) 
 			VALUES %s 
@@ -310,7 +323,7 @@ func (w *PostgreSQLWriter) insertBatch(batch []map[string]interface{}) error {
 			strings.Join(quotedColumns, ", "),
 			strings.Join(placeholders, ", "),
 		)
-	default: // "error" or any other value
+	default: // ConflictError or any other value
 		query = fmt.Sprintf(`
 			INSERT INTO %s.%s (%s) 
 			VALUES %s`,
