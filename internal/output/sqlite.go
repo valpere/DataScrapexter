@@ -460,9 +460,15 @@ func (w *SQLiteWriter) Close() error {
 	if w.db != nil && !w.closed {
 		// Only optimize database if explicitly configured to do so
 		if w.config.OptimizeOnClose {
-			if err := w.performDatabaseOptimization(); err != nil {
-				fmt.Printf("Warning: Database optimization failed: %v\n", err)
-			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel() // Ensure the context is canceled when Close exits
+
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go w.performDatabaseOptimization(ctx, &wg)
+
+			// Optionally, wait for the optimization to complete if needed
+			// wg.Wait()
 		}
 
 		err := w.db.Close()
