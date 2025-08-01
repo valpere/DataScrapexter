@@ -224,8 +224,18 @@ func (w *PostgreSQLWriter) inferColumnType(data []map[string]interface{}, column
 			} else if _, err := strconv.ParseFloat(v, 64); err == nil {
 				hasFloats = true
 			} else if CouldBeTimeFormat(v) { // Quick format check before expensive parsing
-				if _, err := time.Parse(time.RFC3339, v); err == nil {
-					hasTime = true
+				// Attempt to parse using multiple time formats
+				timeFormats := []string{
+					time.RFC3339,
+					"2006-01-02 15:04:05", // Common SQL datetime format
+					"2006-01-02",          // Date only
+					"15:04:05",            // Time only
+				}
+				for _, format := range timeFormats {
+					if _, err := time.Parse(format, v); err == nil {
+						hasTime = true
+						break
+					}
 				}
 			}
 		}
