@@ -152,8 +152,8 @@ func ValidateSQLIdentifier(identifier string) error {
 		return fmt.Errorf("identifier cannot be empty")
 	}
 	
-	if len(identifier) > 63 { // PostgreSQL limit
-		return fmt.Errorf("identifier too long (max 63 characters): %s", identifier)
+	if len(identifier) > MaxPostgreSQLIdentifierLength { // PostgreSQL limit
+		return fmt.Errorf("identifier too long (max %d characters): %s", MaxPostgreSQLIdentifierLength, identifier)
 	}
 	
 	if !sqlIdentifierRegex.MatchString(identifier) {
