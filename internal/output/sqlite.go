@@ -16,11 +16,12 @@ import (
 
 // SQLiteWriter writes data to SQLite database
 type SQLiteWriter struct {
-	db      *sql.DB
-	config  SQLiteOptions
-	table   string
-	columns []string
-	closed  bool
+	db            *sql.DB
+	config        SQLiteOptions
+	table         string
+	columns       []string
+	systemColumns []string // Columns with DEFAULT values that shouldn't be inserted
+	closed        bool
 }
 
 // NewSQLiteWriter creates a new SQLite writer
@@ -87,9 +88,10 @@ func NewSQLiteWriter(options SQLiteOptions) (*SQLiteWriter, error) {
 	}
 
 	writer := &SQLiteWriter{
-		db:     db,
-		config: options,
-		table:  options.Table,
+		db:            db,
+		config:        options,
+		table:         options.Table,
+		systemColumns: []string{"created_at"}, // Initialize system columns
 	}
 
 	return writer, nil
@@ -150,9 +152,9 @@ func (w *SQLiteWriter) createTable(data []map[string]interface{}) error {
 		columnDefs = append(columnDefs, fmt.Sprintf("[%s] %s", column, columnType))
 	}
 
-	// Add metadata column
+	// Add system columns (created_at timestamp column)
 	columnDefs = append(columnDefs, "created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
-	w.columns = append(w.columns, "created_at") // Ensure consistency with the columns slice
+	// Note: systemColumns are already initialized in constructor, no need to append here
 
 	query := `
 		CREATE TABLE IF NOT EXISTS [` + w.table + `] (
@@ -269,10 +271,15 @@ func (w *SQLiteWriter) insertBatch(tx *sql.Tx, batch []map[string]interface{}) e
 		return nil
 	}
 
-	// Filter out system columns (created_at) that have DEFAULT values
+	// Filter out system columns that have DEFAULT values
 	insertColumns := make([]string, 0, len(w.columns))
+	systemColumnMap := make(map[string]bool)
+	for _, col := range w.systemColumns {
+		systemColumnMap[col] = true
+	}
+	
 	for _, column := range w.columns {
-		if column != "created_at" { // Skip created_at as it has DEFAULT value
+		if !systemColumnMap[column] {
 			insertColumns = append(insertColumns, column)
 		}
 	}
@@ -376,10 +383,23 @@ func (w *SQLiteWriter) convertValue(value interface{}) interface{} {
 }
 
 // Close closes the SQLite connection
+// 
+// IMPORTANT PERFORMANCE NOTE: If OptimizeOnClose is enabled, this method
+// will run PRAGMA optimize and VACUUM operations before closing. VACUUM
+// can be EXTREMELY slow for large databases (minutes to hours) and will
+// BLOCK all other database operations during execution. Consider running
+// VACUUM operations during maintenance windows or using incremental_vacuum
+// instead for production systems with large datasets.
+//
+// For better performance in production:
+// 1. Set OptimizeOnClose to false
+// 2. Run VACUUM manually during scheduled maintenance
+// 3. Use PRAGMA incremental_vacuum for regular cleanup
+// 4. Monitor database size and plan VACUUM operations accordingly
 func (w *SQLiteWriter) Close() error {
 	if w.db != nil && !w.closed {
 		// Only optimize database if explicitly configured to do so
-		// VACUUM can be expensive and block other operations
+		// WARNING: VACUUM can take a very long time on large databases
 		if w.config.OptimizeOnClose {
 			// Run optimization before closing
 			if _, err := w.db.Exec("PRAGMA optimize"); err != nil {

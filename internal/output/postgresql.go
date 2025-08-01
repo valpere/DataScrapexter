@@ -14,11 +14,12 @@ import (
 
 // PostgreSQLWriter writes data to PostgreSQL database
 type PostgreSQLWriter struct {
-	db      *sql.DB
-	config  PostgreSQLOptions
-	table   string
-	schema  string
-	columns []string
+	db            *sql.DB
+	config        PostgreSQLOptions
+	table         string
+	schema        string
+	columns       []string
+	systemColumns []string // Columns with DEFAULT values that shouldn't be inserted
 }
 
 // NewPostgreSQLWriter creates a new PostgreSQL writer
@@ -62,10 +63,11 @@ func NewPostgreSQLWriter(options PostgreSQLOptions) (*PostgreSQLWriter, error) {
 	db.SetConnMaxLifetime(5 * time.Minute)
 
 	writer := &PostgreSQLWriter{
-		db:     db,
-		config: options,
-		table:  options.Table,
-		schema: options.Schema,
+		db:            db,
+		config:        options,
+		table:         options.Table,
+		schema:        options.Schema,
+		systemColumns: []string{"created_at"}, // Initialize system columns
 	}
 
 	return writer, nil
@@ -126,9 +128,9 @@ func (w *PostgreSQLWriter) createTable(data []map[string]interface{}) error {
 		columnDefs = append(columnDefs, fmt.Sprintf("%s %s", w.quoteIdentifier(column), columnType))
 	}
 
-	// Add created_at timestamp column
+	// Add system columns (created_at timestamp column)
 	columnDefs = append(columnDefs, "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-	w.columns = append(w.columns, "created_at") // Ensure consistency with the columns slice
+	// Note: systemColumns are already initialized in constructor, no need to append here
 
 	var queryBuilder strings.Builder
 	queryBuilder.WriteString("CREATE TABLE IF NOT EXISTS ")
@@ -258,10 +260,15 @@ func (w *PostgreSQLWriter) insertBatch(batch []map[string]interface{}) error {
 		return nil
 	}
 
-	// Filter out system columns (created_at) that have DEFAULT values
+	// Filter out system columns that have DEFAULT values
 	insertColumns := make([]string, 0, len(w.columns))
+	systemColumnMap := make(map[string]bool)
+	for _, col := range w.systemColumns {
+		systemColumnMap[col] = true
+	}
+	
 	for _, column := range w.columns {
-		if column != "created_at" { // Skip created_at as it has DEFAULT value
+		if !systemColumnMap[column] {
 			insertColumns = append(insertColumns, column)
 		}
 	}
@@ -303,10 +310,11 @@ func (w *PostgreSQLWriter) insertBatch(batch []map[string]interface{}) error {
 			strings.Join(placeholders, ", "),
 		)
 	case "update":
-		// Build update clause for ON CONFLICT UPDATE
+		// Use ON CONFLICT DO NOTHING for safety
 		// Since we can't assume which columns have unique constraints,
-		// use DO NOTHING as safer alternative. For true upsert functionality,
-		// users should specify unique constraints in their table schema.
+		// we use DO NOTHING instead of attempting updates. For true upsert functionality,
+		// users should configure unique constraints in their table schema and use
+		// a different conflict resolution strategy.
 		query = fmt.Sprintf(`
 			INSERT INTO %s.%s (%s) 
 			VALUES %s 
