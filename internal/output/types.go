@@ -24,12 +24,13 @@ const (
 // ConflictStrategy represents database conflict resolution strategies
 type ConflictStrategy string
 
+// Common conflict strategies (supported by both PostgreSQL and SQLite)
 const (
 	ConflictIgnore ConflictStrategy = "ignore" // Ignore conflicts (ON CONFLICT DO NOTHING / INSERT OR IGNORE)
 	ConflictError  ConflictStrategy = "error"  // Fail on conflicts (default INSERT behavior)
 )
 
-// PostgreSQL-specific conflict strategies
+// SQLite-specific conflict strategies
 const (
 	ConflictReplace ConflictStrategy = "replace" // SQLite only: REPLACE existing row
 )
@@ -71,6 +72,30 @@ var (
 	}
 )
 
+// SQL column type validation
+var (
+	// Valid PostgreSQL column types
+	postgreSQLColumnTypes = map[string]bool{
+		"SMALLINT": true, "INTEGER": true, "BIGINT": true, "DECIMAL": true, "NUMERIC": true,
+		"REAL": true, "DOUBLE PRECISION": true, "SMALLSERIAL": true, "SERIAL": true, "BIGSERIAL": true,
+		"MONEY": true, "CHARACTER VARYING": true, "VARCHAR": true, "CHARACTER": true, "CHAR": true,
+		"TEXT": true, "BYTEA": true, "TIMESTAMP": true, "TIMESTAMPTZ": true, "DATE": true,
+		"TIME": true, "TIMETZ": true, "INTERVAL": true, "BOOLEAN": true, "POINT": true,
+		"LINE": true, "LSEG": true, "BOX": true, "PATH": true, "POLYGON": true, "CIRCLE": true,
+		"CIDR": true, "INET": true, "MACADDR": true, "BIT": true, "BIT VARYING": true,
+		"TSVECTOR": true, "TSQUERY": true, "UUID": true, "XML": true, "JSON": true, "JSONB": true,
+	}
+	
+	// Valid SQLite column types
+	sqliteColumnTypes = map[string]bool{
+		"NULL": true, "INTEGER": true, "REAL": true, "TEXT": true, "BLOB": true,
+		"NUMERIC": true, "BOOLEAN": true, "DATE": true, "DATETIME": true,
+	}
+	
+	// Common column type patterns (for VARCHAR(n), DECIMAL(p,s), etc.)
+	columnTypePatternRegex = regexp.MustCompile(`^[A-Z]+(?:\([0-9,\s]+\))?$`)
+)
+
 // ValidateSQLIdentifier validates that a string is a safe SQL identifier
 func ValidateSQLIdentifier(identifier string) error {
 	if identifier == "" {
@@ -88,6 +113,40 @@ func ValidateSQLIdentifier(identifier string) error {
 	upperIdent := strings.ToUpper(identifier)
 	if sqlReservedWords[upperIdent] {
 		return fmt.Errorf("identifier is a reserved SQL keyword: %s", identifier)
+	}
+	
+	return nil
+}
+
+// ValidateColumnType validates that a column type is safe for the specified database
+func ValidateColumnType(columnType string, dbType string) error {
+	if columnType == "" {
+		return fmt.Errorf("column type cannot be empty")
+	}
+	
+	// Normalize to uppercase for comparison
+	upperType := strings.ToUpper(strings.TrimSpace(columnType))
+	
+	// Check if it matches a pattern (like VARCHAR(255))
+	if !columnTypePatternRegex.MatchString(upperType) {
+		return fmt.Errorf("invalid column type format: %s", columnType)
+	}
+	
+	// Extract base type (remove parentheses and parameters)
+	baseType := strings.Split(upperType, "(")[0]
+	
+	// Validate against database-specific types
+	switch dbType {
+	case "postgresql":
+		if !postgreSQLColumnTypes[baseType] {
+			return fmt.Errorf("unsupported PostgreSQL column type: %s", baseType)
+		}
+	case "sqlite":
+		if !sqliteColumnTypes[baseType] {
+			return fmt.Errorf("unsupported SQLite column type: %s", baseType)
+		}
+	default:
+		return fmt.Errorf("unsupported database type: %s", dbType)
 	}
 	
 	return nil
@@ -281,7 +340,7 @@ var DefaultConfigs = map[string]Config{
 			"schema":       "public",
 			"batch_size":   "1000",
 			"create_table": "true",
-			"on_conflict":  "ignore",
+			"on_conflict":  string(ConflictIgnore),
 		},
 	},
 	"sqlite": {
@@ -290,7 +349,7 @@ var DefaultConfigs = map[string]Config{
 			"table":        "scraped_data",
 			"batch_size":   "1000",
 			"create_table": "true",
-			"on_conflict":  "ignore",
+			"on_conflict":  string(ConflictIgnore),
 		},
 	},
 }

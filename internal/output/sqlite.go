@@ -14,6 +14,15 @@ import (
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
 )
 
+// SQLite connection parameter constants
+const (
+	DefaultSQLiteConnectionParams = "?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=on"
+	DefaultSQLiteSynchronous      = "NORMAL"
+	DefaultSQLiteCacheSize        = 10000
+	DefaultSQLiteTempStore        = "memory"
+	DefaultSQLiteMmapSize         = 268435456 // 256MB
+)
+
 // SQLiteWriter writes data to SQLite database
 type SQLiteWriter struct {
 	db            *sql.DB
@@ -64,7 +73,7 @@ func NewSQLiteWriter(options SQLiteOptions) (*SQLiteWriter, error) {
 	// Connect to database
 	connectionParams := options.ConnectionParams
 	if connectionParams == "" {
-		connectionParams = "?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=on"
+		connectionParams = DefaultSQLiteConnectionParams
 	}
 	db, err := sql.Open("sqlite3", options.DatabasePath+connectionParams)
 	if err != nil {
@@ -84,10 +93,10 @@ func NewSQLiteWriter(options SQLiteOptions) (*SQLiteWriter, error) {
 
 	// Enable optimizations
 	pragmas := []string{
-		"PRAGMA synchronous = NORMAL",
-		"PRAGMA cache_size = 10000",
-		"PRAGMA temp_store = memory",
-		"PRAGMA mmap_size = 268435456", // 256MB
+		fmt.Sprintf("PRAGMA synchronous = %s", DefaultSQLiteSynchronous),
+		fmt.Sprintf("PRAGMA cache_size = %d", DefaultSQLiteCacheSize),
+		fmt.Sprintf("PRAGMA temp_store = %s", DefaultSQLiteTempStore),
+		fmt.Sprintf("PRAGMA mmap_size = %d", DefaultSQLiteMmapSize),
 	}
 
 	for _, pragma := range pragmas {
@@ -157,6 +166,10 @@ func (w *SQLiteWriter) createTable(data []map[string]interface{}) error {
 		columnType := columnTypes[column]
 		// Override with user-specified types if provided
 		if userType, exists := w.config.ColumnTypes[column]; exists {
+			// Validate user-specified column type
+			if err := ValidateColumnType(userType, "sqlite"); err != nil {
+				return fmt.Errorf("invalid column type for column '%s': %w", column, err)
+			}
 			columnType = userType
 		}
 		// SQLite uses square brackets for identifier quoting (also supports double quotes)

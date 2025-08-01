@@ -136,6 +136,10 @@ func (w *PostgreSQLWriter) createTable(data []map[string]interface{}) error {
 		columnType := columnTypes[column]
 		// Override with user-specified types if provided
 		if userType, exists := w.config.ColumnTypes[column]; exists {
+			// Validate user-specified column type
+			if err := ValidateColumnType(userType, "postgresql"); err != nil {
+				return fmt.Errorf("invalid column type for column '%s': %w", column, err)
+			}
 			columnType = userType
 		}
 		// PostgreSQL uses double quotes for identifier quoting (SQL standard)

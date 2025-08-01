@@ -94,7 +94,7 @@ func (m *Manager) createPostgreSQLWriter() (Writer, error) {
 		options.BatchSize = 1000
 	}
 	if options.OnConflict == "" {
-		options.OnConflict = "ignore"
+		options.OnConflict = ConflictIgnore
 	}
 	if options.ColumnTypes == nil {
 		options.ColumnTypes = make(map[string]string)
@@ -121,7 +121,7 @@ func (m *Manager) createSQLiteWriter() (Writer, error) {
 		options.BatchSize = 1000
 	}
 	if options.OnConflict == "" {
-		options.OnConflict = "ignore"
+		options.OnConflict = ConflictIgnore
 	}
 	if options.ColumnTypes == nil {
 		options.ColumnTypes = make(map[string]string)
