@@ -129,14 +129,18 @@ func (m *Manager) createSQLiteWriter() (Writer, error) {
 
 	// Database path is required
 	if options.DatabasePath == "" {
-		// If no database_path specified, use the File field or default
-		if m.config.File != "" {
-			options.DatabasePath = m.config.File
-		} else {
-			options.DatabasePath = "output.db"
-		}
+		options.DatabasePath = m.resolveSQLitePath()
 	}
 
 	return NewSQLiteWriter(options)
+}
+
+// resolveSQLitePath determines the SQLite database path using fallback logic
+func (m *Manager) resolveSQLitePath() string {
+	// Priority order: explicit database_path > config file path > default
+	if m.config.File != "" {
+		return m.config.File
+	}
+	return "output.db" // Default SQLite database name
 }
 

@@ -92,9 +92,9 @@ var (
 		"NUMERIC": true, "BOOLEAN": true, "DATE": true, "DATETIME": true,
 	}
 	
-	// Common column type patterns (for VARCHAR(n), DECIMAL(p,s), etc.)
-	// Only allows digits and commas within parentheses for better validation
-	columnTypePatternRegex = regexp.MustCompile(`^[A-Z]+(?:\([0-9]+(,[0-9]+)*\))?$`)
+	// Common column type patterns (for VARCHAR(n), DECIMAL(p,s), DOUBLE PRECISION, etc.)
+	// Allows multi-word types like 'DOUBLE PRECISION' and 'CHARACTER VARYING'
+	columnTypePatternRegex = regexp.MustCompile(`^[A-Z]+(?: [A-Z]+)*(?:\([0-9]+(,[0-9]+)*\))?$`)
 )
 
 // System column definitions - consistent across database implementations
@@ -105,8 +105,16 @@ const (
 )
 
 // Time format patterns for quick validation before parsing
+// Compiled once at package initialization for better performance
 var (
-	// Common time format patterns to check before expensive parsing
+	timeFormatPatterns []struct{
+		minLen, maxLen int
+		pattern *regexp.Regexp
+	}
+)
+
+// Initialize time format patterns once at package load
+func init() {
 	timeFormatPatterns = []struct{
 		minLen, maxLen int
 		pattern *regexp.Regexp
@@ -118,7 +126,7 @@ var (
 		// DateTime format: "2006-01-02 15:04:05"
 		{19, 19, regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$`)},
 	}
-)
+}
 
 // CouldBeTimeFormat performs a quick check to see if a string might be a time format
 // This avoids expensive time.Parse calls on obviously non-time strings
