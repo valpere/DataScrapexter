@@ -175,25 +175,18 @@ func (w *SQLiteWriter) createTable(data []map[string]interface{}) error {
 	// Infer column types from data
 	columnTypes := w.inferColumnTypes(data)
 
-	// Build CREATE TABLE statement
-	var columnDefs []string
-	for _, column := range w.columns {
-		// Validate column name for SQL safety
-		if err := ValidateSQLiteIdentifier(column); err != nil {
-			return fmt.Errorf("invalid column name '%s': %w", column, err)
-		}
-		
-		columnType := columnTypes[column]
-		// Override with user-specified types if provided
-		if userType, exists := w.config.ColumnTypes[column]; exists {
-			// Validate user-specified column type
-			if err := ValidateColumnType(userType, "sqlite"); err != nil {
-				return fmt.Errorf("invalid column type for column '%s': %w", column, err)
-			}
-			columnType = userType
-		}
-		// SQLite uses double quotes for identifier quoting for consistency
-		columnDefs = append(columnDefs, fmt.Sprintf("%s %s", w.quoteIdentifier(column), columnType))
+	// Build CREATE TABLE statement using shared utility
+	builder := &ColumnDefinitionBuilder{
+		DBType:      "sqlite",
+		Columns:     w.columns,
+		ColumnTypes: columnTypes,
+		UserTypes:   w.config.ColumnTypes,
+		QuoteFunc:   w.quoteIdentifier,
+	}
+	
+	columnDefs, err := builder.BuildColumnDefinitions()
+	if err != nil {
+		return err
 	}
 
 	// Add system columns (created_at timestamp column)
@@ -527,13 +520,11 @@ func (w *SQLiteWriter) performDatabaseOptimization() error {
 		// If incremental_vacuum fails, log but don't fail the close operation
 		log.Printf("Warning: PRAGMA incremental_vacuum failed: %v", err)
 		
-		// Fallback to a limited VACUUM with timeout protection would be ideal,
-		// but SQLite doesn't support VACUUM timeouts. In production, consider
-		// implementing this as a background goroutine with context cancellation.
-		// TODO: Implement a background goroutine with context cancellation to
-		// handle the fallback VACUUM operation. This should ensure that the
-		// operation does not block the main thread and can be safely terminated
-		// if it exceeds a predefined timeout or if the application shuts down.
+		// Note: A full VACUUM fallback is not implemented here because:
+		// 1. SQLite doesn't support VACUUM timeouts, making it potentially blocking
+		// 2. Full VACUUM can take minutes/hours on large databases
+		// 3. incremental_vacuum is the recommended approach for production
+		// For critical space recovery, run full VACUUM manually during maintenance windows.
 	}
 	
 	return nil

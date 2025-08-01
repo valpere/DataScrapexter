@@ -135,25 +135,18 @@ func (w *PostgreSQLWriter) createTable(data []map[string]interface{}) error {
 	// Infer column types from data
 	columnTypes := w.inferColumnTypes(data)
 
-	// Build CREATE TABLE statement
-	var columnDefs []string
-	for _, column := range w.columns {
-		// Validate column name for SQL safety
-		if err := ValidatePostgreSQLIdentifier(column); err != nil {
-			return fmt.Errorf("invalid column name '%s': %w", column, err)
-		}
-		
-		columnType := columnTypes[column]
-		// Override with user-specified types if provided
-		if userType, exists := w.config.ColumnTypes[column]; exists {
-			// Validate user-specified column type
-			if err := ValidateColumnType(userType, "postgresql"); err != nil {
-				return fmt.Errorf("invalid column type for column '%s': %w", column, err)
-			}
-			columnType = userType
-		}
-		// PostgreSQL uses double quotes for identifier quoting (SQL standard)
-		columnDefs = append(columnDefs, fmt.Sprintf("%s %s", w.quoteIdentifier(column), columnType))
+	// Build CREATE TABLE statement using shared utility
+	builder := &ColumnDefinitionBuilder{
+		DBType:      "postgresql",
+		Columns:     w.columns,
+		ColumnTypes: columnTypes,
+		UserTypes:   w.config.ColumnTypes,
+		QuoteFunc:   w.quoteIdentifier,
+	}
+	
+	columnDefs, err := builder.BuildColumnDefinitions()
+	if err != nil {
+		return err
 	}
 
 	// Add system columns (created_at timestamp column)

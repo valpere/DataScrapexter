@@ -214,7 +214,7 @@ func ValidatePostgreSQLIdentifier(identifier string) error {
 	}
 	
 	upperIdent := strings.ToUpper(identifier)
-	if sqlReservedWords[upperIdent] {
+	if postgresReservedWords[upperIdent] {
 		return fmt.Errorf("identifier is a reserved SQL keyword: %s", identifier)
 	}
 	
@@ -236,7 +236,7 @@ func ValidateSQLiteIdentifier(identifier string) error {
 	}
 	
 	upperIdent := strings.ToUpper(identifier)
-	if sqlReservedWords[upperIdent] {
+	if sqliteReservedWords[upperIdent] {
 		return fmt.Errorf("identifier is a reserved SQL keyword: %s", identifier)
 	}
 	
@@ -275,6 +275,58 @@ func ValidateColumnType(columnType string, dbType string) error {
 	}
 	
 	return nil
+}
+
+// ColumnDefinitionBuilder helps build CREATE TABLE column definitions
+type ColumnDefinitionBuilder struct {
+	DBType      string
+	Columns     []string
+	ColumnTypes map[string]string
+	UserTypes   map[string]string
+	QuoteFunc   func(string) string
+}
+
+// BuildColumnDefinitions builds column definitions for CREATE TABLE statements
+// Returns the column definitions slice and any validation errors
+func (cdb *ColumnDefinitionBuilder) BuildColumnDefinitions() ([]string, error) {
+	var columnDefs []string
+	
+	for _, column := range cdb.Columns {
+		// Validate column name for SQL safety based on database type
+		var err error
+		switch cdb.DBType {
+		case "postgresql":
+			err = ValidatePostgreSQLIdentifier(column)
+		case "sqlite":
+			err = ValidateSQLiteIdentifier(column)
+		default:
+			err = ValidateSQLIdentifier(column) // Default validation
+		}
+		
+		if err != nil {
+			return nil, fmt.Errorf("invalid column name '%s': %w", column, err)
+		}
+		
+		columnType := cdb.ColumnTypes[column]
+		// Override with user-specified types if provided
+		if userType, exists := cdb.UserTypes[column]; exists {
+			// Validate user-specified column type
+			if err := ValidateColumnType(userType, cdb.DBType); err != nil {
+				return nil, fmt.Errorf("invalid column type for column '%s': %w", column, err)
+			}
+			columnType = userType
+		}
+		
+		// Use the provided quote function to quote identifiers
+		quotedColumn := column
+		if cdb.QuoteFunc != nil {
+			quotedColumn = cdb.QuoteFunc(column)
+		}
+		
+		columnDefs = append(columnDefs, fmt.Sprintf("%s %s", quotedColumn, columnType))
+	}
+	
+	return columnDefs, nil
 }
 
 // IsValid checks if the output format is valid
