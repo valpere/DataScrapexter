@@ -181,8 +181,9 @@ fields:
 `
 				// Add many fields to create a large file
 				for i := 0; i < 1000; i++ {
-					content += `  - name: field` + string(rune(i%26+'a')) + `
-    selector: .selector` + string(rune(i%26+'a')) + `
+					suffix := string(rune('a' + (i % 26)))
+					content += `  - name: field` + suffix + `
+    selector: .selector` + suffix + `
     type: text
 `
 				}
