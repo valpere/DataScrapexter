@@ -3,6 +3,7 @@ package antidetect
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"math"
@@ -323,8 +324,12 @@ func generateCanvasVariations() []string {
 	for i := range variations {
 		// Generate small random strings that can be appended to canvas data
 		bytes := make([]byte, 2)
-		rand.Read(bytes)
-		variations[i] = hex.EncodeToString(bytes)
+		if _, err := rand.Read(bytes); err != nil {
+			// Fallback to time-based random if crypto/rand fails
+			variations[i] = fmt.Sprintf("%04x", time.Now().UnixNano()&0xFFFF)
+		} else {
+			variations[i] = hex.EncodeToString(bytes)
+		}
 	}
 	return variations
 }
@@ -332,14 +337,23 @@ func generateCanvasVariations() []string {
 func generateRandomCanvasData() string {
 	// Simulate canvas rendering output
 	data := make([]byte, 32)
-	rand.Read(data)
+	if _, err := rand.Read(data); err != nil {
+		// Fallback to predictable pattern if crypto/rand fails
+		for i := range data {
+			data[i] = byte(time.Now().UnixNano() + int64(i))
+		}
+	}
 	return hex.EncodeToString(data)
 }
 
 func generateHash(data string) string {
 	// Simple hash simulation
 	hash := make([]byte, 16)
-	rand.Read(hash)
+	if _, err := rand.Read(hash); err != nil {
+		// Fallback to hash of input data if crypto/rand fails
+		h := sha256.Sum256([]byte(data + time.Now().String()))
+		copy(hash, h[:16])
+	}
 	return hex.EncodeToString(hash)
 }
 

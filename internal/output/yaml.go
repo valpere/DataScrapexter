@@ -253,7 +253,11 @@ func (w *YAMLWriter) processValue(value interface{}) interface{} {
 	case []map[string]interface{}:
 		processed := make([]map[string]interface{}, len(v))
 		for i, val := range v {
-			processed[i] = w.processValue(val).(map[string]interface{})
+			if processedVal, ok := w.processValue(val).(map[string]interface{}); ok {
+				processed[i] = processedVal
+			} else {
+				processed[i] = map[string]interface{}{"value": val}
+			}
 		}
 		return processed
 		

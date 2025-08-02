@@ -439,8 +439,12 @@ func (hm *HealthManager) LivenessHandler() http.HandlerFunc {
 	}
 }
 
-// Predefined health checks
-var startTime = time.Now()
+// Package-level variables initialized safely
+var startTime time.Time
+
+func init() {
+	startTime = time.Now()
+}
 
 // DatabaseHealthCheck creates a database connectivity health check
 func DatabaseHealthCheck(name string, checkFunc func(ctx context.Context) error) *HealthCheck {

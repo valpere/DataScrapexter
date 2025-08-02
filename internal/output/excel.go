@@ -506,7 +506,7 @@ func (w *ExcelWriter) applyFinalFormatting() error {
 // createNewSheet creates a new sheet when row limit is reached
 func (w *ExcelWriter) createNewSheet() error {
 	// Generate new sheet name
-	newSheetName := fmt.Sprintf("%s_%d", w.config.SheetName, w.file.GetSheetList())
+	newSheetName := fmt.Sprintf("%s_%d", w.config.SheetName, len(w.file.GetSheetList()))
 	
 	// Create new sheet
 	index, err := w.file.NewSheet(newSheetName)

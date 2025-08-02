@@ -275,6 +275,7 @@ func getFirefoxCipherSuites() []uint16 {
 	}
 }
 
+// getSafariCipherSuites returns Safari-like cipher suite ordering (secure AEAD only)
 func getSafariCipherSuites() []uint16 {
 	return []uint16{
 		tls.TLS_AES_128_GCM_SHA256,
@@ -286,14 +287,6 @@ func getSafariCipherSuites() []uint16 {
 		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
 		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384,
-		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-		tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
 	}
 }
 
@@ -312,6 +305,19 @@ func getDefaultCipherSuites() []uint16 {
 }
 
 func isHTTPSAddr(addr string) bool {
-	// Simple check for HTTPS ports
-	return addr[len(addr)-4:] == ":443" || addr[len(addr)-5:] == ":8443"
+	// Parse the address to properly extract the port
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		// If we can't parse, assume it's not HTTPS
+		return false
+	}
+	
+	// Check for common HTTPS ports
+	switch port {
+	case "443", "8443", "9443":
+		return true
+	default:
+		// Also check if host part suggests HTTPS (rare case)
+		return len(host) > 0 && port != "80" && port != "8080"
+	}
 }

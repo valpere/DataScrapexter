@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 )
@@ -225,6 +226,7 @@ func (w *XMLWriter) writeRecord(record map[string]interface{}) error {
 	for key := range record {
 		keys = append(keys, key)
 	}
+	sort.Strings(keys)
 	
 	for _, key := range keys {
 		value := record[key]
