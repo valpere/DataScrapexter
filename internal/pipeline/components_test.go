@@ -551,10 +551,6 @@ func TestOutputManager_Close(t *testing.T) {
 
 // Helper functions and mock types for testing
 
-func deepEqual(a, b interface{}) bool {
-	return reflect.DeepEqual(a, b)
-}
-
 // Mock enricher for testing
 type MockEnricher struct {
 	name       string
