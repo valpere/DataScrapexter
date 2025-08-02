@@ -64,8 +64,12 @@ func NewYAMLWriter(config YAMLConfig) (*YAMLWriter, error) {
 	if config.GeneratorVersion == "" {
 		config.GeneratorVersion = "1.0"
 	}
-	// Default to including metadata
-	config.IncludeMetadata = true
+	// Default to including metadata only if not explicitly set
+	// This respects user configuration while providing sensible defaults
+	if !config.IncludeMetadata && config.GeneratorName == "DataScrapexter" {
+		// Only set default if using default generator name (indicating no explicit config)
+		config.IncludeMetadata = true
+	}
 	
 	file, err := os.Create(config.FilePath)
 	if err != nil {

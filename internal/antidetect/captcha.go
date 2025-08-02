@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -259,17 +261,49 @@ func (cm *CaptchaManager) GetStats(ctx context.Context) (map[string]interface{},
 
 // TwoCaptchaSolver implements 2Captcha API
 type TwoCaptchaSolver struct {
-	apiKey string
-	client *http.Client
-	baseURL string
+	apiKey         string
+	client         *http.Client
+	baseURL        string
+	requestTimeout time.Duration
+	retryConfig    CaptchaRetryConfig
 }
 
-// NewTwoCaptchaSolver creates a new 2Captcha solver
+// CaptchaRetryConfig configuration for CAPTCHA retry mechanisms
+type CaptchaRetryConfig struct {
+	MaxRetries    int
+	InitialDelay  time.Duration
+	MaxDelay      time.Duration
+	BackoffFactor float64
+}
+
+// NewTwoCaptchaSolver creates a new 2Captcha solver with enhanced security
 func NewTwoCaptchaSolver(apiKey string) *TwoCaptchaSolver {
 	return &TwoCaptchaSolver{
-		apiKey:  apiKey,
-		client:  &http.Client{Timeout: 30 * time.Second},
-		baseURL: "https://2captcha.com",
+		apiKey:         apiKey,
+		client:         createSecureHTTPClient(),
+		baseURL:        "https://2captcha.com",
+		requestTimeout: 15 * time.Second, // Per-request timeout
+		retryConfig: CaptchaRetryConfig{
+			MaxRetries:    3,
+			InitialDelay:  1 * time.Second,
+			MaxDelay:      10 * time.Second,
+			BackoffFactor: 2.0,
+		},
+	}
+}
+
+// createSecureHTTPClient creates an HTTP client with security hardening
+func createSecureHTTPClient() *http.Client {
+	return &http.Client{
+		Timeout: 30 * time.Second, // Overall client timeout
+		Transport: &http.Transport{
+			TLSHandshakeTimeout:   10 * time.Second, // TLS handshake timeout
+			ResponseHeaderTimeout: 10 * time.Second, // Response header timeout
+			ExpectContinueTimeout: 1 * time.Second,  // 100-continue timeout
+			IdleConnTimeout:       90 * time.Second, // Idle connection timeout
+			MaxIdleConns:          10,               // Limit idle connections
+			MaxIdleConnsPerHost:   2,                // Limit per-host connections
+		},
 	}
 }
 
@@ -439,12 +473,21 @@ func (tc *TwoCaptchaSolver) makeRequest(ctx context.Context, endpoint string, pa
 	
 	fullURL.RawQuery = values.Encode()
 	
-	req, err := http.NewRequestWithContext(ctx, "GET", fullURL.String(), nil)
+	// Create request with per-request timeout context
+	requestCtx, cancel := context.WithTimeout(ctx, tc.requestTimeout)
+	defer cancel()
+	
+	req, err := http.NewRequestWithContext(requestCtx, "GET", fullURL.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("2Captcha: failed to create HTTP request for '%s': %w", fullURL.String(), err)
 	}
 	
-	resp, err := tc.client.Do(req)
+	// Set security headers
+	req.Header.Set("User-Agent", "DataScrapexter/1.0")
+	req.Header.Set("Accept", "application/json")
+	
+	// Execute request with retry mechanism
+	resp, err := tc.executeWithRetry(requestCtx, req)
 	if err != nil {
 		return nil, fmt.Errorf("2Captcha: HTTP request failed for '%s': %w", fullURL.String(), err)
 	}
@@ -455,6 +498,66 @@ func (tc *TwoCaptchaSolver) makeRequest(ctx context.Context, endpoint string, pa
 	}
 	
 	return io.ReadAll(resp.Body)
+}
+
+// executeWithRetry executes HTTP request with exponential backoff retry
+func (tc *TwoCaptchaSolver) executeWithRetry(ctx context.Context, req *http.Request) (*http.Response, error) {
+	var resp *http.Response
+	var err error
+	
+	for attempt := 0; attempt <= tc.retryConfig.MaxRetries; attempt++ {
+		if attempt > 0 {
+			// Calculate exponential backoff delay
+			delay := time.Duration(float64(tc.retryConfig.InitialDelay) * 
+				math.Pow(tc.retryConfig.BackoffFactor, float64(attempt-1)))
+			
+			if delay > tc.retryConfig.MaxDelay {
+				delay = tc.retryConfig.MaxDelay
+			}
+			
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// Continue with retry
+			}
+		}
+		
+		resp, err = tc.client.Do(req)
+		if err == nil {
+			return resp, nil
+		}
+		
+		// Check if error is retryable
+		if !tc.isRetryableError(err) {
+			return nil, err
+		}
+	}
+	
+	return nil, fmt.Errorf("2Captcha: request failed after %d attempts: %w", tc.retryConfig.MaxRetries+1, err)
+}
+
+// isRetryableError determines if an error should trigger a retry
+func (tc *TwoCaptchaSolver) isRetryableError(err error) bool {
+	// Retry on network errors, timeouts, and temporary failures
+	if err == nil {
+		return false
+	}
+	
+	errorStr := err.Error()
+	retryablePatterns := []string{
+		"timeout", "connection refused", "temporary failure",
+		"network is unreachable", "no route to host",
+		"connection reset", "broken pipe",
+	}
+	
+	for _, pattern := range retryablePatterns {
+		if strings.Contains(strings.ToLower(errorStr), pattern) {
+			return true
+		}
+	}
+	
+	return false
 }
 
 // AntiCaptchaSolver implements Anti-Captcha API

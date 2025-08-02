@@ -23,6 +23,45 @@ func TestTLSFingerprinter_GetRandomConfig(t *testing.T) {
 		}
 	}
 	
+	// Verify configs actually vary (test randomization)
+	if len(configs) >= 2 {
+		// Check that at least some configs have different characteristics
+		hasVariation := false
+		firstConfig := configs[0]
+		
+		for i := 1; i < len(configs); i++ {
+			currentConfig := configs[i]
+			
+			// Compare cipher suites
+			if len(firstConfig.CipherSuites) != len(currentConfig.CipherSuites) {
+				hasVariation = true
+				break
+			}
+			
+			// Compare TLS versions
+			if firstConfig.MinVersion != currentConfig.MinVersion || 
+			   firstConfig.MaxVersion != currentConfig.MaxVersion {
+				hasVariation = true
+				break
+			}
+			
+			// Compare cipher suite contents
+			for j := 0; j < len(firstConfig.CipherSuites); j++ {
+				if firstConfig.CipherSuites[j] != currentConfig.CipherSuites[j] {
+					hasVariation = true
+					break
+				}
+			}
+			if hasVariation {
+				break
+			}
+		}
+		
+		if !hasVariation {
+			t.Error("GetRandomConfig() appears to return identical configurations - randomization may not be working")
+		}
+	}
+	
 	// Verify configs have expected properties
 	config := configs[0]
 	if config.MinVersion == 0 {

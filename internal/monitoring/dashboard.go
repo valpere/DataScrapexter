@@ -365,10 +365,20 @@ func (d *Dashboard) staticHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	// Clean the path and perform robust security checks
+	// Enhanced security validation
+	// 1. Check for null bytes (potential path truncation attack)
+	if strings.Contains(decodedFile, "\x00") {
+		http.Error(w, "Invalid file path: null byte detected", http.StatusBadRequest)
+		return
+	}
+	
+	// 2. Unicode normalization to prevent bypass attempts
+	// TODO: Consider adding golang.org/x/text/unicode/norm for full normalization
+	
+	// 3. Clean the path and perform robust security checks
 	cleanedPath := filepath.Clean(decodedFile)
 
-	// Prevent directory traversal - ensure cleaned path doesn't escape static directory
+	// 4. Prevent directory traversal - ensure cleaned path doesn't escape static directory
 	staticDir := filepath.Join(d.config.Path, "static")
 	absRequestedPath := filepath.Join(staticDir, cleanedPath)
 	rel, err := filepath.Rel(staticDir, absRequestedPath)
@@ -389,6 +399,13 @@ func (d *Dashboard) staticHandler(w http.ResponseWriter, r *http.Request) {
 	ext := filepath.Ext(strings.ToLower(cleanedPath))
 	if !allowedExtensions[ext] {
 		http.Error(w, "File type not allowed", http.StatusForbidden)
+		return
+	}
+	
+	// 5. Positive allowlist validation - only allow specific file patterns
+	// This provides defense in depth beyond just extension checking
+	if !d.isValidStaticFilePath(cleanedPath) {
+		http.Error(w, "File path not permitted", http.StatusForbidden)
 		return
 	}
 	
@@ -440,6 +457,37 @@ func (d *Dashboard) getSummary() DashboardSummary {
 		MemoryUsage:    245.7,
 		CPUUsage:       23.4,
 	}
+}
+
+// isValidStaticFilePath validates file paths against allowed patterns
+// This provides positive allowlist validation beyond extension checking
+func (d *Dashboard) isValidStaticFilePath(path string) bool {
+	// Only allow simple alphanumeric paths with safe separators
+	// This prevents various encoding and traversal attacks
+	for _, char := range path {
+		if !((char >= 'a' && char <= 'z') ||
+			(char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') ||
+			char == '/' || char == '-' || char == '_' || char == '.') {
+			return false
+		}
+	}
+	
+	// Additional pattern validation - prevent suspicious patterns
+	suspiciousPatterns := []string{
+		"../", "..\\",
+		"/..", "\\..",
+		"//", "\\\\",
+		".", "..",
+	}
+	
+	for _, pattern := range suspiciousPatterns {
+		if strings.Contains(path, pattern) {
+			return false
+		}
+	}
+	
+	return true
 }
 
 // getAllowedExtensions returns the allowed file extensions for static files
