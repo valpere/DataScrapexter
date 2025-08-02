@@ -1,4 +1,4 @@
-// internal/output/database_test_fixed.go
+// internal/output/database_test.go
 package output
 
 import (
