@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
+	"path/filepath"
 	"sort"
-	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -348,12 +350,34 @@ func (d *Dashboard) apiChartsHandler(w http.ResponseWriter, r *http.Request) {
 // staticHandler serves static files for the dashboard
 // TODO: Implement actual static file serving for production use
 func (d *Dashboard) staticHandler(w http.ResponseWriter, r *http.Request) {
-	// Extract the requested file path
+	// Extract and decode the requested file path
 	requestedFile := r.URL.Path[len(d.config.Path+"/static/"):]
 	
-	// Security check - prevent directory traversal
-	if strings.Contains(requestedFile, "..") {
-		http.Error(w, "Invalid file path", http.StatusBadRequest)
+	// URL decode to handle encoded characters
+	decodedFile, err := url.QueryUnescape(requestedFile)
+	if err != nil {
+		http.Error(w, "Invalid file path encoding", http.StatusBadRequest)
+		return
+	}
+	
+	// Clean the path and perform robust security checks
+	cleanedPath := filepath.Clean(decodedFile)
+	
+	// Prevent directory traversal - ensure cleaned path doesn't escape
+	if strings.Contains(cleanedPath, "..") || filepath.IsAbs(cleanedPath) || strings.HasPrefix(cleanedPath, "/") {
+		http.Error(w, "Invalid file path", http.StatusForbidden)
+		return
+	}
+	
+	// Additional validation - only allow specific file types for security
+	allowedExtensions := map[string]bool{
+		".css": true, ".js": true, ".png": true, ".jpg": true, ".jpeg": true, 
+		".gif": true, ".svg": true, ".ico": true, ".woff": true, ".woff2": true,
+	}
+	
+	ext := filepath.Ext(strings.ToLower(cleanedPath))
+	if !allowedExtensions[ext] {
+		http.Error(w, "File type not allowed", http.StatusForbidden)
 		return
 	}
 	

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"net/url"
+	"strconv"
 	"time"
 )
 
@@ -305,19 +307,36 @@ func getDefaultCipherSuites() []uint16 {
 }
 
 func isHTTPSAddr(addr string) bool {
-	// Parse the address to properly extract the port
+	// First try to parse as URL to handle full URLs
+	if u, err := url.Parse(addr); err == nil && u.Scheme != "" {
+		return u.Scheme == "https"
+	}
+	
+	// Handle host:port format (including IPv6)
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		// If we can't parse, assume it's not HTTPS
+		// Try parsing without port (might be just hostname)
+		if _, parseErr := url.Parse("https://" + addr); parseErr == nil {
+			// Default to HTTPS for hostnames without explicit port
+			return true
+		}
 		return false
 	}
 	
-	// Check for common HTTPS ports
-	switch port {
-	case "443", "8443", "9443":
+	// Parse port number for better validation
+	portNum, err := strconv.Atoi(port)
+	if err != nil {
+		return false
+	}
+	
+	// Common HTTPS ports
+	switch portNum {
+	case 443, 8443, 9443:
 		return true
+	case 80, 8080, 3000, 8000: // Common HTTP ports
+		return false
 	default:
-		// Also check if host part suggests HTTPS (rare case)
-		return len(host) > 0 && port != "80" && port != "8080"
+		// For other ports, assume HTTPS if hostname is valid
+		return len(host) > 0
 	}
 }

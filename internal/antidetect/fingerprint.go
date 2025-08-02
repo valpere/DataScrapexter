@@ -5,8 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
-	"math"
 	mathrand "math/rand"
 	"time"
 )
@@ -325,8 +323,12 @@ func generateCanvasVariations() []string {
 		// Generate small random strings that can be appended to canvas data
 		bytes := make([]byte, 2)
 		if _, err := rand.Read(bytes); err != nil {
-			// Fallback to time-based random if crypto/rand fails
-			variations[i] = fmt.Sprintf("%04x", time.Now().UnixNano()&0xFFFF)
+			// Fallback using math/rand with time seed for security-sensitive fingerprinting
+			// NOTE: This reduces randomness quality but maintains functionality
+			mathrand.Seed(time.Now().UnixNano() + int64(i))
+			bytes[0] = byte(mathrand.Intn(256))
+			bytes[1] = byte(mathrand.Intn(256))
+			variations[i] = hex.EncodeToString(bytes)
 		} else {
 			variations[i] = hex.EncodeToString(bytes)
 		}
@@ -338,9 +340,11 @@ func generateRandomCanvasData() string {
 	// Simulate canvas rendering output
 	data := make([]byte, 32)
 	if _, err := rand.Read(data); err != nil {
-		// Fallback to predictable pattern if crypto/rand fails
+		// Fallback using math/rand for better unpredictability
+		// NOTE: Reduces security but maintains fingerprinting functionality
+		mathrand.Seed(time.Now().UnixNano())
 		for i := range data {
-			data[i] = byte(time.Now().UnixNano() + int64(i))
+			data[i] = byte(mathrand.Intn(256))
 		}
 	}
 	return hex.EncodeToString(data)

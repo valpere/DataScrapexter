@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -94,7 +95,7 @@ type SystemMetrics struct {
 	CPUUsage       float64           `json:"cpu_usage_percent"`
 	MemoryUsage    MemoryMetrics     `json:"memory"`
 	GoroutineCount int               `json:"goroutine_count"`
-	GCStats        runtime.GCStats   `json:"gc_stats"`
+	GCStats        debug.GCStats     `json:"gc_stats"`
 	Uptime         time.Duration     `json:"uptime"`
 	LoadAverage    []float64         `json:"load_average,omitempty"`
 	DiskUsage      map[string]int64  `json:"disk_usage,omitempty"`
@@ -369,8 +370,8 @@ func (hm *HealthManager) getSystemMetrics() SystemMetrics {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	
-	var gcStats runtime.GCStats
-	runtime.ReadGCStats(&gcStats)
+	var gcStats debug.GCStats
+	debug.ReadGCStats(&gcStats)
 
 	return SystemMetrics{
 		MemoryUsage: MemoryMetrics{
@@ -593,8 +594,11 @@ func HTTPHealthCheck(name, url string, timeout time.Duration) *HealthCheck {
 }
 
 // DiskSpaceHealthCheck creates a disk space health check
-// TODO: This is a stub implementation. Platform-specific disk space checking 
-// needs to be implemented for production use (using syscalls or external tools).
+// DEPRECATED: This is a stub implementation that is not functional.
+// Consider removing this function or implementing platform-specific disk space checking.
+// For production use, implement using:
+// - Unix/Linux: syscall.Statfs() or golang.org/x/sys/unix.Statfs()
+// - Windows: golang.org/x/sys/windows GetDiskFreeSpaceEx()
 func DiskSpaceHealthCheck(path string, minFreePercent float64) *HealthCheck {
 	return &HealthCheck{
 		Name:     "disk_space_" + path,

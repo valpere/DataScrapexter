@@ -60,7 +60,7 @@ type MetricsManager struct {
 	rateLimitWaits    *prometheus.HistogramVec
 	
 	// Custom metrics
-	customMetrics     map[string]prometheus.Metric
+	customMetrics     map[string]prometheus.Collector
 	customMutex       sync.RWMutex
 	
 	// Configuration
@@ -99,7 +99,7 @@ func NewMetricsManager(config MetricsConfig) *MetricsManager {
 		namespace:     config.Namespace,
 		subsystem:     config.Subsystem,
 		labels:        config.Labels,
-		customMetrics: make(map[string]prometheus.Metric),
+		customMetrics: make(map[string]prometheus.Collector),
 	}
 	
 	mm.initializeMetrics()
@@ -580,7 +580,7 @@ func (mm *MetricsManager) RegisterCustomHistogram(name, help string, labels []st
 }
 
 // GetCustomMetric retrieves a custom metric by name
-func (mm *MetricsManager) GetCustomMetric(name string) (prometheus.Metric, bool) {
+func (mm *MetricsManager) GetCustomMetric(name string) (prometheus.Collector, bool) {
 	mm.customMutex.RLock()
 	defer mm.customMutex.RUnlock()
 	metric, exists := mm.customMetrics[name]

@@ -6,7 +6,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"os"
-	"reflect"
 	"sort"
 	"strings"
 	"time"

@@ -18,7 +18,7 @@ func TestUserAgentRotatorIntegration(t *testing.T) {
     }
 }
 
-func TestAntiDetectionClientIntegration(t *testing.T) {
+func TestAntiDetectionClientCreation(t *testing.T) {
     config := &AntiDetectionConfig{}
 
     client := NewAntiDetectionClient(config)

@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
+	"net/url"
 	"time"
 )
 
@@ -95,6 +95,14 @@ func NewCaptchaManager(config *CaptchaConfig) *CaptchaManager {
 			MinBalance:      1.0,
 			MaxConcurrent:   10,
 		}
+	}
+	
+	// Ensure default values for critical fields
+	if config.PollingInterval <= 0 {
+		config.PollingInterval = 5 * time.Second
+	}
+	if config.SolveTimeout <= 0 {
+		config.SolveTimeout = 120 * time.Second
 	}
 	
 	return &CaptchaManager{
@@ -409,15 +417,18 @@ func (tc *TwoCaptchaSolver) GetStats(ctx context.Context) (map[string]interface{
 
 // makeRequest makes an HTTP request to 2Captcha API
 func (tc *TwoCaptchaSolver) makeRequest(ctx context.Context, endpoint string, params map[string]string) ([]byte, error) {
-	// Build query string
-	var queryParams []string
+	// Build URL with properly escaped parameters
+	baseURL := fmt.Sprintf("%s/%s", tc.baseURL, endpoint)
+	
+	// Use url.Values for proper parameter encoding
+	values := url.Values{}
 	for key, value := range params {
-		queryParams = append(queryParams, fmt.Sprintf("%s=%s", key, value))
+		values.Set(key, value)
 	}
 	
-	url := fmt.Sprintf("%s/%s?%s", tc.baseURL, endpoint, strings.Join(queryParams, "&"))
+	fullURL := baseURL + "?" + values.Encode()
 	
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", fullURL, nil)
 	if err != nil {
 		return nil, err
 	}

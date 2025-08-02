@@ -4,13 +4,20 @@ package output
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/xuri/excelize/v2"
+)
+
+// Excel-specific constants
+const (
+	// ExcelMaxCellLength is the maximum number of characters allowed in a single Excel cell
+	ExcelMaxCellLength = 32767
+	// ExcelMaxSheetRows is the maximum number of rows per sheet in Excel
+	ExcelMaxSheetRows = 1048576
 )
 
 // ExcelWriter implements the Writer interface for Excel output
@@ -324,8 +331,8 @@ func (w *ExcelWriter) processValue(value interface{}) interface{} {
 		return "{" + strings.Join(parts, ", ") + "}"
 	case string:
 		// Handle very long strings
-		if len(v) > 32767 { // Excel's cell character limit
-			return v[:32767]
+		if len(v) > ExcelMaxCellLength {
+			return v[:ExcelMaxCellLength]
 		}
 		return v
 	default:
