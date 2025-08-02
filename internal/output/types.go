@@ -17,6 +17,8 @@ const (
 	FormatXML        OutputFormat = "xml"
 	FormatYAML       OutputFormat = "yaml"
 	FormatTSV        OutputFormat = "tsv"
+	FormatExcel      OutputFormat = "excel"
+	FormatParquet    OutputFormat = "parquet"
 	FormatPostgreSQL OutputFormat = "postgresql"
 	FormatSQLite     OutputFormat = "sqlite"
 )
@@ -44,7 +46,7 @@ const (
 
 // ValidOutputFormats returns all valid output format values
 func ValidOutputFormats() []OutputFormat {
-	return []OutputFormat{FormatJSON, FormatCSV, FormatXML, FormatYAML, FormatTSV, FormatPostgreSQL, FormatSQLite}
+	return []OutputFormat{FormatJSON, FormatCSV, FormatXML, FormatYAML, FormatTSV, FormatExcel, FormatParquet, FormatPostgreSQL, FormatSQLite}
 }
 
 // ValidConflictStrategies returns all valid conflict strategy values
@@ -368,6 +370,10 @@ func (of OutputFormat) GetFileExtension() string {
 		return ".yaml"
 	case FormatTSV:
 		return ".tsv"
+	case FormatExcel:
+		return ".xlsx"
+	case FormatParquet:
+		return ".parquet"
 	default:
 		return ".txt"
 	}
@@ -386,6 +392,10 @@ func (of OutputFormat) GetMimeType() string {
 		return "application/yaml"
 	case FormatTSV:
 		return "text/tab-separated-values"
+	case FormatExcel:
+		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	case FormatParquet:
+		return "application/octet-stream"
 	default:
 		return "text/plain"
 	}
