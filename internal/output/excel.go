@@ -12,12 +12,12 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// Excel-specific constants
+// Excel-specific default limits (can be overridden via ExcelConfig)
 const (
-	// ExcelMaxCellLength is the maximum number of characters allowed in a single Excel cell
-	ExcelMaxCellLength = 32767
-	// ExcelMaxSheetRows is the maximum number of rows per sheet in Excel
-	ExcelMaxSheetRows = 1048576
+	// DefaultExcelMaxCellLength is the default maximum characters in a single Excel cell
+	DefaultExcelMaxCellLength = 32767
+	// DefaultExcelMaxSheetRows is the default maximum rows per sheet in Excel
+	DefaultExcelMaxSheetRows = 1048576
 )
 
 // ExcelWriter implements the Writer interface for Excel output
@@ -44,6 +44,7 @@ type ExcelConfig struct {
 	DateFormat     string            `json:"date_format"`
 	NumberFormat   string            `json:"number_format"`
 	MaxSheetRows   int               `json:"max_sheet_rows"`
+	MaxCellLength  int               `json:"max_cell_length"`
 	CreateIndex    bool              `json:"create_index"`
 	Compression    bool              `json:"compression"`
 }
@@ -108,7 +109,10 @@ func NewExcelWriter(config ExcelConfig) (*ExcelWriter, error) {
 		config.NumberFormat = "0.00"
 	}
 	if config.MaxSheetRows == 0 {
-		config.MaxSheetRows = 1048576 // Excel's maximum
+		config.MaxSheetRows = DefaultExcelMaxSheetRows
+	}
+	if config.MaxCellLength == 0 {
+		config.MaxCellLength = DefaultExcelMaxCellLength
 	}
 	
 	file := excelize.NewFile()
@@ -330,9 +334,13 @@ func (w *ExcelWriter) processValue(value interface{}) interface{} {
 		}
 		return "{" + strings.Join(parts, ", ") + "}"
 	case string:
-		// Handle very long strings
-		if len(v) > ExcelMaxCellLength {
-			return v[:ExcelMaxCellLength]
+		// Handle very long strings using configurable limit
+		maxLength := w.config.MaxCellLength
+		if maxLength <= 0 {
+			maxLength = DefaultExcelMaxCellLength
+		}
+		if len(v) > maxLength {
+			return v[:maxLength]
 		}
 		return v
 	default:
@@ -627,7 +635,7 @@ func ValidateExcelConfig(config ExcelConfig) error {
 		return fmt.Errorf("buffer size must be non-negative")
 	}
 	
-	if config.MaxSheetRows < 1 || config.MaxSheetRows > 1048576 {
+	if config.MaxSheetRows < 1 || config.MaxSheetRows > DefaultExcelMaxSheetRows {
 		return fmt.Errorf("max sheet rows must be between 1 and 1048576")
 	}
 	

@@ -348,7 +348,12 @@ func (d *Dashboard) apiChartsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // staticHandler serves static files for the dashboard
-// TODO: Implement actual static file serving for production use
+// PRODUCTION NOTE: This is a development stub. For production deployment:
+//   1. Use go:embed to embed static files: 
+//      //go:embed static/*
+//      var staticFiles embed.FS
+//   2. Use http.FS(staticFiles) with http.FileServer
+//   3. Or serve static files through a CDN/reverse proxy like nginx
 func (d *Dashboard) staticHandler(w http.ResponseWriter, r *http.Request) {
 	// Extract and decode the requested file path
 	requestedFile := r.URL.Path[len(d.config.Path+"/static/"):]

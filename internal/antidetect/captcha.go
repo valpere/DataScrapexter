@@ -417,8 +417,19 @@ func (tc *TwoCaptchaSolver) GetStats(ctx context.Context) (map[string]interface{
 
 // makeRequest makes an HTTP request to 2Captcha API
 func (tc *TwoCaptchaSolver) makeRequest(ctx context.Context, endpoint string, params map[string]string) ([]byte, error) {
-	// Build URL with properly escaped parameters
-	baseURL := fmt.Sprintf("%s/%s", tc.baseURL, endpoint)
+	// Build URL using proper URL construction for robustness
+	baseURL, err := url.Parse(tc.baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid base URL: %w", err)
+	}
+	
+	// Use ResolveReference for robust URL construction
+	endpointURL, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("invalid endpoint: %w", err)
+	}
+	
+	fullURL := baseURL.ResolveReference(endpointURL)
 	
 	// Use url.Values for proper parameter encoding
 	values := url.Values{}
@@ -426,9 +437,9 @@ func (tc *TwoCaptchaSolver) makeRequest(ctx context.Context, endpoint string, pa
 		values.Set(key, value)
 	}
 	
-	fullURL := baseURL + "?" + values.Encode()
+	fullURL.RawQuery = values.Encode()
 	
-	req, err := http.NewRequestWithContext(ctx, "GET", fullURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", fullURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}

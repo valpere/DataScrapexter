@@ -593,32 +593,8 @@ func HTTPHealthCheck(name, url string, timeout time.Duration) *HealthCheck {
 	}
 }
 
-// DiskSpaceHealthCheck creates a disk space health check
-// DEPRECATED: This is a stub implementation that is not functional.
-// Consider removing this function or implementing platform-specific disk space checking.
-// For production use, implement using:
-// - Unix/Linux: syscall.Statfs() or golang.org/x/sys/unix.Statfs()
-// - Windows: golang.org/x/sys/windows GetDiskFreeSpaceEx()
-func DiskSpaceHealthCheck(path string, minFreePercent float64) *HealthCheck {
-	return &HealthCheck{
-		Name:     "disk_space_" + path,
-		Critical: false,
-		Enabled:  false, // Disabled by default since it's not implemented
-		CheckFunc: func(ctx context.Context) HealthCheckResult {
-			// TODO: Implement actual disk space checking
-			// This requires platform-specific code:
-			// - Unix/Linux: syscall.Statfs()
-			// - Windows: GetDiskFreeSpaceEx()
-			return HealthCheckResult{
-				Status:  HealthStatusUnknown,
-				Message: fmt.Sprintf("Disk space check not implemented for path: %s", path),
-				Metadata: map[string]interface{}{
-					"path":               path,
-					"min_free_percent":   minFreePercent,
-					"implementation":     "stub",
-					"requires":          "platform-specific implementation",
-				},
-			}
-		},
-	}
-}
+// NOTE: DiskSpaceHealthCheck was removed as it was a non-functional stub.
+// For disk space monitoring in production, implement platform-specific solutions:
+// - Unix/Linux: Use golang.org/x/sys/unix.Statfs() 
+// - Windows: Use golang.org/x/sys/windows and GetDiskFreeSpaceEx()
+// - Cross-platform: Use third-party libraries like github.com/shirou/gopsutil
