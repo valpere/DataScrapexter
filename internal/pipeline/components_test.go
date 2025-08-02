@@ -3,6 +3,7 @@ package pipeline
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -551,34 +552,7 @@ func TestOutputManager_Close(t *testing.T) {
 // Helper functions and mock types for testing
 
 func deepEqual(a, b interface{}) bool {
-	// Simple deep equality check for testing purposes
-	// In production, you might want to use reflect.DeepEqual or a more sophisticated comparison
-	switch aVal := a.(type) {
-	case map[string]interface{}:
-		bVal, ok := b.(map[string]interface{})
-		if !ok || len(aVal) != len(bVal) {
-			return false
-		}
-		for k, v := range aVal {
-			if bv, exists := bVal[k]; !exists || !deepEqual(v, bv) {
-				return false
-			}
-		}
-		return true
-	case []string:
-		bVal, ok := b.([]string)
-		if !ok || len(aVal) != len(bVal) {
-			return false
-		}
-		for i, v := range aVal {
-			if v != bVal[i] {
-				return false
-			}
-		}
-		return true
-	default:
-		return a == b
-	}
+	return reflect.DeepEqual(a, b)
 }
 
 // Mock enricher for testing
