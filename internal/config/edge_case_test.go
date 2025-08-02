@@ -151,13 +151,43 @@ func TestLoadFromFileEdgeCases(t *testing.T) {
 			errorMsg:    "",
 		},
 		{
-			name: "file with only whitespace",
+			name: "file with mixed whitespace and newlines",
 			setupFile: func() string {
-				filePath := filepath.Join(tempDir, "whitespace.yaml")
+				filePath := filepath.Join(tempDir, "mixed_whitespace.yaml")
+				os.WriteFile(filePath, []byte("   \n\t  \n  "), 0644)
+				return filePath
+			},
+			expectError: true, // Mixed whitespace with newlines causes YAML parsing error: "found character that cannot start any token"
+			errorMsg:    "yaml",
+		},
+		{
+			name: "file with carriage return whitespace", 
+			setupFile: func() string {
+				filePath := filepath.Join(tempDir, "cr_whitespace.yaml")
 				os.WriteFile(filePath, []byte("   \n\t  \r\n  "), 0644)
 				return filePath
 			},
-			expectError: false, // Files containing only whitespace (including carriage returns) are parsed as empty YAML documents
+			expectError: true, // Mixed whitespace with carriage returns causes YAML parsing error
+			errorMsg:    "yaml",
+		},
+		{
+			name: "file with only carriage returns",
+			setupFile: func() string {
+				filePath := filepath.Join(tempDir, "only_cr.yaml")
+				os.WriteFile(filePath, []byte("\r\n\r\n"), 0644)
+				return filePath
+			},
+			expectError: false, // Pure carriage returns are handled as empty document
+			errorMsg:    "",
+		},
+		{
+			name: "file with spaces only",
+			setupFile: func() string {
+				filePath := filepath.Join(tempDir, "spaces_only.yaml")
+				os.WriteFile(filePath, []byte("    "), 0644)
+				return filePath
+			},
+			expectError: false, // Pure spaces are valid YAML (empty document)
 			errorMsg:    "",
 		},
 		{
