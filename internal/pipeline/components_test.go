@@ -462,7 +462,7 @@ func TestDataEnricher_Enrich(t *testing.T) {
 func TestOutputManager_Write(t *testing.T) {
 	ctx := context.Background()
 
-	// Mock output handler for testing
+	// Use reusable MockOutputHandler for testing
 	mockOutput := &MockOutputHandler{
 		writeFunc: func(ctx context.Context, data interface{}) error {
 			return nil
