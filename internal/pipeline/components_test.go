@@ -269,7 +269,7 @@ func TestDataValidator_Validate(t *testing.T) {
 				return
 			}
 
-			if !deepEqual(result, tt.expected) {
+			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("expected %v, got %v", tt.expected, result)
 			}
 		})
@@ -368,7 +368,7 @@ func TestRecordDeduplicator_Deduplicate(t *testing.T) {
 				return
 			}
 
-			if !deepEqual(result, tt.expected) {
+			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("expected %v, got %v", tt.expected, result)
 			}
 		})
@@ -452,7 +452,7 @@ func TestDataEnricher_Enrich(t *testing.T) {
 				return
 			}
 
-			if !deepEqual(result, tt.expected) {
+			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("expected %v, got %v", tt.expected, result)
 			}
 		})
