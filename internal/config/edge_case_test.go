@@ -19,14 +19,14 @@ func TestLoadFromBytesEdgeCases(t *testing.T) {
 		{
 			name:        "empty bytes",
 			content:     []byte{},
-			expectError: false, // May not validate empty as error in current implementation
-			errorMsg:    "empty",
+			expectError: false, // Empty bytes create empty config with zero values
+			errorMsg:    "",
 		},
 		{
 			name:        "nil bytes",
 			content:     nil,
-			expectError: false, // May not validate nil as error in current implementation
-			errorMsg:    "empty",
+			expectError: false, // Nil bytes also create empty config with zero values
+			errorMsg:    "",
 		},
 		{
 			name: "minimal valid config",
@@ -147,8 +147,8 @@ func TestLoadFromFileEdgeCases(t *testing.T) {
 				os.WriteFile(filePath, []byte{}, 0644)
 				return filePath
 			},
-			expectError: false, // May not validate empty as error in current implementation
-			errorMsg:    "empty",
+			expectError: false, // Empty file creates empty config with zero values
+			errorMsg:    "",
 		},
 		{
 			name: "file with only whitespace",
@@ -472,7 +472,7 @@ output:
   format: json
   file: output.json
 `,
-			expectedVal: "${UNDEFINED_VAR}", // Should remain as is
+			expectedVal: "${UNDEFINED_VAR}", // Environment variables not expanded by YAML parser
 			expectError: false,
 		},
 		{
@@ -491,7 +491,7 @@ output:
   format: json
   file: output.json
 `,
-			expectedVal: "${EMPTY_VAR}", // May not support variable substitution yet
+			expectedVal: "${EMPTY_VAR}", // Environment variables not expanded by YAML parser
 			expectError: false,
 		},
 		{
@@ -510,7 +510,7 @@ output:
   format: json
   file: output.json
 `,
-			expectedVal: "${SPECIAL_VAR}", // May not support variable substitution yet
+			expectedVal: "${SPECIAL_VAR}", // Environment variables not expanded by YAML parser
 			expectError: false,
 		},
 		{
@@ -531,7 +531,7 @@ output:
   format: json
   file: output.json
 `,
-			expectedVal: "${PROTOCOL}://${HOST}:${PORT}", // May not support variable substitution yet
+			expectedVal: "${PROTOCOL}://${HOST}:${PORT}", // Environment variables not expanded by YAML parser
 			expectError: false,
 		},
 	}

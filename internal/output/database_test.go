@@ -243,7 +243,8 @@ func TestDatabaseWriterConfigValidation(t *testing.T) {
 				Table:           "valid_table",
 				BatchSize:       100,
 			},
-			expectError: true, // Will fail to connect in test environment
+			expectError: true, // Will fail on database connection, not config validation
+			errorType:   "connect", // Should be a connection error, not config error
 		},
 		{
 			name: "invalid SQLite - empty connection string",
