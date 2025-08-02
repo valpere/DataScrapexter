@@ -345,12 +345,31 @@ func (d *Dashboard) apiChartsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(chartData)
 }
 
-// staticHandler serves static files
+// staticHandler serves static files for the dashboard
+// TODO: Implement actual static file serving for production use
 func (d *Dashboard) staticHandler(w http.ResponseWriter, r *http.Request) {
-	// Serve static CSS, JS, and other assets
-	// This is a placeholder - in practice, you'd serve actual static files
-	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte("Static file serving not implemented"))
+	// Extract the requested file path
+	requestedFile := r.URL.Path[len(d.config.Path+"/static/"):]
+	
+	// Security check - prevent directory traversal
+	if strings.Contains(requestedFile, "..") {
+		http.Error(w, "Invalid file path", http.StatusBadRequest)
+		return
+	}
+	
+	// For now, return a helpful message with basic CSS for dashboard functionality
+	// In production, this would serve actual static files from an embedded filesystem
+	w.Header().Set("Content-Type", "text/css")
+	w.Write([]byte(`
+/* Basic Dashboard Styles - Production implementation needed */
+body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+.dashboard-container { max-width: 1200px; margin: 0 auto; }
+.metric-card { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px; }
+.chart-container { width: 100%; height: 300px; margin: 20px 0; }
+.status-healthy { color: #28a745; }
+.status-warning { color: #ffc107; }
+.status-error { color: #dc3545; }
+	`))
 }
 
 // getDashboardData collects all data for the dashboard

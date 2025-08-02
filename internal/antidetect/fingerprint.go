@@ -363,7 +363,13 @@ func generateOscillatorHash(spoofed bool) string {
 	}
 	
 	hash := make([]byte, 8)
-	rand.Read(hash)
+	if _, err := rand.Read(hash); err != nil {
+		// Fallback to time-based hash if crypto/rand fails
+		nano := time.Now().UnixNano()
+		for i := range hash {
+			hash[i] = byte(nano >> (i * 8))
+		}
+	}
 	return hex.EncodeToString(hash)
 }
 

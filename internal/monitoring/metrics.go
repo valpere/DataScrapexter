@@ -4,6 +4,7 @@ package monitoring
 import (
 	"context"
 	"net/http"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -610,14 +611,32 @@ func (mm *MetricsManager) StartMetricsServer(ctx context.Context, address, path 
 }
 
 // GetMetrics returns current metric values as a map
+// Note: This is a simplified implementation that returns basic metric metadata.
+// For full metric values, use the Prometheus /metrics endpoint directly.
 func (mm *MetricsManager) GetMetrics() map[string]interface{} {
 	metrics := make(map[string]interface{})
 	
-	// This is a simplified version - in practice, you'd gather all metric values
-	// For brevity, we'll just show the structure
-	metrics["requests_total"] = "counter_value"
-	metrics["jobs_active"] = "gauge_value"
-	metrics["memory_usage"] = "gauge_value"
+	// Get current system metrics (these have actual values)
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	
+	metrics["system"] = map[string]interface{}{
+		"memory_alloc_bytes":   m.Alloc,
+		"memory_sys_bytes":     m.Sys,
+		"goroutines_count":     runtime.NumGoroutine(),
+		"gc_cycles":           m.NumGC,
+	}
+	
+	// Metric registry information
+	metrics["metric_families"] = map[string]interface{}{
+		"requests_total":       "Counter - Total HTTP requests made",
+		"jobs_active":         "Gauge - Currently active scraping jobs", 
+		"memory_usage_bytes":  "Gauge - Current memory usage",
+		"extraction_success":  "Counter - Successful data extractions",
+		"captcha_solved":      "Counter - CAPTCHAs successfully solved",
+	}
+	
+	metrics["note"] = "For current metric values, query the /metrics endpoint"
 	
 	return metrics
 }

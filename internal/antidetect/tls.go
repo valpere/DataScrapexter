@@ -275,7 +275,7 @@ func getFirefoxCipherSuites() []uint16 {
 	}
 }
 
-// getSafariCipherSuites returns Safari-like cipher suite ordering (secure AEAD only)
+// getSafariCipherSuites returns Safari-like cipher suite ordering with modern secure ciphers
 func getSafariCipherSuites() []uint16 {
 	return []uint16{
 		tls.TLS_AES_128_GCM_SHA256,

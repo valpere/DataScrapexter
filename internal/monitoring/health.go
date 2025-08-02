@@ -593,19 +593,26 @@ func HTTPHealthCheck(name, url string, timeout time.Duration) *HealthCheck {
 }
 
 // DiskSpaceHealthCheck creates a disk space health check
+// TODO: This is a stub implementation. Platform-specific disk space checking 
+// needs to be implemented for production use (using syscalls or external tools).
 func DiskSpaceHealthCheck(path string, minFreePercent float64) *HealthCheck {
 	return &HealthCheck{
 		Name:     "disk_space_" + path,
 		Critical: false,
-		Enabled:  true,
+		Enabled:  false, // Disabled by default since it's not implemented
 		CheckFunc: func(ctx context.Context) HealthCheckResult {
-			// This would need to be implemented with platform-specific code
-			// For now, we'll return a placeholder
+			// TODO: Implement actual disk space checking
+			// This requires platform-specific code:
+			// - Unix/Linux: syscall.Statfs()
+			// - Windows: GetDiskFreeSpaceEx()
 			return HealthCheckResult{
-				Status:  HealthStatusHealthy,
-				Message: "Disk space check not implemented",
+				Status:  HealthStatusUnknown,
+				Message: fmt.Sprintf("Disk space check not implemented for path: %s", path),
 				Metadata: map[string]interface{}{
-					"path": path,
+					"path":               path,
+					"min_free_percent":   minFreePercent,
+					"implementation":     "stub",
+					"requires":          "platform-specific implementation",
 				},
 			}
 		},
