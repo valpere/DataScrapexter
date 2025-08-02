@@ -441,17 +441,17 @@ func (tc *TwoCaptchaSolver) makeRequest(ctx context.Context, endpoint string, pa
 	
 	req, err := http.NewRequestWithContext(ctx, "GET", fullURL.String(), nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("2Captcha: failed to create HTTP request for '%s': %w", fullURL.String(), err)
 	}
 	
 	resp, err := tc.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("2Captcha: HTTP request failed for '%s': %w", fullURL.String(), err)
 	}
 	defer resp.Body.Close()
 	
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
+		return nil, fmt.Errorf("2Captcha: API returned HTTP %d (%s) for endpoint '%s'", resp.StatusCode, resp.Status, endpoint)
 	}
 	
 	return io.ReadAll(resp.Body)

@@ -377,11 +377,14 @@ func (d *Dashboard) staticHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	// Additional validation - only allow specific file types for security
-	allowedExtensions := map[string]bool{
-		".css": true, ".js": true, ".png": true, ".jpg": true, ".jpeg": true, 
-		".gif": true, ".svg": true, ".ico": true, ".woff": true, ".woff2": true,
-	}
+	// Additional validation - configurable file type allowlist for security
+	// PRODUCTION NOTE: Consider using nginx or dedicated CDN for static files
+	// For enhanced security, implement:
+	// 1. Content-Type validation
+	// 2. File size limits
+	// 3. Virus scanning for uploads
+	// 4. Rate limiting per client
+	allowedExtensions := d.getAllowedExtensions()
 	
 	ext := filepath.Ext(strings.ToLower(cleanedPath))
 	if !allowedExtensions[ext] {
@@ -436,6 +439,30 @@ func (d *Dashboard) getSummary() DashboardSummary {
 		Uptime:         time.Since(startTime),
 		MemoryUsage:    245.7,
 		CPUUsage:       23.4,
+	}
+}
+
+// getAllowedExtensions returns the allowed file extensions for static files
+// This can be made configurable based on deployment requirements
+func (d *Dashboard) getAllowedExtensions() map[string]bool {
+	// Default safe extensions - customize based on your needs
+	// SECURITY: Only include extensions that are safe to serve
+	return map[string]bool{
+		".css":   true, // Stylesheets
+		".js":    true, // JavaScript (ensure Content-Security-Policy is set)
+		".png":   true, // Images
+		".jpg":   true,
+		".jpeg":  true,
+		".gif":   true,
+		".svg":   true, // SVG (consider sanitization)
+		".ico":   true, // Favicons
+		".woff":  true, // Fonts
+		".woff2": true,
+		".ttf":   true,
+		".eot":   true,
+		// Add more as needed, but be security-conscious
+		// ".pdf": false, // Example: PDFs might need special handling
+		// ".zip": false, // Example: Archives should be restricted
 	}
 }
 

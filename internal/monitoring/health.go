@@ -594,48 +594,8 @@ func HTTPHealthCheck(name, url string, timeout time.Duration) *HealthCheck {
 }
 
 // NOTE: DiskSpaceHealthCheck was removed as it was a non-functional stub.
-// For disk space monitoring in production, implement platform-specific solutions:
+// For comprehensive disk space monitoring implementation guidance, see:
+// docs/health-monitoring.md
 //
-// UNIX/Linux Implementation:
-//   import "golang.org/x/sys/unix"
-//   func diskSpace(path string) (free, total uint64, err error) {
-//     var stat unix.Statfs_t
-//     err = unix.Statfs(path, &stat)
-//     free = stat.Bavail * uint64(stat.Bsize)
-//     total = stat.Blocks * uint64(stat.Bsize)
-//     return
-//   }
-//
-// Windows Implementation:
-//   import "golang.org/x/sys/windows"
-//   func diskSpace(path string) (free, total uint64, err error) {
-//     h := windows.MustLoadDLL("kernel32.dll")
-//     proc := h.MustFindProc("GetDiskFreeSpaceExW")
-//     // Call GetDiskFreeSpaceExW...
-//   }
-//
-// Cross-platform Implementation:
-//   import "github.com/shirou/gopsutil/v3/disk"
-//   func diskSpace(path string) (*disk.UsageStat, error) {
-//     return disk.Usage(path)
-//   }
-//
-// Example Health Check:
-//   func DiskSpaceHealthCheck(path string, maxUsagePercent float64) *HealthCheck {
-//     return &HealthCheck{
-//       Name: "disk_space",
-//       CheckFunc: func(ctx context.Context) HealthCheckResult {
-//         usage, err := diskSpace(path)
-//         if err != nil {
-//           return HealthCheckResult{Status: HealthStatusUnhealthy, Error: err}
-//         }
-//         percent := float64(usage.Used) / float64(usage.Total) * 100
-//         if percent > maxUsagePercent {
-//           return HealthCheckResult{Status: HealthStatusDegraded, 
-//             Message: fmt.Sprintf("Disk usage: %.1f%%", percent)}
-//         }
-//         return HealthCheckResult{Status: HealthStatusHealthy,
-//           Message: fmt.Sprintf("Disk usage: %.1f%%", percent)}
-//       },
-//     }
-//   }
+// The implementation requires platform-specific code and additional dependencies.
+// Recommended: Use github.com/shirou/gopsutil/v3/disk for cross-platform support.

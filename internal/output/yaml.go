@@ -32,6 +32,10 @@ type YAMLConfig struct {
 	CompactArrays bool          `json:"compact_arrays"`
 	SortKeys      bool          `json:"sort_keys"`
 	IncludeNull   bool          `json:"include_null"`
+	// Metadata configuration
+	GeneratorName    string `json:"generator_name"`
+	GeneratorVersion string `json:"generator_version"`
+	IncludeMetadata  bool   `json:"include_metadata"`
 }
 
 // NewYAMLWriter creates a new YAML writer
@@ -53,6 +57,15 @@ func NewYAMLWriter(config YAMLConfig) (*YAMLWriter, error) {
 	if config.BufferSize == 0 {
 		config.BufferSize = 1000
 	}
+	// Set metadata defaults
+	if config.GeneratorName == "" {
+		config.GeneratorName = "DataScrapexter"
+	}
+	if config.GeneratorVersion == "" {
+		config.GeneratorVersion = "1.0"
+	}
+	// Default to including metadata
+	config.IncludeMetadata = true
 	
 	file, err := os.Create(config.FilePath)
 	if err != nil {
@@ -190,19 +203,22 @@ func (w *YAMLWriter) writeArrayDocument(records []map[string]interface{}) error 
 		processedRecords[i] = w.processRecord(record)
 	}
 	
-	// Add metadata if this is the first write
-	if w.isFirstDoc {
+	// Add configurable metadata if this is the first write
+	if w.isFirstDoc && w.config.IncludeMetadata {
 		document := map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"generated_at": time.Now().Format(time.RFC3339),
-				"generator":    "DataScrapexter",
-				"version":      "1.0",
+				"generator":    w.config.GeneratorName,
+				"version":      w.config.GeneratorVersion,
 				"count":        len(processedRecords),
 			},
 			"data": processedRecords,
 		}
 		w.isFirstDoc = false
 		return w.encoder.Encode(document)
+	} else if w.isFirstDoc {
+		// No metadata, just encode the data directly
+		w.isFirstDoc = false
 	}
 	
 	return w.encoder.Encode(processedRecords)

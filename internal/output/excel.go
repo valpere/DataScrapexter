@@ -13,6 +13,24 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
+// Logger interface for structured logging integration
+// Applications can provide their own logger implementation
+type Logger interface {
+	Warnf(format string, args ...interface{})
+	Infof(format string, args ...interface{})
+}
+
+// DefaultLogger implements Logger using standard log package
+type DefaultLogger struct{}
+
+func (l *DefaultLogger) Warnf(format string, args ...interface{}) {
+	log.Printf("[WARN] "+format, args...)
+}
+
+func (l *DefaultLogger) Infof(format string, args ...interface{}) {
+	log.Printf("[INFO] "+format, args...)
+}
+
 // Excel-specific default limits (can be overridden via ExcelConfig)
 const (
 	// DefaultExcelMaxCellLength is the default maximum characters in a single Excel cell
@@ -48,6 +66,7 @@ type ExcelConfig struct {
 	MaxCellLength  int               `json:"max_cell_length"`
 	CreateIndex    bool              `json:"create_index"`
 	Compression    bool              `json:"compression"`
+	Logger         Logger            `json:"-"` // Optional logger interface for structured logging
 }
 
 // ExcelCellStyle defines cell styling options
@@ -114,6 +133,9 @@ func NewExcelWriter(config ExcelConfig) (*ExcelWriter, error) {
 	}
 	if config.MaxCellLength == 0 {
 		config.MaxCellLength = DefaultExcelMaxCellLength
+	}
+	if config.Logger == nil {
+		config.Logger = &DefaultLogger{}
 	}
 	
 	file := excelize.NewFile()
@@ -341,8 +363,8 @@ func (w *ExcelWriter) processValue(value interface{}) interface{} {
 			maxLength = DefaultExcelMaxCellLength
 		}
 		if len(v) > maxLength {
-			// Log data truncation for monitoring and debugging
-			log.Printf("Excel: Truncating cell data from %d to %d characters (file: %s)", 
+			// Log data truncation using configured logger for better integration
+			w.config.Logger.Warnf("Excel: Truncating cell data from %d to %d characters (file: %s)", 
 				len(v), maxLength, w.config.FilePath)
 			return v[:maxLength]
 		}
