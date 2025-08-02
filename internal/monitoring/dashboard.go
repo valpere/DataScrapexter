@@ -367,9 +367,12 @@ func (d *Dashboard) staticHandler(w http.ResponseWriter, r *http.Request) {
 	
 	// Clean the path and perform robust security checks
 	cleanedPath := filepath.Clean(decodedFile)
-	
-	// Prevent directory traversal - ensure cleaned path doesn't escape
-	if strings.Contains(cleanedPath, "..") || filepath.IsAbs(cleanedPath) || strings.HasPrefix(cleanedPath, "/") {
+
+	// Prevent directory traversal - ensure cleaned path doesn't escape static directory
+	staticDir := filepath.Join(d.config.Path, "static")
+	absRequestedPath := filepath.Join(staticDir, cleanedPath)
+	rel, err := filepath.Rel(staticDir, absRequestedPath)
+	if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
 		http.Error(w, "Invalid file path", http.StatusForbidden)
 		return
 	}
