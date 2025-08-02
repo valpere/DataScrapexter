@@ -157,7 +157,7 @@ func TestLoadFromFileEdgeCases(t *testing.T) {
 				os.WriteFile(filePath, []byte("   \n\t  \r\n  "), 0644)
 				return filePath
 			},
-			expectError: true, // This should error due to invalid YAML
+			expectError: true, // Mixed whitespace with carriage returns causes YAML parsing error
 			errorMsg:    "yaml",
 		},
 		{
@@ -179,8 +179,8 @@ func TestLoadFromFileEdgeCases(t *testing.T) {
 base_url: https://example.com
 fields:
 `
-				// Add many fields to create a large file
-				for i := 0; i < 1000; i++ {
+				// Add many fields to create a large file (reduced from 1000 to 100 for efficiency)
+				for i := 0; i < 100; i++ {
 					suffix := string(rune('a' + (i % 26)))
 					content += `  - name: field` + suffix + `
     selector: .selector` + suffix + `

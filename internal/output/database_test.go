@@ -23,8 +23,8 @@ func TestValidatePostgreSQLIdentifier(t *testing.T) {
 		{"contains hyphen", "user-name", true},
 		{"reserved word", "select", true},
 		{"reserved word case", "SELECT", true},
-		{"too long", "a" + strings.Repeat("b", MaxPostgreSQLIdentifierLength), true},
-		{"max length", "a" + strings.Repeat("b", MaxPostgreSQLIdentifierLength-2), false},
+		{"too long", "a" + strings.Repeat("b", 63), true}, // 64 chars total (> MaxPostgreSQLIdentifierLength)
+		{"max length", "a" + strings.Repeat("b", 61), false}, // 62 chars total (< MaxPostgreSQLIdentifierLength)
 	}
 
 	for _, tt := range tests {
@@ -56,8 +56,8 @@ func TestValidateSQLiteIdentifier(t *testing.T) {
 		{"contains hyphen", "user-name", true},
 		{"reserved word", "select", true},
 		{"reserved word case", "SELECT", true},
-		{"too long", "a" + strings.Repeat("b", MaxSQLiteIdentifierLength), true},
-		{"max length", "a" + strings.Repeat("b", MaxSQLiteIdentifierLength-2), false},
+		{"too long", "a" + strings.Repeat("b", 999), true}, // 1000 chars total (> MaxSQLiteIdentifierLength)
+		{"max length", "a" + strings.Repeat("b", 997), false}, // 998 chars total (< MaxSQLiteIdentifierLength)
 	}
 
 	for _, tt := range tests {
