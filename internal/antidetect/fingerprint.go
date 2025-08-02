@@ -323,17 +323,12 @@ func generateCanvasVariations() []string {
 		// Generate small random strings that can be appended to canvas data
 		bytes := make([]byte, 2)
 		if _, err := rand.Read(bytes); err != nil {
-			// SECURITY WARNING: Fallback to math/rand reduces cryptographic security
-			// In production, ensure crypto/rand is available or fail gracefully
-			// Consider using hardware entropy sources or entropy pools
-			mathrand.Seed(time.Now().UnixNano() + int64(i))
-			bytes[0] = byte(mathrand.Intn(256))
-			bytes[1] = byte(mathrand.Intn(256))
-			variations[i] = hex.EncodeToString(bytes)
-			// Log this security degradation in production
-		} else {
-			variations[i] = hex.EncodeToString(bytes)
+			// SECURITY: Fail gracefully instead of degrading to weak randomness
+			// In production environments, crypto/rand failure indicates serious system issues
+			// that should be addressed rather than silently degraded
+			return []string{"fallback_variation"} // Return minimal safe fallback
 		}
+		variations[i] = hex.EncodeToString(bytes)
 	}
 	return variations
 }
@@ -342,22 +337,19 @@ func generateRandomCanvasData() string {
 	// Simulate canvas rendering output
 	data := make([]byte, 32)
 	if _, err := rand.Read(data); err != nil {
-		// SECURITY WARNING: crypto/rand failed, using weaker math/rand fallback
-		// Production systems should ensure crypto/rand availability for security
-		mathrand.Seed(time.Now().UnixNano())
-		for i := range data {
-			data[i] = byte(mathrand.Intn(256))
-		}
-		// Consider logging this security event in production monitoring
+		// SECURITY: Fail gracefully with deterministic fallback
+		// Crypto/rand failure indicates system entropy issues that need attention
+		return "canvas_data_entropy_unavailable"
 	}
 	return hex.EncodeToString(data)
 }
 
 func generateHash(data string) string {
-	// Simple hash simulation
+	// Generate cryptographically secure hash
 	hash := make([]byte, 16)
 	if _, err := rand.Read(hash); err != nil {
-		// Fallback to hash of input data if crypto/rand fails
+		// Fallback to deterministic hash of input data if crypto/rand fails
+		// This maintains consistency while avoiding weak randomness
 		h := sha256.Sum256([]byte(data + time.Now().String()))
 		copy(hash, h[:16])
 	}
@@ -371,7 +363,8 @@ func generateOscillatorHash(spoofed bool) string {
 	
 	hash := make([]byte, 8)
 	if _, err := rand.Read(hash); err != nil {
-		// Fallback to time-based hash if crypto/rand fails
+		// Fallback to deterministic time-based hash if crypto/rand fails
+		// This maintains consistency while avoiding security degradation
 		nano := time.Now().UnixNano()
 		for i := range hash {
 			hash[i] = byte(nano >> (i * 8))

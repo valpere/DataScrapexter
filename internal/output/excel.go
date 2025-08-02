@@ -4,6 +4,7 @@ package output
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -340,6 +341,9 @@ func (w *ExcelWriter) processValue(value interface{}) interface{} {
 			maxLength = DefaultExcelMaxCellLength
 		}
 		if len(v) > maxLength {
+			// Log data truncation for monitoring and debugging
+			log.Printf("Excel: Truncating cell data from %d to %d characters (file: %s)", 
+				len(v), maxLength, w.config.FilePath)
 			return v[:maxLength]
 		}
 		return v

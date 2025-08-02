@@ -291,6 +291,7 @@ const (
 	RecaptchaV3
 	HCaptcha
 	FunCaptcha
+	ImageCaptcha // Generic image-based CAPTCHA type
 )
 
 // NewCaptchaDetector creates a new CAPTCHA detector

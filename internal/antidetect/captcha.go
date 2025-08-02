@@ -164,7 +164,7 @@ func (cm *CaptchaManager) SolveHCaptcha(ctx context.Context, siteKey, siteURL st
 // SolveImageCaptcha solves an image-based CAPTCHA
 func (cm *CaptchaManager) SolveImageCaptcha(ctx context.Context, imageData []byte) (*CaptchaSolution, error) {
 	task := &CaptchaTask{
-		Type:      CaptchaType(999), // Generic image CAPTCHA
+		Type:      ImageCaptcha, // Use proper constant for generic image CAPTCHA
 		ImageData: base64.StdEncoding.EncodeToString(imageData),
 		Timeout:   cm.config.SolveTimeout,
 	}
