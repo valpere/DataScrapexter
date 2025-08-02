@@ -157,8 +157,8 @@ func TestLoadFromFileEdgeCases(t *testing.T) {
 				os.WriteFile(filePath, []byte("   \n\t  \r\n  "), 0644)
 				return filePath
 			},
-			expectError: true, // Mixed whitespace with carriage returns causes YAML parsing error
-			errorMsg:    "yaml",
+			expectError: false, // Files containing only whitespace (including carriage returns) are parsed as empty YAML documents
+			errorMsg:    "",
 		},
 		{
 			name: "unreadable file",
