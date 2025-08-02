@@ -85,7 +85,7 @@ func TestDataExtractor_Extract(t *testing.T) {
 			for key, expectedValue := range tt.expected {
 				if actualValue, exists := result[key]; !exists {
 					t.Errorf("expected key %s not found", key)
-				} else if !deepEqual(actualValue, expectedValue) {
+				} else if !reflect.DeepEqual(actualValue, expectedValue) {
 					t.Errorf("for key %s: expected %v, got %v", key, expectedValue, actualValue)
 				}
 			}
