@@ -360,30 +360,102 @@ func (w *XMLWriter) writeArrayOfMapsElement(name string, arr []map[string]interf
 
 // Helper functions
 
-// sanitizeXMLName ensures the name is valid for XML
+// sanitizeXMLName ensures the name is valid for XML according to Unicode rules
 func sanitizeXMLName(name string) string {
-	// Replace invalid characters with underscores
-	sanitized := strings.Map(func(r rune) rune {
-		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || 
-		   (r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.' {
-			return r
+	if name == "" {
+		return "element"
+	}
+
+	var sanitized strings.Builder
+	runes := []rune(name)
+	for i, r := range runes {
+		if i == 0 {
+			if isXMLNameStartChar(r) {
+				sanitized.WriteRune(r)
+			} else {
+				sanitized.WriteRune('_')
+			}
+		} else {
+			if isXMLNameChar(r) {
+				sanitized.WriteRune(r)
+			} else {
+				sanitized.WriteRune('_')
+			}
 		}
-		return '_'
-	}, name)
-	
-	// Ensure it doesn't start with a number
-	if len(sanitized) > 0 && sanitized[0] >= '0' && sanitized[0] <= '9' {
-		sanitized = "_" + sanitized
 	}
-	
-	// Ensure it's not empty
-	if sanitized == "" {
-		sanitized = "element"
+
+	result := sanitized.String()
+	if result == "" {
+		result = "element"
 	}
-	
-	return sanitized
+	return result
 }
 
+// isXMLNameStartChar returns true if r is a valid XML name start character (Unicode-aware)
+func isXMLNameStartChar(r rune) bool {
+	// XML 1.0 NameStartChar:
+	// ":" | [A-Z] | "_" | [a-z] | [#xC0-#xD6] | [#xD8-#xF6] | [#xF8-#x2FF] |
+	// [#x370-#x37D] | [#x37F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] |
+	// [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] |
+	// [#x10000-#xEFFFF]
+	switch {
+	case r == ':', r == '_':
+		return true
+	case r >= 'A' && r <= 'Z':
+		return true
+	case r >= 'a' && r <= 'z':
+		return true
+	case r >= 0xC0 && r <= 0xD6:
+		return true
+	case r >= 0xD8 && r <= 0xF6:
+		return true
+	case r >= 0xF8 && r <= 0x2FF:
+		return true
+	case r >= 0x370 && r <= 0x37D:
+		return true
+	case r >= 0x37F && r <= 0x1FFF:
+		return true
+	case r >= 0x200C && r <= 0x200D:
+		return true
+	case r >= 0x2070 && r <= 0x218F:
+		return true
+	case r >= 0x2C00 && r <= 0x2FEF:
+		return true
+	case r >= 0x3001 && r <= 0xD7FF:
+		return true
+	case r >= 0xF900 && r <= 0xFDCF:
+		return true
+	case r >= 0xFDF0 && r <= 0xFFFD:
+		return true
+	case r >= 0x10000 && r <= 0xEFFFF:
+		return true
+	}
+	return false
+}
+
+// isXMLNameChar returns true if r is a valid XML name character (Unicode-aware)
+func isXMLNameChar(r rune) bool {
+	// XML 1.0 NameChar:
+	// NameStartChar | "-" | "." | [0-9] | #xB7 | [#x0300-#x036F] | [#x203F-#x2040]
+	if isXMLNameStartChar(r) {
+		return true
+	}
+	switch {
+	case r == '-':
+		return true
+	case r == '.':
+		return true
+	case r >= '0' && r <= '9':
+		return true
+	case r == 0xB7:
+		return true
+	case r >= 0x0300 && r <= 0x036F:
+		return true
+	case r >= 0x203F && r <= 0x2040:
+		return true
+	}
+	return false
+}
 // getXMLType returns the XML type for a value
 func getXMLType(value interface{}) string {
 	if value == nil {
