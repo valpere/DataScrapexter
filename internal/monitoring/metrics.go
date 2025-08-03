@@ -777,10 +777,10 @@ func (mm *MetricsManager) StartMetricsServer(ctx context.Context, address, path 
 	return server.ListenAndServe()
 }
 
-// GetMetrics returns current metric values as a map
-// Note: This is a simplified implementation that returns basic metric metadata.
+// GetMetricsInfo returns current system metrics and metric metadata as a map.
+// Note: This does NOT return the current values of all registered Prometheus metrics.
 // For full metric values, use the Prometheus /metrics endpoint directly.
-func (mm *MetricsManager) GetMetrics() map[string]interface{} {
+func (mm *MetricsManager) GetMetricsInfo() map[string]interface{} {
 	metrics := make(map[string]interface{})
 
 	// Get current system metrics (these have actual values)
