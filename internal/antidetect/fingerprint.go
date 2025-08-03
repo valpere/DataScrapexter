@@ -337,7 +337,7 @@ func generateCanvasVariations() ([]string, error) {
 		if _, err := rand.Read(bytes); err != nil {
 			// SECURITY: Fail fast when cryptographic randomness is unavailable
 			logEntropyFailure("canvas_variations", err)
-			panic(fmt.Errorf("crypto/rand failed: %w", err))
+			return nil, fmt.Errorf("crypto/rand failed: %w", err)
 		} else {
 			variations[i] = hex.EncodeToString(bytes)
 		}
