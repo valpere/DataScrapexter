@@ -41,20 +41,32 @@ type YAMLConfig struct {
 	GeneratorName    string `json:"generator_name"`
 	GeneratorVersion string `json:"generator_version"`
 	IncludeMetadata  bool   `json:"include_metadata"`
-	// MetadataExplicit is an internal-only flag used to track whether metadata inclusion
-	// was explicitly configured by the user or should use default behavior.
-	// This prevents automatic metadata inclusion when not explicitly requested.
-	// Not exposed in JSON serialization to maintain clean configuration files.
-	MetadataExplicit bool `json:"-"`
+	// (internal) MetadataExplicit removed; explicit metadata tracking is now handled by YAMLWriter.
 }
 
 // NewYAMLWriterWithExplicitMetadata creates a new YAML writer with explicit metadata configuration
 func NewYAMLWriterWithExplicitMetadata(config YAMLConfig, includeMetadata bool) (*YAMLWriter, error) {
 	config.IncludeMetadata = includeMetadata
-	config.MetadataExplicit = true
-	return NewYAMLWriter(config)
+	return newYAMLWriterInternal(config, true)
 }
 
+// NewYAMLWriter creates a new YAML writer with default metadata configuration
+func NewYAMLWriter(config YAMLConfig) (*YAMLWriter, error) {
+	return newYAMLWriterInternal(config, false)
+}
+
+// newYAMLWriterInternal is an internal constructor that tracks explicit metadata configuration
+func newYAMLWriterInternal(config YAMLConfig, metadataExplicit bool) (*YAMLWriter, error) {
+	// ... existing logic to open file, create encoder, etc. ...
+	writer := &YAMLWriter{
+		config:           config,
+		records:          make([]map[string]interface{}, 0),
+		isFirstDoc:       true,
+		metadataExplicit: metadataExplicit,
+	}
+	// ... rest of initialization ...
+	return writer, nil
+}
 // NewYAMLWriter creates a new YAML writer
 func NewYAMLWriter(config YAMLConfig) (*YAMLWriter, error) {
 	if config.FilePath == "" {
