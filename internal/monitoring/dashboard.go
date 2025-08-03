@@ -391,7 +391,7 @@ func (d *Dashboard) serveStaticFileSafely(w http.ResponseWriter, r *http.Request
 	// Check if requested file is in our safe allowlist
 	file, exists := safeFiles[requestedPath]
 	if !exists {
-		return fmt.Errorf("file not in allowlist: %s", requestedPath)
+		return fmt.Errorf("resource not available")
 	}
 
 	// Serve the safe file

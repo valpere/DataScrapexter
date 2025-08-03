@@ -73,14 +73,9 @@ func NewYAMLWriter(config YAMLConfig) (*YAMLWriter, error) {
 		config.GeneratorVersion = "1.0"
 	}
 	// METADATA INCLUSION BEHAVIOR:
-	// When MetadataExplicit is false (default), metadata is automatically included
-	// When MetadataExplicit is true, metadata inclusion follows the IncludeMetadata setting
-	//
-	// To explicitly control metadata:
-	// 1. Use NewYAMLWriterWithExplicitMetadata(config, true/false), OR
-	// 2. Set config.MetadataExplicit = true and config.IncludeMetadata = true/false
-	//
-	// Default behavior (when not explicitly set): metadata is included for better traceability
+	// Metadata is included by default for better traceability and debugging.
+	// To disable metadata, explicitly set IncludeMetadata = false in config.
+	// Use NewYAMLWriterWithExplicitMetadata(config, false) for cleaner API.
 	if !config.MetadataExplicit {
 		config.IncludeMetadata = true
 	}

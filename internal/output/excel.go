@@ -49,7 +49,11 @@ type ExcelWriter struct {
 	records   []map[string]interface{}
 }
 
-// ExcelConfig configuration for Excel output
+// ExcelConfig configuration for Excel output.
+//
+// Logger field: Optional logger interface for structured logging and warnings.
+// If nil, a default logger using the standard log package will be used.
+// Implement the Logger interface to integrate with your application's logging system.
 type ExcelConfig struct {
 	FilePath         string         `json:"file"`
 	SheetName        string         `json:"sheet_name"`
