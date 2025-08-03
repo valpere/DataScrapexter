@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -363,9 +364,10 @@ func (w *ExcelWriter) processValue(value interface{}) interface{} {
 			maxLength = DefaultExcelMaxCellLength
 		}
 		if len(v) > maxLength {
-			// Log data truncation using configured logger for better integration
+			// Log data truncation using configured logger - sanitize file path
+			filename := filepath.Base(w.config.FilePath)
 			w.config.Logger.Warnf("Excel: Truncating cell data from %d to %d characters (file: %s)", 
-				len(v), maxLength, w.config.FilePath)
+				len(v), maxLength, filename)
 			return v[:maxLength]
 		}
 		return v

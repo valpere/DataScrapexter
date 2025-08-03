@@ -479,7 +479,7 @@ func (tc *TwoCaptchaSolver) makeRequest(ctx context.Context, endpoint string, pa
 	
 	req, err := http.NewRequestWithContext(requestCtx, "GET", fullURL.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("2Captcha: failed to create HTTP request for '%s': %w", fullURL.String(), err)
+		return nil, fmt.Errorf("2Captcha: failed to create HTTP request for endpoint '%s': %w", endpoint, err)
 	}
 	
 	// Set security headers
@@ -489,7 +489,7 @@ func (tc *TwoCaptchaSolver) makeRequest(ctx context.Context, endpoint string, pa
 	// Execute request with retry mechanism
 	resp, err := tc.executeWithRetry(requestCtx, req)
 	if err != nil {
-		return nil, fmt.Errorf("2Captcha: HTTP request failed for '%s': %w", fullURL.String(), err)
+		return nil, fmt.Errorf("2Captcha: HTTP request failed for endpoint '%s': %w", endpoint, err)
 	}
 	defer resp.Body.Close()
 	

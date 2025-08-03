@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	mathrand "math/rand"
 	"time"
-	"unsafe"
 )
 
 // CanvasFingerprint represents canvas fingerprinting data
@@ -324,21 +323,11 @@ func generateCanvasVariations() []string {
 		// Generate small random strings that can be appended to canvas data
 		bytes := make([]byte, 2)
 		if _, err := rand.Read(bytes); err != nil {
-			// SECURITY: Enhanced fallback with multiple entropy sources
-			// Combine time, position, and runtime entropy for unpredictability
-			nano := time.Now().UnixNano()
-			processID := int64(time.Now().Nanosecond()) // Additional runtime entropy
-			memAddr := int64(uintptr(unsafe.Pointer(&bytes))) // Memory address entropy
-			
-			// Mix multiple entropy sources with position-dependent factors
-			entropy1 := nano ^ (int64(i*17+3) << 8) ^ processID
-			entropy2 := (nano >> 16) ^ (int64(i*23+11) << 4) ^ (memAddr >> 8)
-			
-			bytes[0] = byte(entropy1 ^ (entropy2 >> 8))
-			bytes[1] = byte((entropy1 >> 8) ^ entropy2)
-			variations[i] = hex.EncodeToString(bytes)
-			// Log this security degradation for monitoring
-			// TODO: Integrate with application logger when available
+			// SECURITY: Fail fast when cryptographic randomness is unavailable
+			// This prevents weak entropy from being used for security-critical operations
+			return []string{"error_crypto_rand_unavailable"}
+			// In production, this should trigger alerts and investigation
+			// Weak entropy could compromise anti-detection effectiveness
 		} else {
 		variations[i] = hex.EncodeToString(bytes)
 		}
@@ -350,15 +339,9 @@ func generateRandomCanvasData() string {
 	// Simulate canvas rendering output
 	data := make([]byte, 32)
 	if _, err := rand.Read(data); err != nil {
-		// SECURITY: Enhanced fallback with time-based entropy
-		// While not cryptographically secure, maintains some unpredictability
-		nano := time.Now().UnixNano()
-		for i := range data {
-			// Use time and position for entropy mixing
-			data[i] = byte((nano >> (i % 8)) ^ int64(i*17+3))
-		}
-		// Log this security degradation for monitoring
-		// TODO: Integrate with application logger when available
+		// SECURITY: Fail fast when cryptographic randomness is unavailable
+		// Return deterministic error marker to avoid weak entropy
+		return "error_crypto_rand_unavailable_canvas_data"
 	}
 	return hex.EncodeToString(data)
 }

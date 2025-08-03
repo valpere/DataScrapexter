@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"net/url"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -348,80 +346,48 @@ func (d *Dashboard) apiChartsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // staticHandler serves static files for the dashboard
-// PRODUCTION NOTE: This is a development stub. For production deployment:
-//   1. Use go:embed to embed static files: 
-//      //go:embed static/*
-//      var staticFiles embed.FS
-//   2. Use http.FS(staticFiles) with http.FileServer
-//   3. Or serve static files through a CDN/reverse proxy like nginx
+// SECURITY: This implementation uses strict allowlisting to prevent path traversal
+// PRODUCTION NOTE: For production deployment, use go:embed or nginx/CDN
 func (d *Dashboard) staticHandler(w http.ResponseWriter, r *http.Request) {
-	// Extract and decode the requested file path
-	requestedFile := r.URL.Path[len(d.config.Path+"/static/"):]
-	
-	// URL decode to handle encoded characters
-	decodedFile, err := url.QueryUnescape(requestedFile)
-	if err != nil {
-		http.Error(w, "Invalid file path encoding", http.StatusBadRequest)
+	// SECURITY: Implement secure static file serving
+	if err := d.serveStaticFileSafely(w, r); err != nil {
+		http.Error(w, "File access denied", http.StatusForbidden)
 		return
 	}
-	
-	// Enhanced security validation
-	// 1. Check for null bytes (potential path truncation attack)
-	if strings.Contains(decodedFile, "\x00") {
-		http.Error(w, "Invalid file path: null byte detected", http.StatusBadRequest)
-		return
-	}
-	
-	// 2. Unicode normalization to prevent bypass attempts
-	// TODO: Consider adding golang.org/x/text/unicode/norm for full normalization
-	
-	// 3. Clean the path and perform robust security checks
-	cleanedPath := filepath.Clean(decodedFile)
+}
 
-	// 4. Prevent directory traversal - ensure cleaned path doesn't escape static directory
-	staticDir := filepath.Join(d.config.Path, "static")
-	absRequestedPath := filepath.Join(staticDir, cleanedPath)
-	rel, err := filepath.Rel(staticDir, absRequestedPath)
-	if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
-		http.Error(w, "Invalid file path", http.StatusForbidden)
-		return
+// serveStaticFileSafely implements secure static file serving with strict validation
+func (d *Dashboard) serveStaticFileSafely(w http.ResponseWriter, r *http.Request) error {
+	// Extract the requested file path
+	requestedPath := r.URL.Path[len(d.config.Path+"/static/"):]
+	
+	// SECURITY: Strict allowlist - only allow predefined safe files
+	safeFiles := map[string]struct{
+		contentType string
+		content     string
+	}{
+		"dashboard.css": {
+			contentType: "text/css",
+			content:     d.getDefaultCSS(),
+		},
+		"dashboard.js": {
+			contentType: "application/javascript",
+			content:     d.getDefaultJS(),
+		},
 	}
 	
-	// Additional validation - configurable file type allowlist for security
-	// PRODUCTION NOTE: Consider using nginx or dedicated CDN for static files
-	// For enhanced security, implement:
-	// 1. Content-Type validation
-	// 2. File size limits
-	// 3. Virus scanning for uploads
-	// 4. Rate limiting per client
-	allowedExtensions := d.getAllowedExtensions()
-	
-	ext := filepath.Ext(strings.ToLower(cleanedPath))
-	if !allowedExtensions[ext] {
-		http.Error(w, "File type not allowed", http.StatusForbidden)
-		return
+	// Check if requested file is in our safe allowlist
+	file, exists := safeFiles[requestedPath]
+	if !exists {
+		return fmt.Errorf("file not in allowlist: %s", requestedPath)
 	}
 	
-	// 5. Positive allowlist validation - only allow specific file patterns
-	// This provides defense in depth beyond just extension checking
-	if !d.isValidStaticFilePath(cleanedPath) {
-		http.Error(w, "File path not permitted", http.StatusForbidden)
-		return
-	}
-	
-	// For now, return a helpful message with basic CSS for dashboard functionality
-	// In production, this would serve actual static files from an embedded filesystem
-	w.Header().Set("Content-Type", "text/css")
-	w.Write([]byte(`
-/* Basic Dashboard Styles - Production implementation needed */
-body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
-.dashboard-container { max-width: 1200px; margin: 0 auto; }
-.metric-card { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px; }
-.chart-container { width: 100%; height: 300px; margin: 20px 0; }
-.status-healthy { color: #28a745; }
-.status-warning { color: #ffc107; }
-.status-error { color: #dc3545; }
-	`))
+	// Serve the safe file
+	w.Header().Set("Content-Type", file.contentType)
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Write([]byte(file.content))
+	return nil
 }
 
 // getDashboardData collects all data for the dashboard
@@ -488,6 +454,112 @@ func (d *Dashboard) isValidStaticFilePath(path string) bool {
 	}
 	
 	return true
+}
+
+// getDefaultCSS returns secure default CSS content
+func (d *Dashboard) getDefaultCSS() string {
+	return `
+/* DataScrapexter Dashboard Styles */
+* { box-sizing: border-box; }
+body { 
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	margin: 0; padding: 20px; background: #f5f5f5; line-height: 1.6;
+}
+.dashboard-container { max-width: 1200px; margin: 0 auto; }
+.header { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 20px; }
+.metric-card { 
+	background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+	border-left: 4px solid #007bff;
+}
+.metric-value { font-size: 2em; font-weight: bold; margin-bottom: 8px; }
+.metric-label { color: #666; font-size: 0.9em; }
+.chart-container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); height: 400px; }
+.status-healthy { color: #28a745; }
+.status-warning { color: #ffc107; }
+.status-error { color: #dc3545; }
+.status-degraded { color: #fd7e14; }
+.jobs-table { width: 100%; border-collapse: collapse; background: #fff; }
+.jobs-table th, .jobs-table td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+.jobs-table th { background: #f8f9fa; font-weight: 600; }
+.progress-bar { width: 100%; height: 20px; background: #e9ecef; border-radius: 10px; overflow: hidden; }
+.progress-fill { height: 100%; background: #28a745; transition: width 0.3s ease; }
+.alert { padding: 12px 16px; border-radius: 4px; margin-bottom: 16px; }
+.alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+.alert-warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+.alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+@media (max-width: 768px) {
+	.metric-grid { grid-template-columns: 1fr; }
+	.dashboard-container { padding: 10px; }
+}
+`
+}
+
+// getDefaultJS returns secure default JavaScript content
+func (d *Dashboard) getDefaultJS() string {
+	return `
+// DataScrapexter Dashboard JavaScript
+(function() {
+	'use strict';
+	
+	// Auto-refresh functionality
+	let refreshInterval = 30000; // 30 seconds
+	let refreshTimer;
+	
+	function refreshDashboard() {
+		fetch(window.location.pathname + '/api/data')
+			.then(response => response.json())
+			.then(data => updateDashboard(data))
+			.catch(error => console.error('Failed to refresh dashboard:', error));
+	}
+	
+	function updateDashboard(data) {
+		// Update timestamp
+		const timestampEl = document.getElementById('last-updated');
+		if (timestampEl) {
+			timestampEl.textContent = new Date(data.timestamp).toLocaleString();
+		}
+		
+		// Update metrics if elements exist
+		updateMetric('total-requests', data.summary?.total_requests);
+		updateMetric('success-rate', data.summary?.successful_pages + '%');
+		updateMetric('active-jobs', data.summary?.active_jobs);
+		updateMetric('memory-usage', data.summary?.memory_usage_mb + ' MB');
+	}
+	
+	function updateMetric(id, value) {
+		const el = document.getElementById(id);
+		if (el && value !== undefined) {
+			el.textContent = value;
+		}
+	}
+	
+	// Initialize auto-refresh
+	function startAutoRefresh() {
+		refreshTimer = setInterval(refreshDashboard, refreshInterval);
+	}
+	
+	function stopAutoRefresh() {
+		if (refreshTimer) {
+			clearInterval(refreshTimer);
+		}
+	}
+	
+	// Start when page loads
+	document.addEventListener('DOMContentLoaded', function() {
+		startAutoRefresh();
+		
+		// Stop refresh when page is hidden to save resources
+		document.addEventListener('visibilitychange', function() {
+			if (document.hidden) {
+				stopAutoRefresh();
+			} else {
+				startAutoRefresh();
+			}
+		});
+	});
+})();
+`
 }
 
 // getAllowedExtensions returns the allowed file extensions for static files

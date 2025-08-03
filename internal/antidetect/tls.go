@@ -315,11 +315,8 @@ func isHTTPSAddr(addr string) bool {
 	// Handle host:port format (including IPv6)
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		// Try parsing without port (might be just hostname)
-		if _, parseErr := url.Parse("https://" + addr); parseErr == nil {
-			// Default to HTTPS for hostnames without explicit port
-			return true
-		}
+		// For hostnames without explicit port, default to HTTP to prevent TLS handshake failures
+		// Applications should explicitly specify the scheme (https://) if HTTPS is required
 		return false
 	}
 	
