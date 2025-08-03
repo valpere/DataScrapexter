@@ -325,6 +325,13 @@ func getDefaultCipherSuites() []uint16 {
 // The conservative default prevents TLS handshake failures when the protocol
 // is uncertain. Applications should use explicit schemes (https://) for HTTPS.
 func isHTTPSAddrWithConfig(addr string, config *TLSConfig) bool {
+	// Ensure consistent behavior by using default config when nil is passed
+	if config == nil {
+		config = &TLSConfig{
+			DefaultToHTTPS: false, // Conservative default to prevent TLS handshake failures
+		}
+	}
+
 	// First try to parse as URL to handle full URLs
 	if u, err := url.Parse(addr); err == nil && u.Scheme != "" {
 		return u.Scheme == "https"
@@ -334,12 +341,7 @@ func isHTTPSAddrWithConfig(addr string, config *TLSConfig) bool {
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		// Use configurable fallback behavior for ambiguous cases
-		if config != nil && config.DefaultToHTTPS {
-			return true
-		}
-		// Conservative default: assume HTTP to prevent TLS handshake failures
-		// Applications should explicitly specify the scheme (https://) if HTTPS is required
-		return false
+		return config.DefaultToHTTPS
 	}
 
 	// Parse port number for better validation
@@ -356,12 +358,7 @@ func isHTTPSAddrWithConfig(addr string, config *TLSConfig) bool {
 		return false
 	default:
 		// For non-standard ports, use configurable behavior
-		if config != nil && config.DefaultToHTTPS {
-			return true
-		}
-		// Conservative default: assume HTTP to prevent TLS handshake failures
-		// Applications should explicitly specify the scheme if using HTTPS on non-standard ports
-		return false
+		return config.DefaultToHTTPS
 	}
 }
 

@@ -487,7 +487,7 @@ func (d *Dashboard) logSecurityEvent(eventType string, details map[string]interf
 // getDashboardData collects all data for the dashboard
 func (d *Dashboard) getDashboardData() DashboardData {
 	health := d.healthManager.GetHealth()
-	metrics := d.metricsManager.GetMetrics()
+	metrics := d.metricsManager.GetMetricsInfo()
 	jobs := d.jobTracker.GetActiveJobs()
 	alerts := d.alertManager.GetActiveAlerts()
 
@@ -506,16 +506,25 @@ func (d *Dashboard) getDashboardData() DashboardData {
 
 // getSummary generates dashboard summary statistics
 func (d *Dashboard) getSummary() DashboardSummary {
-	// This would collect real metrics from the metrics manager
+	// Get real metrics from the metrics manager
+	summary, err := d.metricsManager.GetDashboardSummary()
+	if err != nil {
+		// Fallback to empty summary if metrics unavailable
+		return DashboardSummary{
+			Uptime: time.Since(startTime),
+		}
+	}
+
+	// Convert to DashboardSummary structure
 	return DashboardSummary{
-		TotalRequests:   12500,
-		SuccessfulPages: 11800,
-		FailedPages:     700,
-		ActiveJobs:      3,
-		QueuedJobs:      7,
+		TotalRequests:   getInt64FromMap(summary, "total_requests"),
+		SuccessfulPages: getInt64FromMap(summary, "successful_pages"),
+		FailedPages:     getInt64FromMap(summary, "failed_pages"),
+		ActiveJobs:      int(getInt64FromMap(summary, "active_jobs")),
+		QueuedJobs:      int(getInt64FromMap(summary, "queued_jobs")),
 		Uptime:          time.Since(startTime),
-		MemoryUsage:     245.7,
-		CPUUsage:        23.4,
+		MemoryUsage:     getFloat64FromMap(summary, "memory_usage_mb"),
+		CPUUsage:        0.0, // CPU usage would need separate tracking
 	}
 }
 
@@ -972,4 +981,40 @@ func (d *Dashboard) setupAlertRules() {
 			Cooldown: 1 * time.Minute,
 		},
 	}
+}
+
+// Helper functions for type-safe map value extraction
+
+// getInt64FromMap safely extracts an int64 value from a map[string]interface{}
+func getInt64FromMap(m map[string]interface{}, key string) int64 {
+	if val, exists := m[key]; exists {
+		switch v := val.(type) {
+		case int64:
+			return v
+		case int:
+			return int64(v)
+		case int32:
+			return int64(v)
+		case float64:
+			return int64(v)
+		}
+	}
+	return 0
+}
+
+// getFloat64FromMap safely extracts a float64 value from a map[string]interface{}
+func getFloat64FromMap(m map[string]interface{}, key string) float64 {
+	if val, exists := m[key]; exists {
+		switch v := val.(type) {
+		case float64:
+			return v
+		case float32:
+			return float64(v)
+		case int:
+			return float64(v)
+		case int64:
+			return float64(v)
+		}
+	}
+	return 0.0
 }

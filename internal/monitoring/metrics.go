@@ -230,6 +230,10 @@ type MetricsManager struct {
 	customMetrics map[string]prometheus.Collector
 	customMutex   sync.RWMutex
 
+	// Dashboard-specific counters for real-time access
+	dashboardCounters *DashboardCounters
+	countersMutex     sync.RWMutex
+
 	// Configuration
 	namespace string
 	subsystem string
@@ -245,6 +249,20 @@ type MetricsConfig struct {
 	EnableProcessMetrics bool              `json:"enable_process_metrics"`
 	MetricsPath          string            `json:"metrics_path"`
 	ListenAddress        string            `json:"listen_address"`
+}
+
+// DashboardCounters maintains simple counters for real-time dashboard access
+// These complement Prometheus metrics with direct value access for dashboards
+type DashboardCounters struct {
+	TotalRequests      int64
+	SuccessfulRequests int64
+	FailedRequests     int64
+	PagesScraped       int64
+	SuccessfulPages    int64
+	FailedPages        int64
+	ActiveJobs         int64
+	QueuedJobs         int64
+	LastUpdate         time.Time
 }
 
 // NewMetricsManager creates a new metrics manager
@@ -263,10 +281,13 @@ func NewMetricsManager(config MetricsConfig) *MetricsManager {
 	}
 
 	mm := &MetricsManager{
-		namespace:     config.Namespace,
-		subsystem:     config.Subsystem,
-		labels:        config.Labels,
-		customMetrics: make(map[string]prometheus.Collector),
+		namespace:         config.Namespace,
+		subsystem:         config.Subsystem,
+		labels:            config.Labels,
+		customMetrics:     make(map[string]prometheus.Collector),
+		dashboardCounters: &DashboardCounters{
+			LastUpdate: time.Now(),
+		},
 	}
 
 	mm.initializeMetrics()
@@ -580,6 +601,17 @@ func (mm *MetricsManager) initializeMetrics() {
 func (mm *MetricsManager) RecordRequest(method, host, jobID string, statusCode int, duration time.Duration) {
 	mm.requestsTotal.WithLabelValues(method, strconv.Itoa(statusCode), host, jobID).Inc()
 	mm.requestDuration.WithLabelValues(method, host, jobID).Observe(duration.Seconds())
+	
+	// Update dashboard counters
+	mm.countersMutex.Lock()
+	mm.dashboardCounters.TotalRequests++
+	if statusCode >= 200 && statusCode < 400 {
+		mm.dashboardCounters.SuccessfulRequests++
+	} else {
+		mm.dashboardCounters.FailedRequests++
+	}
+	mm.dashboardCounters.LastUpdate = time.Now()
+	mm.countersMutex.Unlock()
 }
 
 func (mm *MetricsManager) IncRequestsInFlight(host, jobID string) {
@@ -601,6 +633,17 @@ func (mm *MetricsManager) RecordRequestRetry(reason, host, jobID string) {
 // Scraping metrics
 func (mm *MetricsManager) RecordPageScraped(host, jobID, status string) {
 	mm.pagesScraped.WithLabelValues(host, jobID, status).Inc()
+	
+	// Update dashboard counters
+	mm.countersMutex.Lock()
+	mm.dashboardCounters.PagesScraped++
+	if status == "success" || status == "completed" {
+		mm.dashboardCounters.SuccessfulPages++
+	} else {
+		mm.dashboardCounters.FailedPages++
+	}
+	mm.dashboardCounters.LastUpdate = time.Now()
+	mm.countersMutex.Unlock()
 }
 
 func (mm *MetricsManager) RecordExtractionSuccess(field, jobID string) {
@@ -666,22 +709,46 @@ func (mm *MetricsManager) UpdateGoroutineCount(count int) {
 func (mm *MetricsManager) RecordJobStart(jobID, jobType string) {
 	mm.jobsTotal.WithLabelValues("started", jobType).Inc()
 	mm.jobsActive.Inc()
+	
+	// Update dashboard counters
+	mm.countersMutex.Lock()
+	mm.dashboardCounters.ActiveJobs++
+	mm.dashboardCounters.LastUpdate = time.Now()
+	mm.countersMutex.Unlock()
 }
 
 func (mm *MetricsManager) RecordJobComplete(jobID, jobType string, duration time.Duration) {
 	mm.jobsTotal.WithLabelValues("completed", jobType).Inc()
 	mm.jobDuration.WithLabelValues(jobID, jobType).Observe(duration.Seconds())
 	mm.jobsActive.Dec()
+	
+	// Update dashboard counters
+	mm.countersMutex.Lock()
+	mm.dashboardCounters.ActiveJobs--
+	mm.dashboardCounters.LastUpdate = time.Now()
+	mm.countersMutex.Unlock()
 }
 
 func (mm *MetricsManager) RecordJobFailed(jobID, jobType string, duration time.Duration) {
 	mm.jobsTotal.WithLabelValues("failed", jobType).Inc()
 	mm.jobDuration.WithLabelValues(jobID, jobType).Observe(duration.Seconds())
 	mm.jobsActive.Dec()
+	
+	// Update dashboard counters
+	mm.countersMutex.Lock()
+	mm.dashboardCounters.ActiveJobs--
+	mm.dashboardCounters.LastUpdate = time.Now()
+	mm.countersMutex.Unlock()
 }
 
 func (mm *MetricsManager) UpdateJobsQueued(count int) {
 	mm.jobsQueued.Set(float64(count))
+	
+	// Update dashboard counters
+	mm.countersMutex.Lock()
+	mm.dashboardCounters.QueuedJobs = int64(count)
+	mm.dashboardCounters.LastUpdate = time.Now()
+	mm.countersMutex.Unlock()
 }
 
 // Rate limiting metrics
@@ -806,4 +873,28 @@ func (mm *MetricsManager) GetMetricsInfo() map[string]interface{} {
 	metrics["note"] = "For current metric values, query the metrics endpoint at the configured address and path (e.g., http://localhost:9090/metrics)"
 
 	return metrics
+}
+
+// GetDashboardSummary returns real-time dashboard summary data
+// This provides direct access to counter values for dashboard display
+func (mm *MetricsManager) GetDashboardSummary() (map[string]interface{}, error) {
+	mm.countersMutex.RLock()
+	defer mm.countersMutex.RUnlock()
+
+	// Get current system metrics
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	summary := map[string]interface{}{
+		"total_requests":    mm.dashboardCounters.TotalRequests,
+		"successful_pages":  mm.dashboardCounters.SuccessfulPages,
+		"failed_pages":      mm.dashboardCounters.FailedPages,
+		"active_jobs":       mm.dashboardCounters.ActiveJobs,
+		"queued_jobs":       mm.dashboardCounters.QueuedJobs,
+		"memory_usage_mb":   float64(m.Alloc) / 1024 / 1024,
+		"goroutines_count":  runtime.NumGoroutine(),
+		"last_update":       mm.dashboardCounters.LastUpdate,
+	}
+
+	return summary, nil
 }

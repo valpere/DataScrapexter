@@ -38,6 +38,12 @@ const (
 	DefaultExcelMaxCellLength = 32767
 	// DefaultExcelMaxSheetRows is the default maximum rows per sheet in Excel
 	DefaultExcelMaxSheetRows = 1048576
+	// DefaultExcelMaxArrayElements is the default maximum array elements to prevent memory issues
+	// This prevents excessive memory usage when processing large arrays in Excel cells
+	DefaultExcelMaxArrayElements = 1000
+	// DefaultExcelStringBuilderThreshold is the threshold for using strings.Builder for efficiency
+	// Arrays larger than this will use strings.Builder for better performance
+	DefaultExcelStringBuilderThreshold = 100
 )
 
 // ExcelWriter implements the Writer interface for Excel output
@@ -510,7 +516,7 @@ func (w *ExcelWriter) getMaxArrayElements() int {
 		return w.config.MaxArrayElements
 	}
 	// Default limit to prevent memory issues
-	return 1000
+	return DefaultExcelMaxArrayElements
 }
 
 // truncateArray truncates an array to the configured maximum length with logging
@@ -528,7 +534,7 @@ func (w *ExcelWriter) truncateArray(arr []interface{}) []interface{} {
 // arrayToString converts an array to a comma-separated string efficiently
 func (w *ExcelWriter) arrayToString(arr []interface{}) string {
 	// Use efficient string builder for large arrays
-	if len(arr) > 100 {
+	if len(arr) > DefaultExcelStringBuilderThreshold {
 		var builder strings.Builder
 		builder.Grow(len(arr) * 10) // Pre-allocate space estimation
 		for i, item := range arr {

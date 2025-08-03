@@ -8,9 +8,15 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
+// Cache for sanitized XML names to improve performance in high-throughput scenarios
+var (
+	xmlNameCache = make(map[string]string)
+	xmlNameMutex sync.RWMutex
+)
 
 // XMLWriter implements the Writer interface for XML output
 type XMLWriter struct {
@@ -362,15 +368,43 @@ func (w *XMLWriter) writeArrayOfMapsElement(name string, arr []map[string]interf
 // Helper functions
 
 // sanitizeXMLName ensures the name is valid for XML according to Unicode rules
+// with caching for improved performance in high-throughput scenarios.
+//
 // Implements XML 1.0 Name and NameChar specification:
 // - The first character must be a NameStartChar (letter, underscore, or colon, but colon is discouraged).
 // - Subsequent characters must be NameChar (letters, digits, '.', '-', '_', ':', combining chars, extenders).
 // See: https://www.w3.org/TR/xml/#NT-Name
+//
+// Performance optimization: Frequently used element names are cached to avoid
+// repeated string processing in high-throughput scenarios.
 func sanitizeXMLName(name string) string {
 	if name == "" {
 		return "element"
 	}
 
+	// Check cache first for performance optimization
+	xmlNameMutex.RLock()
+	if cached, exists := xmlNameCache[name]; exists {
+		xmlNameMutex.RUnlock()
+		return cached
+	}
+	xmlNameMutex.RUnlock()
+
+	// Perform sanitization
+	result := sanitizeXMLNameUncached(name)
+
+	// Cache the result (with size limit to prevent memory bloat)
+	xmlNameMutex.Lock()
+	if len(xmlNameCache) < 1000 { // Limit cache size to prevent memory issues
+		xmlNameCache[name] = result
+	}
+	xmlNameMutex.Unlock()
+
+	return result
+}
+
+// sanitizeXMLNameUncached performs the actual sanitization without caching
+func sanitizeXMLNameUncached(name string) string {
 	var sanitized strings.Builder
 	runes := []rune(name)
 	for i, r := range runes {
