@@ -1,4 +1,171 @@
-// internal/monitoring/metrics.go
+// Package monitoring provides comprehensive metrics collection and monitoring capabilities
+// for the DataScrapexter web scraping platform.
+//
+// # Metrics Collection Strategy
+//
+// This package implements a Prometheus-based metrics collection system that provides
+// visibility into all aspects of scraping operations:
+//
+//   - HTTP Request Performance: Latency, throughput, error rates, retry patterns
+//   - Scraping Operations: Page extraction success/failure, data quality metrics
+//   - Anti-Detection Effectiveness: Proxy usage, CAPTCHA solve rates, fingerprinting success
+//   - Output Operations: Export performance, data volume, format-specific metrics
+//   - System Resources: Memory usage, CPU utilization, goroutine counts
+//   - Job Management: Active jobs, queue depths, completion rates
+//
+// # Metrics Interpretation Guide
+//
+// ## Key Performance Indicators (KPIs)
+//
+//   - Success Rate: (extraction_success_total / pages_scraped_total) * 100
+//   - Throughput: pages_scraped_total rate per second
+//   - Availability: (requests_total - request_errors_total) / requests_total
+//   - Anti-Detection Effectiveness: captcha_solved_total / (captcha_solved_total + captcha_failed_total)
+//
+// ## Alert Thresholds (Recommended)
+//
+//   - Error Rate > 10%: High alert
+//   - Success Rate < 80%: Medium alert
+//   - Average Response Time > 5s: Medium alert
+//   - Memory Usage > 80%: High alert
+//   - Active Jobs > 100: Capacity alert
+//
+// ## Performance Baselines
+//
+//   - Normal throughput: 10-50 pages/second per instance
+//   - Expected success rate: 90-95%
+//   - Target response time: <2 seconds (P95)
+//   - Memory usage: <500MB for typical workloads
+//
+// # Integration Patterns
+//
+// ## Prometheus Configuration
+//
+// Add this scrape configuration to prometheus.yml:
+//
+//	scrape_configs:
+//	  - job_name: 'datascrapexter'
+//	    static_configs:
+//	      - targets: ['localhost:9090']
+//	    scrape_interval: 15s
+//	    metrics_path: '/metrics'
+//
+// ## Grafana Dashboard Setup
+//
+// Essential queries for monitoring dashboards:
+//
+//	# Request Rate (pages/sec)
+//	rate(datascrapexter_scraper_pages_scraped_total[5m])
+//
+//	# Error Rate (%)
+//	(rate(datascrapexter_scraper_request_errors_total[5m]) /
+//	 rate(datascrapexter_scraper_requests_total[5m])) * 100
+//
+//	# Response Time Percentiles
+//	histogram_quantile(0.95, rate(datascrapexter_scraper_request_duration_seconds_bucket[5m]))
+//	histogram_quantile(0.50, rate(datascrapexter_scraper_request_duration_seconds_bucket[5m]))
+//
+//	# CAPTCHA Success Rate
+//	rate(datascrapexter_scraper_captcha_solved_total[5m]) /
+//	(rate(datascrapexter_scraper_captcha_solved_total[5m]) +
+//	 rate(datascrapexter_scraper_captcha_failed_total[5m]))
+//
+//	# Memory Usage
+//	datascrapexter_scraper_memory_usage_bytes / 1024 / 1024
+//
+//	# Active Jobs
+//	datascrapexter_scraper_jobs_active
+//
+// ## Alerting Rules
+//
+// Example Prometheus alerting rules:
+//
+//	groups:
+//	  - name: datascrapexter
+//	    rules:
+//	      - alert: HighErrorRate
+//	        expr: (rate(datascrapexter_scraper_request_errors_total[5m]) /
+//	               rate(datascrapexter_scraper_requests_total[5m])) * 100 > 10
+//	        for: 2m
+//	        labels:
+//	          severity: warning
+//	        annotations:
+//	          summary: "DataScrapexter error rate is high"
+//
+//	      - alert: LowSuccessRate
+//	        expr: (rate(datascrapexter_scraper_extraction_success_total[5m]) /
+//	               rate(datascrapexter_scraper_pages_scraped_total[5m])) * 100 < 80
+//	        for: 5m
+//	        labels:
+//	          severity: critical
+//	        annotations:
+//	          summary: "DataScrapexter success rate is low"
+//
+// ## Service Discovery
+//
+// For Kubernetes deployments, use service discovery:
+//
+//	kubernetes_sd_configs:
+//	  - role: pod
+//	relabel_configs:
+//	  - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+//	    action: keep
+//	    regex: true
+//	  - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+//	    action: replace
+//	    target_label: __metrics_path__
+//	    regex: (.+)
+//
+// # Advanced Usage
+//
+// ## Custom Metrics
+//
+// Register application-specific metrics:
+//
+//	manager := NewMetricsManager(config)
+//	customCounter := manager.RegisterCustomCounter(
+//	    "custom_events_total",
+//	    "Total custom events",
+//	    []string{"event_type", "status"}
+//	)
+//	customCounter.WithLabelValues("user_action", "success").Inc()
+//
+// ## High-Cardinality Labels
+//
+// Avoid high-cardinality labels (>100 unique values) like URLs or user IDs.
+// Use techniques like URL pattern extraction or user cohorts instead.
+//
+// ## Memory Management
+//
+// Metrics with large label combinations consume memory. Monitor:
+//   - prometheus_tsdb_symbol_table_size_bytes
+//   - prometheus_tsdb_head_series
+//
+// Implement metric cleanup for time-bounded labels when necessary.
+//
+// # Production Considerations
+//
+//   - Use recording rules for expensive queries in large deployments
+//   - Configure appropriate retention policies (default: 15 days)
+//   - Monitor Prometheus itself with node_exporter and prometheus_exporter
+//   - Use federation for multi-datacenter setups
+//   - Implement backup strategies for critical metrics data
+//
+// # Troubleshooting
+//
+// ## Common Issues
+//
+//   - Missing metrics: Check MetricsManager initialization and HTTP endpoint exposure
+//   - High memory usage: Review label cardinality and implement cleanup strategies  
+//   - Slow queries: Use recording rules or optimize PromQL expressions
+//   - Stale metrics: Verify scrape configuration and target health
+//
+// ## Debug Endpoints
+//
+//   - /metrics: Raw Prometheus metrics
+//   - /debug/vars: Go runtime metrics (if enabled)
+//   - /-/healthy: Prometheus health check
+//   - /-/ready: Prometheus readiness check
 package monitoring
 
 import (
