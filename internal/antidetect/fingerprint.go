@@ -319,33 +319,20 @@ func (fe *FingerprintingEvader) GenerateCompleteFingerprint() map[string]interfa
 
 // Helper functions
 
-func generateCanvasVariations() []string {
+func generateCanvasVariations() ([]string, error) {
 	variations := make([]string, 10)
 	for i := range variations {
 		// Generate small random strings that can be appended to canvas data
 		bytes := make([]byte, 2)
 		if _, err := rand.Read(bytes); err != nil {
 			// SECURITY: Fail fast when cryptographic randomness is unavailable
-			// Fallback: Use math/rand with a time-based seed to generate non-static variations
-			// This maintains behavioral consistency while preventing weak entropy use
-			src := mathrand.NewSource(time.Now().UnixNano())
-			r := mathrand.New(src)
-			for j := range variations {
-				fallbackBytes := make([]byte, 2)
-				for k := range fallbackBytes {
-					fallbackBytes[k] = byte(r.Intn(256))
-				}
-				variations[j] = hex.EncodeToString(fallbackBytes)
-			}
-			// Log the entropy failure for monitoring (but continue operation)
-			// This approach prevents application failure while maintaining security
 			logEntropyFailure("canvas_variations", err)
-			return variations
+			return nil, fmt.Errorf("crypto/rand failed: %w", err)
 		} else {
 			variations[i] = hex.EncodeToString(bytes)
 		}
 	}
-	return variations
+	return variations, nil
 }
 
 func generateRandomCanvasData() string {
