@@ -636,7 +636,7 @@ func (mm *MetricsManager) GetMetrics() map[string]interface{} {
 		"captcha_solved":     "Counter - CAPTCHAs successfully solved",
 	}
 
-	metrics["note"] = "For current metric values, query the /metrics endpoint"
+	metrics["note"] = "For current metric values, query the metrics endpoint at the configured address and path (e.g., http://localhost:9090/metrics)"
 
 	return metrics
 }
