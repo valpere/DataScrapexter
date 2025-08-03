@@ -640,21 +640,3 @@ func (mm *MetricsManager) GetMetrics() map[string]interface{} {
 
 	return metrics
 }
-
-// Reset is deprecated and should not be used.
-//
-// Deprecated: Use separate test metric registries instead. This method
-// panics to prevent accidental use in production. Counter metrics cannot
-// be reset in Prometheus by design.
-func (mm *MetricsManager) Reset() {
-	panic("MetricsManager.Reset is deprecated and should not be used. Use separate test metric registries instead.")
-}
-
-// ResetTestMetrics is deprecated and should not be used.
-//
-// Deprecated: Use separate test metric registries instead. This method
-// panics to prevent accidental use. Prometheus metrics should be isolated
-// using separate registries for testing.
-func (mm *MetricsManager) ResetTestMetrics() {
-	panic("MetricsManager.ResetTestMetrics is deprecated and should not be used. Use separate test metric registries instead.")
-}

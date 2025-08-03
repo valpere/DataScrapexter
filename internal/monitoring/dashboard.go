@@ -354,12 +354,12 @@ func (d *Dashboard) staticHandler(w http.ResponseWriter, r *http.Request) {
 	if err := d.serveStaticFileSafely(w, r); err != nil {
 		// Structured logging for security monitoring (internal diagnostics)
 		d.logSecurityEvent("static_file_access_denied", map[string]interface{}{
-			"remote_addr":    r.RemoteAddr,
-			"user_agent":     r.Header.Get("User-Agent"),
-			"requested_path": r.URL.Path,
-			"method":         r.Method,
-			"error":          err.Error(),
-			"timestamp":      time.Now().UTC(),
+			"remote_addr":     r.RemoteAddr,
+			"user_agent":      r.Header.Get("User-Agent"),
+			"requested_file":  d.sanitizeRequestedPath(r.URL.Path),
+			"method":          r.Method,
+			"error_type":      "file_access_denied",
+			"timestamp":       time.Now().UTC(),
 		})
 
 		// Generic error message that doesn't expose security mechanism details
@@ -401,6 +401,37 @@ func (d *Dashboard) serveStaticFileSafely(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Security-Policy", "default-src 'self'")
 	w.Write([]byte(file.content))
 	return nil
+}
+
+// sanitizeRequestedPath sanitizes the requested path for secure logging
+// This prevents information disclosure while maintaining useful audit trails
+func (d *Dashboard) sanitizeRequestedPath(path string) string {
+	// Extract just the requested filename from the static path
+	staticPrefix := d.config.Path + "/static/"
+	if strings.HasPrefix(path, staticPrefix) {
+		requestedFile := path[len(staticPrefix):]
+		
+		// Only log if it's a reasonable file request
+		if len(requestedFile) > 0 && len(requestedFile) < 100 {
+			// Allow only alphanumeric, dots, dashes, underscores
+			sanitized := strings.Map(func(r rune) rune {
+				if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+				   (r >= '0' && r <= '9') || r == '.' || r == '-' || r == '_' {
+					return r
+				}
+				return '_'
+			}, requestedFile)
+			
+			// Truncate if too long
+			if len(sanitized) > 50 {
+				sanitized = sanitized[:50] + "..."
+			}
+			return sanitized
+		}
+	}
+	
+	// For any other case, return generic identifier
+	return "unknown_file"
 }
 
 // logSecurityEvent logs security-related events for monitoring and analysis

@@ -593,8 +593,9 @@ func (w *ExcelWriter) applyFinalFormatting() error {
 
 // createNewSheet creates a new sheet when row limit is reached
 func (w *ExcelWriter) createNewSheet() error {
-	// Generate new sheet name
-	newSheetName := fmt.Sprintf("%s_%d", w.config.SheetName, len(w.file.GetSheetList()))
+	// Generate unique new sheet name
+	baseSheetName := fmt.Sprintf("%s_%d", w.config.SheetName, len(w.file.GetSheetList()))
+	newSheetName := w.generateUniqueSheetNameForWriter(baseSheetName)
 
 	// Create new sheet
 	index, err := w.file.NewSheet(newSheetName)
@@ -613,6 +614,35 @@ func (w *ExcelWriter) createNewSheet() error {
 	}
 
 	return nil
+}
+
+// generateUniqueSheetNameForWriter generates a unique sheet name for ExcelWriter
+func (w *ExcelWriter) generateUniqueSheetNameForWriter(baseName string) string {
+	existingSheets := w.file.GetSheetList()
+	sheetMap := make(map[string]bool)
+	for _, name := range existingSheets {
+		sheetMap[name] = true
+	}
+
+	// If base name doesn't exist, use it
+	if !sheetMap[baseName] {
+		return baseName
+	}
+
+	// Generate unique name with suffix
+	counter := 1
+	for {
+		candidateName := fmt.Sprintf("%s_%d", baseName, counter)
+		if !sheetMap[candidateName] {
+			return candidateName
+		}
+		counter++
+		// Safety check to prevent infinite loop
+		if counter > 1000 {
+			// Use timestamp as fallback for extreme cases
+			return fmt.Sprintf("%s_%d", baseName, time.Now().UnixNano())
+		}
+	}
 }
 
 // columnName converts a column number to Excel column name (A, B, C, ..., AA, AB, etc.)
@@ -650,8 +680,11 @@ func (wb *ExcelWorkbook) GetOrCreateWriter(sheetName string) (*ExcelWriter, erro
 		return writer, nil
 	}
 
+	// Generate unique sheet name if collision exists
+	uniqueSheetName := wb.generateUniqueSheetName(sheetName)
+
 	// Create new sheet
-	index, err := wb.file.NewSheet(sheetName)
+	index, err := wb.file.NewSheet(uniqueSheetName)
 	if err != nil {
 		return nil, err
 	}
@@ -660,18 +693,47 @@ func (wb *ExcelWorkbook) GetOrCreateWriter(sheetName string) (*ExcelWriter, erro
 
 	// Create writer for this sheet
 	config := wb.config
-	config.SheetName = sheetName
+	config.SheetName = uniqueSheetName
 
 	writer := &ExcelWriter{
 		file:      wb.file,
 		config:    config,
-		sheetName: sheetName,
+		sheetName: uniqueSheetName,
 		row:       1,
 		records:   make([]map[string]interface{}, 0, config.BufferSize),
 	}
 
-	wb.writers[sheetName] = writer
+	wb.writers[uniqueSheetName] = writer
 	return writer, nil
+}
+
+// generateUniqueSheetName generates a unique sheet name by checking existing sheets
+func (wb *ExcelWorkbook) generateUniqueSheetName(baseName string) string {
+	existingSheets := wb.file.GetSheetList()
+	sheetMap := make(map[string]bool)
+	for _, name := range existingSheets {
+		sheetMap[name] = true
+	}
+
+	// If base name doesn't exist, use it
+	if !sheetMap[baseName] {
+		return baseName
+	}
+
+	// Generate unique name with suffix
+	counter := 1
+	for {
+		candidateName := fmt.Sprintf("%s_%d", baseName, counter)
+		if !sheetMap[candidateName] {
+			return candidateName
+		}
+		counter++
+		// Safety check to prevent infinite loop
+		if counter > 1000 {
+			// Use timestamp as fallback for extreme cases
+			return fmt.Sprintf("%s_%d", baseName, time.Now().UnixNano())
+		}
+	}
 }
 
 // Save saves the workbook to file

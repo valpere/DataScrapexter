@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	mathrand "math/rand"
+	"strings"
 	"time"
 )
 
@@ -454,16 +455,19 @@ func getExtraFonts() []string {
 // logEntropyFailure logs entropy generation failures for security monitoring
 // This is critical for detecting entropy issues that could compromise anti-detection
 func logEntropyFailure(context string, err error) {
+	// Sanitize error message to prevent information disclosure
+	sanitizedError := sanitizeErrorForLogging(err)
+	
 	// Structure the security event for monitoring systems
 	_ = map[string]interface{}{
-		"event_type":   "entropy_failure",
-		"component":    "fingerprint",
-		"context":      context,
-		"error":        err.Error(),
-		"severity":     "critical",
-		"timestamp":    time.Now().UTC(),
-		"impact":       "fallback_to_static_values",
-		"action_taken": "continued_operation_with_static_fallback",
+		"event_type":     "entropy_failure",
+		"component":      "fingerprint",
+		"context":        context,
+		"error_category": sanitizedError,
+		"severity":       "critical",
+		"timestamp":      time.Now().UTC(),
+		"impact":         "fallback_to_static_values",
+		"action_taken":   "continued_operation_with_static_fallback",
 	}
 
 	// In production, this should trigger immediate alerts
@@ -479,10 +483,40 @@ func logEntropyFailure(context string, err error) {
 		slog.String("event_type", "entropy_failure"),
 		slog.String("component", "fingerprint"),
 		slog.String("context", context),
-		slog.String("error", err.Error()),
+		slog.String("error_category", sanitizedError),
 		slog.String("severity", "critical"),
 		slog.Time("timestamp", time.Now().UTC()),
 		slog.String("impact", "fallback_to_static_values"),
 		slog.String("action_taken", "continued_operation_with_static_fallback"),
 	)
+}
+
+// sanitizeErrorForLogging sanitizes error messages to prevent information disclosure
+// while maintaining useful categorization for security monitoring
+func sanitizeErrorForLogging(err error) string {
+	if err == nil {
+		return "unknown_error"
+	}
+	
+	errStr := strings.ToLower(err.Error())
+	
+	// Categorize common error types without exposing details
+	switch {
+	case strings.Contains(errStr, "crypto/rand"):
+		return "entropy_source_unavailable"
+	case strings.Contains(errStr, "random"):
+		return "randomization_failure" 
+	case strings.Contains(errStr, "read"):
+		return "read_operation_failed"
+	case strings.Contains(errStr, "no such"):
+		return "resource_unavailable"
+	case strings.Contains(errStr, "permission"):
+		return "permission_denied"
+	case strings.Contains(errStr, "timeout"):
+		return "operation_timeout"
+	case strings.Contains(errStr, "context"):
+		return "context_error"
+	default:
+		return "unclassified_error"
+	}
 }
