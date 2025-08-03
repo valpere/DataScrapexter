@@ -537,25 +537,9 @@ func ValidateXMLConfig(config XMLConfig) error {
 	return nil
 }
 
-// isValidXMLName checks if a string is a valid XML name
+// isValidXMLName checks if a string is a valid XML name using the same logic as sanitizeXMLName
 func isValidXMLName(name string) bool {
-	if len(name) == 0 {
-		return false
-	}
-
-	// Check first character
-	first := rune(name[0])
-	if !((first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z') || first == '_') {
-		return false
-	}
-
-	// Check remaining characters
-	for _, r := range name[1:] {
-		if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') ||
-			(r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.') {
-			return false
-		}
-	}
-
-	return true
+	// Use sanitizeXMLName to ensure consistency: valid if non-empty and unchanged by sanitization
+	sanitized := sanitizeXMLName(name)
+	return sanitized == name && len(sanitized) > 0
 }
