@@ -68,7 +68,7 @@ type ExcelConfig struct {
 	NumberFormat     string         `json:"number_format"`
 	MaxSheetRows     int            `json:"max_sheet_rows"`
 	MaxCellLength    int            `json:"max_cell_length"`
-	MaxArrayElements int            `json:"max_array_elements"` // Maximum array elements to prevent memory issues
+	MaxArrayElements int            `json:"max_array_elements"` // Maximum array elements to prevent memory issues (Default: 1000)
 	CreateIndex      bool           `json:"create_index"`
 	Compression      bool           `json:"compression"`
 	Logger           Logger         `json:"-"` // Optional logger interface for structured logging
