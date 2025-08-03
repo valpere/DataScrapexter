@@ -6,20 +6,34 @@
 [![codecov](https://codecov.io/gh/valpere/DataScrapexter/branch/main/graph/badge.svg)](https://codecov.io/gh/valpere/DataScrapexter)
 [![GitHub release](https://img.shields.io/github/release/valpere/DataScrapexter.svg)](https://github.com/valpere/DataScrapexter/releases)
 
-**DataScrapexter** is a high-performance, configuration-driven web scraping platform built with Go. It combines intelligent anti-detection mechanisms with universal compatibility to enable seamless data extraction from any website structure.
+**DataScrapexter** is a professional web scraping platform built with Go 1.24+ that combines high performance, intelligent anti-detection mechanisms, and configuration-driven operation to enable seamless data extraction from any website structure.
 
 ![IN PROGRESS](./images/IN_PROGRESS.png)
 
 ## ✨ Key Features
 
-🎯 **Universal Compatibility** - Scrape any website: e-commerce, news, directories, social media
-🛡️ **Advanced Anti-Detection** - Proxy rotation, browser fingerprinting, CAPTCHA solving
-⚙️ **Configuration-Driven** - No-code setup through YAML configuration
-⚡ **High Performance** - Process 10,000+ pages/hour with Go's concurrency
-🌐 **JavaScript Support** - Headless browser automation for dynamic content
-⚖️ **Legal Compliance** - Built-in ethical scraping and compliance features
-📊 **Multiple Outputs** - JSON, CSV, PostgreSQL, SQLite, and more
-📈 **Real-time Monitoring** - Comprehensive metrics and health monitoring
+### Core Capabilities
+- **🎯 Universal Website Support**: Scrape any website type - e-commerce, news, directories, social media
+- **⚙️ Configuration-Driven**: No-code setup through YAML configuration files
+- **⚡ High Performance**: Go's concurrency model for processing 10,000+ pages per hour
+- **🌐 JavaScript Support**: Headless browser automation for dynamic content
+- **📊 Multiple Output Formats**: JSON, CSV, Excel, XML, YAML, databases, and cloud storage
+- **📈 Real-time Monitoring**: Comprehensive metrics and health monitoring
+
+### Anti-Detection
+- **🛡️ Browser Fingerprinting Evasion**: Canvas, WebGL, audio spoofing
+- **🔐 CAPTCHA Solving**: 2Captcha, Anti-Captcha, CapMonster integration
+- **🔒 TLS Fingerprinting**: JA3/JA4 randomization
+- **🌐 Proxy Management**: Residential and datacenter proxy rotation
+- **🤖 Human-like Behavior**: Realistic timing and interaction patterns
+
+### Enterprise Features
+- **📊 Monitoring & Alerting**: Prometheus, Grafana, health checks
+- **🏗️ High Availability**: Load balancing, failover, replication
+- **☁️ Cloud Integration**: AWS, GCP, Azure support
+- **🚢 Kubernetes Native**: Container orchestration ready
+- **🔌 API Gateway Integration**: Enterprise architecture support
+- **📋 Audit & Compliance**: GDPR compliance, audit logging
 
 ## 🚀 Quick Start
 
@@ -75,17 +89,88 @@ datascrapexter run config.yaml
 cat results.json
 ```
 
-## 📚 Documentation
+## 📚 Complete Documentation
 
-| Category | Documentation |
-|----------|---------------|
-| **🚀 Getting Started** | [Installation](docs/installation.md) • [User Guide](docs/user-guide.md) • [Tutorial](docs/tutorial-ecommerce.md) |
-| **⚙️ Configuration** | [Reference](docs/configuration.md) • [Templates](docs/configuration-templates-guide.md) • [Examples](examples/) |
-| **🔧 Development** | [API Reference](docs/api.md) • [Architecture](docs/ARCHITECTURE.md) • [CLI Reference](docs/cli.md) |
-| **🛠️ Operations** | [Docker Setup](docs/docker-setup.md) • [Troubleshooting](docs/troubleshooting.md) • [FAQ](docs/faq.md) |
-| **📋 Project** | [Contributing](CONTRIBUTING.md) • [Changelog](CHANGELOG.md) • [Security](SECURITY.md) |
+The documentation is organized in a logical reading order, from basic concepts to advanced enterprise features:
 
-📖 **[Complete Documentation Index](docs/README.md)**
+### 📚 [01. Getting Started](docs/01-getting-started.md)
+*Start here for installation, first scraper, and basic concepts*
+
+- Installation (binary, source, Docker)
+- Quick start guide with first scraper
+- Basic configuration structure
+- Command line usage
+- Next steps and learning path
+
+### ⚙️ [02. Configuration Reference](docs/02-configuration-reference.md)
+*Complete reference for all configuration options*
+
+- Configuration file structure
+- Request settings (rate limiting, timeouts, headers)
+- Data extraction (fields, selectors, transformations)
+- Pagination strategies
+- Output formats and destinations
+- Anti-detection settings
+- Monitoring configuration
+- Environment variables
+
+### 🎯 [03. Examples and Tutorials](docs/03-examples-and-tutorials.md)
+*Real-world examples and step-by-step tutorials*
+
+- Basic examples (quotes, books)
+- E-commerce scraping (price monitoring, product comparison)
+- News and content collection
+- Real estate listings
+- Job board scraping
+- Advanced scenarios (multi-site, SPA)
+- Production configurations
+
+### 🔧 [04. Advanced Features](docs/04-advanced-features.md)
+*Sophisticated features for enterprise-grade scraping*
+
+- Anti-detection technologies
+- Monitoring and observability
+- Output formats and destinations
+- Browser automation
+- Proxy management
+- Performance optimization
+- Enterprise features
+
+### 🔌 [05. API Reference](docs/05-api-reference.md)
+*Complete Go programming interface documentation*
+
+- Core packages and interfaces
+- Configuration types
+- Scraping engine API
+- Data processing and transformations
+- Output management
+- Monitoring integration
+- Anti-detection features
+- Error handling
+- Complete code examples
+
+### 🔍 [06. Troubleshooting](docs/06-troubleshooting.md)
+*Solutions to common issues and debugging guide*
+
+- Quick diagnostics
+- Configuration issues
+- Scraping failures
+- Anti-detection problems
+- Performance issues
+- Output problems
+- Monitoring and health issues
+- Deployment issues
+- Best practices for prevention
+
+## 📖 Reading Paths for Different Users
+
+Choose your learning path based on your role and needs:
+
+- **🆕 New Users**: Start with [01. Getting Started](docs/01-getting-started.md) → [02. Configuration Reference](docs/02-configuration-reference.md) → [03. Examples and Tutorials](docs/03-examples-and-tutorials.md)
+- **⚙️ Configuration Focus**: [02. Configuration Reference](docs/02-configuration-reference.md) → [03. Examples and Tutorials](docs/03-examples-and-tutorials.md) → [06. Troubleshooting](docs/06-troubleshooting.md)
+- **👨‍💻 Developers**: [05. API Reference](docs/05-api-reference.md) → [04. Advanced Features](docs/04-advanced-features.md) → [06. Troubleshooting](docs/06-troubleshooting.md)
+- **🚀 Production Users**: [04. Advanced Features](docs/04-advanced-features.md) → [05. API Reference](docs/05-api-reference.md) → [06. Troubleshooting](docs/06-troubleshooting.md)
+- **🔧 Troubleshooting**: [06. Troubleshooting](docs/06-troubleshooting.md) → [02. Configuration Reference](docs/02-configuration-reference.md) → [05. API Reference](docs/05-api-reference.md)
 
 ## 💡 Usage Examples
 
@@ -318,6 +403,27 @@ datascrapexter serve [--port 8080]        # Start API server
 datascrapexter proxy-test --config <config.yaml>     # Test proxies
 datascrapexter captcha-test --solver 2captcha        # Test CAPTCHA
 datascrapexter health                                 # Health check
+```
+
+## 🏗️ Architecture
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   CLI/API       │    │  Scraping Engine │    │  Anti-Detection │
+│                 │────│                  │────│                 │
+│ • Configuration │    │ • HTTP Client    │    │ • Fingerprinting│
+│ • Validation    │    │ • Browser Pool   │    │ • CAPTCHA Solver│
+│ • Monitoring    │    │ • Rate Limiting  │    │ • Proxy Manager │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+         │                       │                       │
+         v                       v                       v
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│  Data Pipeline  │    │   Output Engine  │    │   Monitoring    │
+│                 │    │                  │    │                 │
+│ • Extraction    │────│ • Format Writers │    │ • Metrics       │
+│ • Validation    │    │ • Cloud Upload   │    │ • Health Checks │
+│ • Transform     │    │ • Database Store │    │ • Dashboard     │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
 
 ## 📊 Performance & Monitoring
