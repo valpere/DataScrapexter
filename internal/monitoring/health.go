@@ -594,33 +594,5 @@ func HTTPHealthCheck(name, url string, timeout time.Duration) *HealthCheck {
 }
 
 // NOTE: DiskSpaceHealthCheck is not implemented in this package due to platform-specific requirements.
-//
-// IMPLEMENTATION GUIDANCE:
-// For production disk space monitoring, see comprehensive implementation examples in:
-//   docs/health-monitoring.md
-//
-// The implementation requires platform-specific code and additional dependencies:
-//   - Unix/Linux: golang.org/x/sys/unix
-//   - Windows: golang.org/x/sys/windows
-//   - Cross-platform (recommended): github.com/shirou/gopsutil/v3/disk
-//
-// Example cross-platform implementation:
-//   import "github.com/shirou/gopsutil/v3/disk"
-//
-//   func DiskSpaceHealthCheck(path string, maxUsage float64) *HealthCheck {
-//     return &HealthCheck{
-//       Name: "disk_space",
-//       CheckFunc: func(ctx context.Context) HealthCheckResult {
-//         usage, err := disk.Usage(path)
-//         if err != nil {
-//           return HealthCheckResult{Status: HealthStatusUnhealthy, Error: err}
-//         }
-//         if usage.UsedPercent > maxUsage {
-//           return HealthCheckResult{Status: HealthStatusDegraded,
-//             Message: fmt.Sprintf("Disk usage: %.1f%%", usage.UsedPercent)}
-//         }
-//         return HealthCheckResult{Status: HealthStatusHealthy,
-//           Message: fmt.Sprintf("Disk usage: %.1f%%", usage.UsedPercent)}
-//       },
-//     }
-//   }
+// For production implementation, use github.com/shirou/gopsutil/v3/disk for cross-platform support.
+// See docs/health-monitoring.md for detailed examples.

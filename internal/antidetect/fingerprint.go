@@ -29,9 +29,18 @@ type CanvasSpoofing struct {
 
 // NewCanvasSpoofing creates a new canvas spoofing system
 func NewCanvasSpoofing(enabled bool) *CanvasSpoofing {
+	variations, err := generateCanvasVariations()
+	if err != nil {
+		// Fall back to static variations if crypto/rand fails
+		variations = []string{
+			"a4b7c3d1e5f2", "b8e1f4g7h2i5", "c2f5g8h1i4j7", "d6g9h2i5j8k1",
+			"e0h3i6j9k2l5", "f4i7j0k3l6m9", "g8j1k4l7m0n3", "h2k5l8m1n4o7",
+			"i6l9m2n5o8p1", "j0m3n6o9p2q5",
+		}
+	}
 	return &CanvasSpoofing{
 		enabled:    enabled,
-		variations: generateCanvasVariations(),
+		variations: variations,
 	}
 }
 

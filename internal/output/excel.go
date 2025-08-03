@@ -349,33 +349,8 @@ func (w *ExcelWriter) processValue(value interface{}) interface{} {
 		return v
 	case []interface{}:
 		// Convert arrays to comma-separated strings with configurable limits
-		maxArrayElements := w.getMaxArrayElements()
-		if len(v) > maxArrayElements {
-			// Log truncation using configured logger - sanitize for security
-			w.config.Logger.Warnf("Excel: Truncating array from %d to %d elements for memory efficiency",
-				len(v), maxArrayElements)
-			v = v[:maxArrayElements]
-		}
-
-		// Use efficient string builder for large arrays
-		if len(v) > 100 {
-			var builder strings.Builder
-			builder.Grow(len(v) * 10) // Pre-allocate space estimation
-			for i, item := range v {
-				if i > 0 {
-					builder.WriteString(", ")
-				}
-				builder.WriteString(fmt.Sprintf("%v", item))
-			}
-			return builder.String()
-		} else {
-			// Use slice approach for smaller arrays
-			var parts []string
-			for _, item := range v {
-				parts = append(parts, fmt.Sprintf("%v", item))
-			}
-			return strings.Join(parts, ", ")
-		}
+		truncatedArray := w.truncateArray(v)
+		return w.arrayToString(truncatedArray)
 	case map[string]interface{}:
 		// Convert objects to JSON-like strings
 		var parts []string
@@ -535,6 +510,41 @@ func (w *ExcelWriter) getMaxArrayElements() int {
 	}
 	// Default limit to prevent memory issues
 	return 1000
+}
+
+// truncateArray truncates an array to the configured maximum length with logging
+func (w *ExcelWriter) truncateArray(arr []interface{}) []interface{} {
+	maxArrayElements := w.getMaxArrayElements()
+	if len(arr) > maxArrayElements {
+		// Log truncation using configured logger - sanitize for security
+		w.config.Logger.Warnf("Excel: Truncating array from %d to %d elements for memory efficiency",
+			len(arr), maxArrayElements)
+		return arr[:maxArrayElements]
+	}
+	return arr
+}
+
+// arrayToString converts an array to a comma-separated string efficiently
+func (w *ExcelWriter) arrayToString(arr []interface{}) string {
+	// Use efficient string builder for large arrays
+	if len(arr) > 100 {
+		var builder strings.Builder
+		builder.Grow(len(arr) * 10) // Pre-allocate space estimation
+		for i, item := range arr {
+			if i > 0 {
+				builder.WriteString(", ")
+			}
+			builder.WriteString(fmt.Sprintf("%v", item))
+		}
+		return builder.String()
+	} else {
+		// Use slice approach for smaller arrays
+		var parts []string
+		for _, item := range arr {
+			parts = append(parts, fmt.Sprintf("%v", item))
+		}
+		return strings.Join(parts, ", ")
+	}
 }
 
 // applyFinalFormatting applies final formatting to the worksheet

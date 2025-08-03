@@ -641,29 +641,12 @@ func (mm *MetricsManager) GetMetrics() map[string]interface{} {
 	return metrics
 }
 
-// Reset resets select metrics for testing scenarios
+// Reset resets select metrics for testing scenarios.
 //
-// DEPRECATED: This method is intended for testing purposes only.
-// DO NOT USE IN PRODUCTION - it will break monitoring and alerting.
-//
-// IMPORTANT PROMETHEUS LIMITATIONS:
-// - Counter metrics (e.g., requestsTotal, requestErrors) cannot be reset by design
-// - Counters are monotonically increasing and preserve their values across resets
-// - Only gauge metrics can be reset to zero
-// - Histogram bucket counts cannot be reset (they behave like counters)
-//
-// TESTING ALTERNATIVES (RECOMMENDED):
-// 1. Use separate metric registries for tests (recommended)
-// 2. Create mock implementations for unit tests
-// 3. Use testify/mock for metric interfaces
-// 4. Reset only gauges and use relative measurements for counters
-//
-// PRODUCTION USAGE:
-// - This method should NEVER be called in production
-// - Metrics are designed to be persistent for monitoring and alerting
-// - Resetting metrics in production breaks observability
-//
-// Deprecated: Use separate test metric registries instead.
+// Deprecated: Use separate test metric registries instead. This method should
+// NEVER be called in production as it breaks monitoring and alerting. Only
+// gauge metrics can be reset; counter metrics are monotonically increasing
+// by design in Prometheus.
 func (mm *MetricsManager) Reset() {
 	// Reset gauge metrics to zero
 	mm.jobsActive.Set(0)
@@ -684,12 +667,10 @@ func (mm *MetricsManager) Reset() {
 	// Production note: Histogram reset behavior may vary by implementation
 }
 
-// ResetTestMetrics provides a more comprehensive reset for testing environments
+// ResetTestMetrics provides a more comprehensive reset for testing environments.
 //
-// DEPRECATED: This method is intended for testing purposes only.
-// WARNING: This should only be used in test environments, never in production
-//
-// Deprecated: Use separate test metric registries instead.
+// Deprecated: Use separate test metric registries instead. This method should
+// only be used in test environments, never in production.
 func (mm *MetricsManager) ResetTestMetrics() {
 	// Create new registry for test isolation if needed
 	// This is the proper way to reset metrics in tests

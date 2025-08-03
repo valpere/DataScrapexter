@@ -394,10 +394,11 @@ func (d *Dashboard) serveStaticFileSafely(w http.ResponseWriter, r *http.Request
 		return fmt.Errorf("resource not available")
 	}
 
-	// Serve the safe file
+	// Serve the safe file with security headers
 	w.Header().Set("Content-Type", file.contentType)
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'")
 	w.Write([]byte(file.content))
 	return nil
 }
