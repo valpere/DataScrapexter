@@ -13,7 +13,7 @@ import (
 
 func TestTLSFingerprinter_GetRandomConfig(t *testing.T) {
 	fingerprinter := NewTLSFingerprinter()
-	
+
 	// Test multiple calls return different configs
 	configs := make([]*tls.Config, 10)
 	for i := 0; i < 10; i++ {
@@ -22,29 +22,29 @@ func TestTLSFingerprinter_GetRandomConfig(t *testing.T) {
 			t.Fatal("GetRandomConfig returned nil")
 		}
 	}
-	
+
 	// Verify configs actually vary (test randomization)
 	if len(configs) >= 2 {
 		// Check that at least some configs have different characteristics
 		hasVariation := false
 		firstConfig := configs[0]
-		
+
 		for i := 1; i < len(configs); i++ {
 			currentConfig := configs[i]
-			
+
 			// Compare cipher suites
 			if len(firstConfig.CipherSuites) != len(currentConfig.CipherSuites) {
 				hasVariation = true
 				break
 			}
-			
+
 			// Compare TLS versions
-			if firstConfig.MinVersion != currentConfig.MinVersion || 
-			   firstConfig.MaxVersion != currentConfig.MaxVersion {
+			if firstConfig.MinVersion != currentConfig.MinVersion ||
+				firstConfig.MaxVersion != currentConfig.MaxVersion {
 				hasVariation = true
 				break
 			}
-			
+
 			// Compare cipher suite contents
 			for j := 0; j < len(firstConfig.CipherSuites); j++ {
 				if firstConfig.CipherSuites[j] != currentConfig.CipherSuites[j] {
@@ -56,12 +56,12 @@ func TestTLSFingerprinter_GetRandomConfig(t *testing.T) {
 				break
 			}
 		}
-		
+
 		if !hasVariation {
 			t.Error("GetRandomConfig() appears to return identical configurations - randomization may not be working")
 		}
 	}
-	
+
 	// Verify configs have expected properties
 	config := configs[0]
 	if config.MinVersion == 0 {
@@ -84,19 +84,19 @@ func TestTLSFingerprinter_GetRandomConfig(t *testing.T) {
 func TestTLSFingerprinter_GetChromeConfig(t *testing.T) {
 	fingerprinter := NewTLSFingerprinter()
 	config := fingerprinter.GetChromeConfig()
-	
+
 	if config.MinVersion != tls.VersionTLS12 {
 		t.Errorf("Expected MinVersion TLS 1.2, got %d", config.MinVersion)
 	}
 	if config.MaxVersion != tls.VersionTLS13 {
 		t.Errorf("Expected MaxVersion TLS 1.3, got %d", config.MaxVersion)
 	}
-	
+
 	// Check for Chrome-specific cipher suites
 	if len(config.CipherSuites) == 0 {
 		t.Error("Chrome config should have cipher suites")
 	}
-	
+
 	// Check for h2 ALPN protocol
 	found := false
 	for _, proto := range config.NextProtos {
@@ -113,19 +113,19 @@ func TestTLSFingerprinter_GetChromeConfig(t *testing.T) {
 func TestTLSFingerprinter_GetFirefoxConfig(t *testing.T) {
 	fingerprinter := NewTLSFingerprinter()
 	config := fingerprinter.GetFirefoxConfig()
-	
+
 	if config.MinVersion != tls.VersionTLS12 {
 		t.Errorf("Expected MinVersion TLS 1.2, got %d", config.MinVersion)
 	}
 	if config.MaxVersion != tls.VersionTLS13 {
 		t.Errorf("Expected MaxVersion TLS 1.3, got %d", config.MaxVersion)
 	}
-	
+
 	// Firefox should have different cipher suite ordering than Chrome
 	if len(config.CipherSuites) == 0 {
 		t.Error("Firefox config should have cipher suites")
 	}
-	
+
 	// Check for curve preferences specific to Firefox
 	if len(config.CurvePreferences) < 4 {
 		t.Error("Firefox config should have at least 4 curve preferences")
@@ -134,16 +134,16 @@ func TestTLSFingerprinter_GetFirefoxConfig(t *testing.T) {
 
 func TestTLSRotator_GetNext(t *testing.T) {
 	rotator := NewTLSRotator()
-	
+
 	// Test rotation
 	config1 := rotator.GetNext()
 	config2 := rotator.GetNext()
 	config3 := rotator.GetNext()
-	
+
 	if config1 == nil || config2 == nil || config3 == nil {
 		t.Fatal("TLS rotator returned nil config")
 	}
-	
+
 	// Should cycle through different configs
 	// Note: This test assumes implementation details, may need adjustment
 	if config1 == config3 { // Should cycle back after 3 calls
@@ -161,12 +161,12 @@ func TestCanvasSpoofing_GetSpoofedData(t *testing.T) {
 		{"disabled spoofing", false, "canvas_data_12345"},
 		{"empty data", true, ""},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			spoofing := NewCanvasSpoofing(tt.enabled)
 			result := spoofing.GetSpoofedData(tt.original)
-			
+
 			if tt.enabled {
 				// Should modify the data
 				if result == tt.original && tt.original != "" {
@@ -189,11 +189,11 @@ func TestCanvasSpoofing_GetSpoofedData(t *testing.T) {
 func TestCanvasSpoofing_GenerateFingerprint(t *testing.T) {
 	spoofing := NewCanvasSpoofing(true)
 	fingerprint := spoofing.GenerateFingerprint()
-	
+
 	if fingerprint == nil {
 		t.Fatal("GenerateFingerprint returned nil")
 	}
-	
+
 	if fingerprint.Data == "" {
 		t.Error("Fingerprint should have data")
 	}
@@ -214,7 +214,7 @@ func TestCanvasSpoofing_GenerateFingerprint(t *testing.T) {
 func TestWebGLSpoofing_GetRandomProfile(t *testing.T) {
 	spoofing := NewWebGLSpoofing(true)
 	profile := spoofing.GetRandomProfile()
-	
+
 	if profile.Renderer == "" {
 		t.Error("WebGL profile should have renderer")
 	}
@@ -233,7 +233,7 @@ func TestWebGLSpoofing_GetRandomProfile(t *testing.T) {
 	if !profile.Spoofed {
 		t.Error("WebGL profile should be marked as spoofed")
 	}
-	
+
 	// Test disabled spoofing
 	disabledSpoofing := NewWebGLSpoofing(false)
 	disabledProfile := disabledSpoofing.GetRandomProfile()
@@ -245,11 +245,11 @@ func TestWebGLSpoofing_GetRandomProfile(t *testing.T) {
 func TestAudioSpoofing_GenerateFingerprint(t *testing.T) {
 	spoofing := NewAudioSpoofing(true, 0.01)
 	fingerprint := spoofing.GenerateFingerprint()
-	
+
 	if fingerprint == nil {
 		t.Fatal("GenerateFingerprint returned nil")
 	}
-	
+
 	if fingerprint.SampleRate <= 0 {
 		t.Error("Audio fingerprint should have valid sample rate")
 	}
@@ -271,7 +271,7 @@ func TestAudioSpoofing_GenerateFingerprint(t *testing.T) {
 	if !fingerprint.Spoofed {
 		t.Error("Audio fingerprint should be marked as spoofed")
 	}
-	
+
 	// Test disabled spoofing
 	disabledSpoofing := NewAudioSpoofing(false, 0)
 	disabledFingerprint := disabledSpoofing.GenerateFingerprint()
@@ -283,7 +283,7 @@ func TestAudioSpoofing_GenerateFingerprint(t *testing.T) {
 func TestScreenSpoofing_GetRandomFingerprint(t *testing.T) {
 	spoofing := NewScreenSpoofing(true)
 	fingerprint := spoofing.GetRandomFingerprint()
-	
+
 	if fingerprint.Width <= 0 || fingerprint.Height <= 0 {
 		t.Error("Screen fingerprint should have valid dimensions")
 	}
@@ -305,7 +305,7 @@ func TestScreenSpoofing_GetRandomFingerprint(t *testing.T) {
 	if !fingerprint.Spoofed {
 		t.Error("Screen fingerprint should be marked as spoofed")
 	}
-	
+
 	// Test disabled spoofing
 	disabledSpoofing := NewScreenSpoofing(false)
 	disabledFingerprint := disabledSpoofing.GetRandomFingerprint()
@@ -317,11 +317,11 @@ func TestScreenSpoofing_GetRandomFingerprint(t *testing.T) {
 func TestFontSpoofing_GetRandomFontList(t *testing.T) {
 	spoofing := NewFontSpoofing(true)
 	fonts := spoofing.GetRandomFontList()
-	
+
 	if len(fonts) == 0 {
 		t.Error("Font spoofing should return font list")
 	}
-	
+
 	// Should include base fonts
 	hasBaseFonts := false
 	for _, font := range fonts {
@@ -333,11 +333,11 @@ func TestFontSpoofing_GetRandomFontList(t *testing.T) {
 	if !hasBaseFonts {
 		t.Error("Font list should include base fonts")
 	}
-	
+
 	// Test disabled spoofing
 	disabledSpoofing := NewFontSpoofing(false)
 	disabledFonts := disabledSpoofing.GetRandomFontList()
-	
+
 	// Should return only base fonts when disabled
 	if len(disabledFonts) > 20 { // Assuming base fonts are less than 20
 		t.Error("Disabled font spoofing should return limited font list")
@@ -347,11 +347,11 @@ func TestFontSpoofing_GetRandomFontList(t *testing.T) {
 func TestFingerprintingEvader_GenerateCompleteFingerprint(t *testing.T) {
 	evader := NewFingerprintingEvader(true)
 	fingerprint := evader.GenerateCompleteFingerprint()
-	
+
 	if fingerprint == nil {
 		t.Fatal("GenerateCompleteFingerprint returned nil")
 	}
-	
+
 	// Check all components are present
 	if _, ok := fingerprint["canvas"]; !ok {
 		t.Error("Complete fingerprint should include canvas")
@@ -379,9 +379,9 @@ func TestCaptchaManager_SolveRecaptchaV2(t *testing.T) {
 		DefaultSolver: TwoCaptcha,
 		SolveTimeout:  10 * time.Second,
 	}
-	
+
 	manager := NewCaptchaManager(config)
-	
+
 	// Register a mock solver
 	mockSolver := &MockCaptchaSolver{
 		balance: 10.0,
@@ -393,26 +393,26 @@ func TestCaptchaManager_SolveRecaptchaV2(t *testing.T) {
 		},
 	}
 	manager.RegisterSolver(TwoCaptcha, mockSolver)
-	
+
 	ctx := context.Background()
 	solution, err := manager.SolveRecaptchaV2(ctx, "test_site_key", "https://example.com", nil)
-	
+
 	if err != nil {
 		t.Fatalf("SolveRecaptchaV2 failed: %v", err)
 	}
-	
+
 	if solution == nil {
 		t.Fatal("Solution should not be nil")
 	}
-	
+
 	if !solution.Success {
 		t.Error("Solution should be successful")
 	}
-	
+
 	if solution.Token == "" {
 		t.Error("Solution should have token")
 	}
-	
+
 	if solution.SolveTime <= 0 {
 		t.Error("Solution should have solve time")
 	}
@@ -424,9 +424,9 @@ func TestCaptchaManager_SolveRecaptchaV3(t *testing.T) {
 		DefaultSolver: TwoCaptcha,
 		SolveTimeout:  10 * time.Second,
 	}
-	
+
 	manager := NewCaptchaManager(config)
-	
+
 	// Register a mock solver
 	mockSolver := &MockCaptchaSolver{
 		balance: 10.0,
@@ -438,22 +438,22 @@ func TestCaptchaManager_SolveRecaptchaV3(t *testing.T) {
 		},
 	}
 	manager.RegisterSolver(TwoCaptcha, mockSolver)
-	
+
 	ctx := context.Background()
 	solution, err := manager.SolveRecaptchaV3(ctx, "test_site_key", "https://example.com", "submit", 0.5)
-	
+
 	if err != nil {
 		t.Fatalf("SolveRecaptchaV3 failed: %v", err)
 	}
-	
+
 	if solution == nil {
 		t.Fatal("Solution should not be nil")
 	}
-	
+
 	if !solution.Success {
 		t.Error("Solution should be successful")
 	}
-	
+
 	if solution.Token == "" {
 		t.Error("Solution should have token")
 	}
@@ -465,9 +465,9 @@ func TestCaptchaManager_SolveImageCaptcha(t *testing.T) {
 		DefaultSolver: TwoCaptcha,
 		SolveTimeout:  10 * time.Second,
 	}
-	
+
 	manager := NewCaptchaManager(config)
-	
+
 	// Register a mock solver
 	mockSolver := &MockCaptchaSolver{
 		balance: 10.0,
@@ -479,23 +479,23 @@ func TestCaptchaManager_SolveImageCaptcha(t *testing.T) {
 		},
 	}
 	manager.RegisterSolver(TwoCaptcha, mockSolver)
-	
+
 	ctx := context.Background()
 	imageData := []byte("fake_image_data")
 	solution, err := manager.SolveImageCaptcha(ctx, imageData)
-	
+
 	if err != nil {
 		t.Fatalf("SolveImageCaptcha failed: %v", err)
 	}
-	
+
 	if solution == nil {
 		t.Fatal("Solution should not be nil")
 	}
-	
+
 	if !solution.Success {
 		t.Error("Solution should be successful")
 	}
-	
+
 	if solution.Text == "" {
 		t.Error("Solution should have text")
 	}
@@ -509,17 +509,17 @@ func TestAntiDetectionClientIntegration(t *testing.T) {
 		if userAgent == "" {
 			t.Error("Request should have User-Agent header")
 		}
-		
+
 		accept := r.Header.Get("Accept")
 		if accept == "" {
 			t.Error("Request should have Accept header")
 		}
-		
+
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Success"))
 	}))
 	defer server.Close()
-	
+
 	// Create anti-detection client
 	config := &AntiDetectionConfig{
 		UserAgentRotation: true,
@@ -534,29 +534,29 @@ func TestAntiDetectionClientIntegration(t *testing.T) {
 			BackoffMax: 1 * time.Second,
 		},
 	}
-	
+
 	client := NewAntiDetectionClient(config)
-	
+
 	// Create request
 	req, err := http.NewRequest("GET", server.URL, nil)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
-	
+
 	// Execute request
 	start := time.Now()
 	resp, err := client.Do(req)
 	duration := time.Since(start)
-	
+
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", resp.StatusCode)
 	}
-	
+
 	// Should have some delay
 	if duration < 100*time.Millisecond {
 		t.Error("Request should have delay from anti-detection measures")
@@ -609,17 +609,17 @@ func (m *MockCaptchaSolver) GetStats(ctx context.Context) (map[string]interface{
 func TestTwoCaptchaSolver_SubmitTask(t *testing.T) {
 	// This test would require a real API key and should be run separately
 	t.Skip("Skipping TwoCaptcha integration test - requires API key")
-	
+
 	solver := NewTwoCaptchaSolver("test_api_key")
 	task := &CaptchaTask{
 		Type:    RecaptchaV2,
 		SiteKey: "test_site_key",
 		SiteURL: "https://example.com",
 	}
-	
+
 	ctx := context.Background()
 	_, err := solver.SubmitTask(ctx, task)
-	
+
 	// Should get an error due to invalid API key
 	if err == nil {
 		t.Error("Expected error with invalid API key")
@@ -629,17 +629,17 @@ func TestTwoCaptchaSolver_SubmitTask(t *testing.T) {
 func TestAntiCaptchaSolver_SubmitTask(t *testing.T) {
 	// This test would require a real API key and should be run separately
 	t.Skip("Skipping AntiCaptcha integration test - requires API key")
-	
+
 	solver := NewAntiCaptchaSolver("test_api_key")
 	task := &CaptchaTask{
 		Type:    RecaptchaV2,
 		SiteKey: "test_site_key",
 		SiteURL: "https://example.com",
 	}
-	
+
 	ctx := context.Background()
 	_, err := solver.SubmitTask(ctx, task)
-	
+
 	// Should get an error due to invalid API key
 	if err == nil {
 		t.Error("Expected error with invalid API key")

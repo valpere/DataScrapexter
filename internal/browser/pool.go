@@ -10,12 +10,12 @@ import (
 
 // BrowserPool implements the Pool interface
 type BrowserPool struct {
-	config     *BrowserConfig
-	browsers   chan BrowserClient
-	maxSize    int
+	config      *BrowserConfig
+	browsers    chan BrowserClient
+	maxSize     int
 	currentSize int
-	mu         sync.RWMutex
-	closed     bool
+	mu          sync.RWMutex
+	closed      bool
 }
 
 // NewBrowserPool creates a new browser pool

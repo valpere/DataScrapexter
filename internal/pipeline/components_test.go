@@ -46,7 +46,7 @@ func TestDataExtractor_Extract(t *testing.T) {
 			name: "complex nested data",
 			input: map[string]interface{}{
 				"product": map[string]interface{}{
-					"name": "Test Product",
+					"name":  "Test Product",
 					"specs": []string{"spec1", "spec2"},
 				},
 				"metadata": map[string]interface{}{
@@ -56,7 +56,7 @@ func TestDataExtractor_Extract(t *testing.T) {
 			},
 			expected: map[string]interface{}{
 				"product": map[string]interface{}{
-					"name": "Test Product",
+					"name":  "Test Product",
 					"specs": []string{"spec1", "spec2"},
 				},
 				"metadata": map[string]interface{}{
@@ -650,10 +650,10 @@ func TestOutputManager_Write(t *testing.T) {
 	}
 
 	tests := []struct {
-		name          string
-		manager       *OutputManager
-		input         interface{}
-		expectError   bool
+		name        string
+		manager     *OutputManager
+		input       interface{}
+		expectError bool
 	}{
 		{
 			name: "single output handler",
@@ -698,7 +698,7 @@ func TestOutputManager_Close(t *testing.T) {
 			manager: &OutputManager{
 				Outputs: []OutputHandler{
 					&MockOutputHandler{
-						closeFunc: func() error { return nil },
+						closeFunc:  func() error { return nil },
 						outputType: "mock1",
 					},
 				},

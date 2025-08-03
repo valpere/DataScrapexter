@@ -14,54 +14,54 @@ import (
 
 // HTTPClientConfig configures the HTTP client behavior
 type HTTPClientConfig struct {
-	Timeout              time.Duration     `yaml:"timeout" json:"timeout"`
-	RetryAttempts        int               `yaml:"retry_attempts" json:"retry_attempts"`
-	RetryBackoffBase     time.Duration     `yaml:"retry_backoff_base" json:"retry_backoff_base"`
-	RetryBackoffMax      time.Duration     `yaml:"retry_backoff_max" json:"retry_backoff_max"`
-	UserAgents           []string          `yaml:"user_agents" json:"user_agents"`
-	Headers              map[string]string `yaml:"headers" json:"headers"`
-	Cookies              map[string]string `yaml:"cookies" json:"cookies"`
-	FollowRedirects      bool              `yaml:"follow_redirects" json:"follow_redirects"`
-	MaxRedirects         int               `yaml:"max_redirects" json:"max_redirects"`
-	RateLimit            time.Duration     `yaml:"rate_limit" json:"rate_limit"`
-	MaxIdleConns         int               `yaml:"max_idle_conns" json:"max_idle_conns"`
-	MaxIdleConnsPerHost  int               `yaml:"max_idle_conns_per_host" json:"max_idle_conns_per_host"`
-	IdleConnTimeout      time.Duration     `yaml:"idle_conn_timeout" json:"idle_conn_timeout"`
-	DisableCompression   bool              `yaml:"disable_compression" json:"disable_compression"`
-	DisableKeepAlives    bool              `yaml:"disable_keep_alives" json:"disable_keep_alives"`
+	Timeout             time.Duration     `yaml:"timeout" json:"timeout"`
+	RetryAttempts       int               `yaml:"retry_attempts" json:"retry_attempts"`
+	RetryBackoffBase    time.Duration     `yaml:"retry_backoff_base" json:"retry_backoff_base"`
+	RetryBackoffMax     time.Duration     `yaml:"retry_backoff_max" json:"retry_backoff_max"`
+	UserAgents          []string          `yaml:"user_agents" json:"user_agents"`
+	Headers             map[string]string `yaml:"headers" json:"headers"`
+	Cookies             map[string]string `yaml:"cookies" json:"cookies"`
+	FollowRedirects     bool              `yaml:"follow_redirects" json:"follow_redirects"`
+	MaxRedirects        int               `yaml:"max_redirects" json:"max_redirects"`
+	RateLimit           time.Duration     `yaml:"rate_limit" json:"rate_limit"`
+	MaxIdleConns        int               `yaml:"max_idle_conns" json:"max_idle_conns"`
+	MaxIdleConnsPerHost int               `yaml:"max_idle_conns_per_host" json:"max_idle_conns_per_host"`
+	IdleConnTimeout     time.Duration     `yaml:"idle_conn_timeout" json:"idle_conn_timeout"`
+	DisableCompression  bool              `yaml:"disable_compression" json:"disable_compression"`
+	DisableKeepAlives   bool              `yaml:"disable_keep_alives" json:"disable_keep_alives"`
 }
 
 // HTTPClient wraps http.Client with additional functionality
 type HTTPClient struct {
-	client        *http.Client
-	config        *HTTPClientConfig
-	userAgentIdx  int
-	userAgentMux  sync.Mutex
-	rateLimiter   *rate.Limiter
-	stats         *HTTPStats
-	statsMux      sync.RWMutex
+	client       *http.Client
+	config       *HTTPClientConfig
+	userAgentIdx int
+	userAgentMux sync.Mutex
+	rateLimiter  *rate.Limiter
+	stats        *HTTPStats
+	statsMux     sync.RWMutex
 }
 
 // HTTPStats tracks HTTP client statistics
 type HTTPStats struct {
-	TotalRequests     int64         `json:"total_requests"`
-	SuccessfulReqs    int64         `json:"successful_requests"`
-	FailedRequests    int64         `json:"failed_requests"`
-	RetryCount        int64         `json:"retry_count"`
-	TotalBytes        int64         `json:"total_bytes"`
-	AverageLatency    time.Duration `json:"average_latency"`
-	LastRequestTime   time.Time     `json:"last_request_time"`
-	ErrorsByCode      map[int]int64 `json:"errors_by_code"`
+	TotalRequests   int64         `json:"total_requests"`
+	SuccessfulReqs  int64         `json:"successful_requests"`
+	FailedRequests  int64         `json:"failed_requests"`
+	RetryCount      int64         `json:"retry_count"`
+	TotalBytes      int64         `json:"total_bytes"`
+	AverageLatency  time.Duration `json:"average_latency"`
+	LastRequestTime time.Time     `json:"last_request_time"`
+	ErrorsByCode    map[int]int64 `json:"errors_by_code"`
 }
 
 // HTTPResponse represents an HTTP response with additional metadata
 type HTTPResponse struct {
 	*http.Response
-	Duration    time.Duration `json:"duration"`
-	Attempts    int           `json:"attempts"`
-	BodyBytes   []byte        `json:"-"`
-	BodySize    int64         `json:"body_size"`
-	FromCache   bool          `json:"from_cache"`
+	Duration  time.Duration `json:"duration"`
+	Attempts  int           `json:"attempts"`
+	BodyBytes []byte        `json:"-"`
+	BodySize  int64         `json:"body_size"`
+	FromCache bool          `json:"from_cache"`
 }
 
 // NewHTTPClient creates a new HTTP client with the given configuration

@@ -143,4 +143,3 @@ func (m *Manager) resolveSQLitePath() string {
 	}
 	return "output.db" // Default SQLite database name
 }
-

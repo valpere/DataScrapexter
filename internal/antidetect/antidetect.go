@@ -68,10 +68,10 @@ func (rl *RateLimiter) Wait(ctx context.Context) error {
 
 // ProxyRotator manages proxy rotation
 type ProxyRotator struct {
-	proxies   []string
-	healthy   map[string]bool
-	mu        sync.RWMutex
-	index     int
+	proxies []string
+	healthy map[string]bool
+	mu      sync.RWMutex
+	index   int
 }
 
 // NewProxyRotator creates a new proxy rotator

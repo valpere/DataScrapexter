@@ -23,7 +23,7 @@ func TestValidatePostgreSQLIdentifier(t *testing.T) {
 		{"contains hyphen", "user-name", true},
 		{"reserved word", "select", true},
 		{"reserved word case", "SELECT", true},
-		{"too long", "a" + strings.Repeat("b", 63), true}, // 64 chars total (> MaxPostgreSQLIdentifierLength)
+		{"too long", "a" + strings.Repeat("b", 63), true},    // 64 chars total (> MaxPostgreSQLIdentifierLength)
 		{"max length", "a" + strings.Repeat("b", 61), false}, // 62 chars total (< MaxPostgreSQLIdentifierLength)
 	}
 
@@ -56,7 +56,7 @@ func TestValidateSQLiteIdentifier(t *testing.T) {
 		{"contains hyphen", "user-name", true},
 		{"reserved word", "select", true},
 		{"reserved word case", "SELECT", true},
-		{"too long", "a" + strings.Repeat("b", 999), true}, // 1000 chars total (> MaxSQLiteIdentifierLength)
+		{"too long", "a" + strings.Repeat("b", 999), true},    // 1000 chars total (> MaxSQLiteIdentifierLength)
 		{"max length", "a" + strings.Repeat("b", 997), false}, // 998 chars total (< MaxSQLiteIdentifierLength)
 	}
 
@@ -222,7 +222,7 @@ func TestDatabaseWriterConfigValidation(t *testing.T) {
 			name: "invalid PostgreSQL - empty connection string",
 			options: PostgreSQLOptions{
 				ConnectionString: "",
-				Table:           "test_table",
+				Table:            "test_table",
 			},
 			expectError: true,
 			errorType:   "connection string",
@@ -231,7 +231,7 @@ func TestDatabaseWriterConfigValidation(t *testing.T) {
 			name: "invalid PostgreSQL - empty table name",
 			options: PostgreSQLOptions{
 				ConnectionString: "postgres://localhost/test",
-				Table:           "",
+				Table:            "",
 			},
 			expectError: true,
 			errorType:   "table name",
@@ -240,17 +240,17 @@ func TestDatabaseWriterConfigValidation(t *testing.T) {
 			name: "valid PostgreSQL options",
 			options: PostgreSQLOptions{
 				ConnectionString: "postgres://user:pass@localhost/testdb",
-				Table:           "valid_table",
-				BatchSize:       100,
+				Table:            "valid_table",
+				BatchSize:        100,
 			},
-			expectError: true, // Will fail on database connection, not config validation
+			expectError: true,      // Will fail on database connection, not config validation
 			errorType:   "connect", // Should be a connection error, not config error
 		},
 		{
 			name: "invalid SQLite - empty connection string",
 			options: SQLiteOptions{
 				DatabasePath: "",
-				Table:       "test_table",
+				Table:        "test_table",
 			},
 			expectError: true,
 			errorType:   "database path",
@@ -259,8 +259,8 @@ func TestDatabaseWriterConfigValidation(t *testing.T) {
 			name: "valid SQLite options",
 			options: SQLiteOptions{
 				DatabasePath: ":memory:",
-				Table:       "valid_table",
-				BatchSize:   50,
+				Table:        "valid_table",
+				BatchSize:    50,
 			},
 			expectError: false,
 		},
@@ -269,7 +269,7 @@ func TestDatabaseWriterConfigValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var err error
-			
+
 			switch opts := tt.options.(type) {
 			case PostgreSQLOptions:
 				_, err = NewPostgreSQLWriter(opts)
@@ -292,13 +292,13 @@ func TestDatabaseWriterConfigValidation(t *testing.T) {
 
 func TestConflictStrategyValidation(t *testing.T) {
 	validStrategies := []ConflictStrategy{ConflictIgnore, ConflictError, ConflictReplace}
-	
+
 	for _, strategy := range validStrategies {
 		t.Run(string(strategy), func(t *testing.T) {
 			if strategy == "" {
 				t.Error("strategy should not be empty")
 			}
-			
+
 			// Test that the strategy is one of the defined constants
 			switch strategy {
 			case ConflictIgnore, ConflictError, ConflictReplace:
@@ -312,15 +312,15 @@ func TestConflictStrategyValidation(t *testing.T) {
 
 func TestOutputFormatValidation(t *testing.T) {
 	validFormats := ValidOutputFormats()
-	
+
 	if len(validFormats) == 0 {
 		t.Error("should have at least one valid output format")
 	}
-	
+
 	expectedFormats := []OutputFormat{
 		FormatJSON, FormatCSV, FormatXML, FormatYAML, FormatTSV, FormatPostgreSQL, FormatSQLite,
 	}
-	
+
 	for _, expected := range expectedFormats {
 		found := false
 		for _, valid := range validFormats {

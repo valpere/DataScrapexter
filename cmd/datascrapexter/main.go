@@ -7,10 +7,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/valpere/DataScrapexter/internal/errors"
 	"github.com/valpere/DataScrapexter/internal/config"
-	"github.com/valpere/DataScrapexter/internal/scraper"
+	"github.com/valpere/DataScrapexter/internal/errors"
 	"github.com/valpere/DataScrapexter/internal/output"
+	"github.com/valpere/DataScrapexter/internal/scraper"
 	"gopkg.in/yaml.v3"
 )
 

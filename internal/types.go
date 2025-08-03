@@ -9,12 +9,12 @@ import (
 
 // BaseConfig represents common configuration fields
 type BaseConfig struct {
-	Timeout      time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
-	RetryDelay   time.Duration `yaml:"retry_delay,omitempty" json:"retry_delay,omitempty"`
-	MaxRetries   int           `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
-	UserAgent    string        `yaml:"user_agent,omitempty" json:"user_agent,omitempty"`
-	RateLimit    time.Duration `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
-	BurstSize    int           `yaml:"burst_size,omitempty" json:"burst_size,omitempty"`
+	Timeout    time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	RetryDelay time.Duration `yaml:"retry_delay,omitempty" json:"retry_delay,omitempty"`
+	MaxRetries int           `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
+	UserAgent  string        `yaml:"user_agent,omitempty" json:"user_agent,omitempty"`
+	RateLimit  time.Duration `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
+	BurstSize  int           `yaml:"burst_size,omitempty" json:"burst_size,omitempty"`
 }
 
 // RequestMetadata contains request-specific metadata

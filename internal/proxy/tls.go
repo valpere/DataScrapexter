@@ -77,7 +77,7 @@ func ValidateTLSConfig(config *TLSConfig) error {
 
 	// Validate client certificate configuration
 	if (config.ClientCert != "" && config.ClientKey == "") ||
-	   (config.ClientCert == "" && config.ClientKey != "") {
+		(config.ClientCert == "" && config.ClientKey != "") {
 		return fmt.Errorf("both client_cert and client_key must be provided for mutual TLS")
 	}
 

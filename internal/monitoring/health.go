@@ -24,18 +24,18 @@ const (
 
 // HealthCheck represents a single health check
 type HealthCheck struct {
-	Name        string                 `json:"name"`
-	Status      HealthStatus           `json:"status"`
-	Message     string                 `json:"message,omitempty"`
-	Error       string                 `json:"error,omitempty"`
-	LastCheck   time.Time              `json:"last_check"`
-	Duration    time.Duration          `json:"duration"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	CheckFunc   func(ctx context.Context) HealthCheckResult `json:"-"`
-	Interval    time.Duration          `json:"-"`
-	Timeout     time.Duration          `json:"-"`
-	Critical    bool                   `json:"critical"`
-	Enabled     bool                   `json:"enabled"`
+	Name      string                                      `json:"name"`
+	Status    HealthStatus                                `json:"status"`
+	Message   string                                      `json:"message,omitempty"`
+	Error     string                                      `json:"error,omitempty"`
+	LastCheck time.Time                                   `json:"last_check"`
+	Duration  time.Duration                               `json:"duration"`
+	Metadata  map[string]interface{}                      `json:"metadata,omitempty"`
+	CheckFunc func(ctx context.Context) HealthCheckResult `json:"-"`
+	Interval  time.Duration                               `json:"-"`
+	Timeout   time.Duration                               `json:"-"`
+	Critical  bool                                        `json:"critical"`
+	Enabled   bool                                        `json:"enabled"`
 }
 
 // HealthCheckResult represents the result of a health check
@@ -71,13 +71,13 @@ type HealthConfig struct {
 
 // SystemHealth represents overall system health information
 type SystemHealth struct {
-	Status     HealthStatus           `json:"status"`
-	Timestamp  time.Time              `json:"timestamp"`
-	Version    string                 `json:"version,omitempty"`
-	Uptime     time.Duration          `json:"uptime"`
-	Checks     map[string]HealthCheck `json:"checks,omitempty"`
-	Summary    HealthSummary          `json:"summary"`
-	System     SystemMetrics          `json:"system"`
+	Status    HealthStatus           `json:"status"`
+	Timestamp time.Time              `json:"timestamp"`
+	Version   string                 `json:"version,omitempty"`
+	Uptime    time.Duration          `json:"uptime"`
+	Checks    map[string]HealthCheck `json:"checks,omitempty"`
+	Summary   HealthSummary          `json:"summary"`
+	System    SystemMetrics          `json:"system"`
 }
 
 // HealthSummary provides a summary of health checks
@@ -92,22 +92,22 @@ type HealthSummary struct {
 
 // SystemMetrics provides system-level metrics
 type SystemMetrics struct {
-	CPUUsage       float64           `json:"cpu_usage_percent"`
-	MemoryUsage    MemoryMetrics     `json:"memory"`
-	GoroutineCount int               `json:"goroutine_count"`
-	GCStats        debug.GCStats     `json:"gc_stats"`
-	Uptime         time.Duration     `json:"uptime"`
-	LoadAverage    []float64         `json:"load_average,omitempty"`
-	DiskUsage      map[string]int64  `json:"disk_usage,omitempty"`
+	CPUUsage       float64          `json:"cpu_usage_percent"`
+	MemoryUsage    MemoryMetrics    `json:"memory"`
+	GoroutineCount int              `json:"goroutine_count"`
+	GCStats        debug.GCStats    `json:"gc_stats"`
+	Uptime         time.Duration    `json:"uptime"`
+	LoadAverage    []float64        `json:"load_average,omitempty"`
+	DiskUsage      map[string]int64 `json:"disk_usage,omitempty"`
 }
 
 // MemoryMetrics provides memory usage information
 type MemoryMetrics struct {
-	Allocated     uint64  `json:"allocated_bytes"`
-	TotalAlloc    uint64  `json:"total_alloc_bytes"`
-	System        uint64  `json:"system_bytes"`
-	NumGC         uint32  `json:"num_gc"`
-	UsagePercent  float64 `json:"usage_percent"`
+	Allocated    uint64  `json:"allocated_bytes"`
+	TotalAlloc   uint64  `json:"total_alloc_bytes"`
+	System       uint64  `json:"system_bytes"`
+	NumGC        uint32  `json:"num_gc"`
+	UsagePercent float64 `json:"usage_percent"`
 }
 
 // NewHealthManager creates a new health manager
@@ -170,11 +170,11 @@ func (hm *HealthManager) RemoveCheck(name string) {
 // Start starts the health monitoring
 func (hm *HealthManager) Start(ctx context.Context) {
 	hm.ticker = time.NewTicker(hm.config.CheckInterval)
-	
+
 	go func() {
 		// Run initial checks
 		hm.runAllChecks(ctx)
-		
+
 		for {
 			select {
 			case <-hm.ticker.C:
@@ -222,13 +222,13 @@ func (hm *HealthManager) runAllChecks(ctx context.Context) {
 // runCheck runs a single health check
 func (hm *HealthManager) runCheck(ctx context.Context, check *HealthCheck) {
 	start := time.Now()
-	
+
 	// Create timeout context
 	checkCtx, cancel := context.WithTimeout(ctx, check.Timeout)
 	defer cancel()
-	
+
 	var result HealthCheckResult
-	
+
 	if check.CheckFunc != nil {
 		result = check.CheckFunc(checkCtx)
 	} else {
@@ -237,9 +237,9 @@ func (hm *HealthManager) runCheck(ctx context.Context, check *HealthCheck) {
 			Message: "No check function defined",
 		}
 	}
-	
+
 	duration := time.Since(start)
-	
+
 	// Update check metadata
 	check.LastCheck = start
 	check.Duration = duration
@@ -253,7 +253,7 @@ func (hm *HealthManager) runCheck(ctx context.Context, check *HealthCheck) {
 	if result.Metadata != nil {
 		check.Metadata = result.Metadata
 	}
-	
+
 	// Store result
 	hm.resultsMutex.Lock()
 	hm.results[check.Name] = result
@@ -283,14 +283,14 @@ func (hm *HealthManager) GetHealth() SystemHealth {
 	// Calculate overall status and summary
 	summary := HealthSummary{}
 	overallStatus := HealthStatusHealthy
-	
+
 	for _, check := range hm.checks {
 		if !check.Enabled {
 			continue
 		}
-		
+
 		summary.Total++
-		
+
 		switch check.Status {
 		case HealthStatusHealthy:
 			summary.Healthy++
@@ -312,7 +312,7 @@ func (hm *HealthManager) GetHealth() SystemHealth {
 				overallStatus = HealthStatusDegraded
 			}
 		}
-		
+
 		if check.Critical {
 			summary.Critical++
 		}
@@ -327,7 +327,7 @@ func (hm *HealthManager) GetHealth() SystemHealth {
 // GetReadiness returns readiness status (for Kubernetes readiness probes)
 func (hm *HealthManager) GetReadiness() SystemHealth {
 	health := hm.GetHealth()
-	
+
 	// Readiness focuses on whether the service can serve traffic
 	// We consider degraded as ready (but log it), but unhealthy as not ready
 	if health.Status == HealthStatusUnhealthy {
@@ -335,18 +335,18 @@ func (hm *HealthManager) GetReadiness() SystemHealth {
 	} else {
 		health.Status = HealthStatusHealthy
 	}
-	
+
 	return health
 }
 
-// GetLiveness returns liveness status (for Kubernetes liveness probes)  
+// GetLiveness returns liveness status (for Kubernetes liveness probes)
 func (hm *HealthManager) GetLiveness() SystemHealth {
 	health := hm.GetHealth()
-	
+
 	// Liveness is about whether the service is alive and should be restarted
 	// Only critical failures should affect liveness
 	criticalFailures := false
-	
+
 	hm.checksMutex.RLock()
 	for _, check := range hm.checks {
 		if check.Critical && check.Status == HealthStatusUnhealthy {
@@ -355,13 +355,13 @@ func (hm *HealthManager) GetLiveness() SystemHealth {
 		}
 	}
 	hm.checksMutex.RUnlock()
-	
+
 	if criticalFailures {
 		health.Status = HealthStatusUnhealthy
 	} else {
 		health.Status = HealthStatusHealthy
 	}
-	
+
 	return health
 }
 
@@ -369,7 +369,7 @@ func (hm *HealthManager) GetLiveness() SystemHealth {
 func (hm *HealthManager) getSystemMetrics() SystemMetrics {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	
+
 	var gcStats debug.GCStats
 	debug.ReadGCStats(&gcStats)
 
@@ -391,9 +391,9 @@ func (hm *HealthManager) getSystemMetrics() SystemMetrics {
 func (hm *HealthManager) HealthHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		health := hm.GetHealth()
-		
+
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		if health.Status == HealthStatusUnhealthy {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		} else if health.Status == HealthStatusDegraded {
@@ -401,7 +401,7 @@ func (hm *HealthManager) HealthHandler() http.HandlerFunc {
 		} else {
 			w.WriteHeader(http.StatusOK)
 		}
-		
+
 		json.NewEncoder(w).Encode(health)
 	}
 }
@@ -410,15 +410,15 @@ func (hm *HealthManager) HealthHandler() http.HandlerFunc {
 func (hm *HealthManager) ReadinessHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		health := hm.GetReadiness()
-		
+
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		if health.Status == HealthStatusUnhealthy {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		} else {
 			w.WriteHeader(http.StatusOK)
 		}
-		
+
 		json.NewEncoder(w).Encode(health)
 	}
 }
@@ -427,15 +427,15 @@ func (hm *HealthManager) ReadinessHandler() http.HandlerFunc {
 func (hm *HealthManager) LivenessHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		health := hm.GetLiveness()
-		
+
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		if health.Status == HealthStatusUnhealthy {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		} else {
 			w.WriteHeader(http.StatusOK)
 		}
-		
+
 		json.NewEncoder(w).Encode(health)
 	}
 }
@@ -479,15 +479,15 @@ func MemoryHealthCheck(maxUsagePercent float64) *HealthCheck {
 		CheckFunc: func(ctx context.Context) HealthCheckResult {
 			var m runtime.MemStats
 			runtime.ReadMemStats(&m)
-			
+
 			usagePercent := float64(m.Alloc) / float64(m.Sys) * 100
-			
+
 			metadata := map[string]interface{}{
 				"allocated_bytes": m.Alloc,
 				"system_bytes":    m.Sys,
 				"usage_percent":   usagePercent,
 			}
-			
+
 			if usagePercent > maxUsagePercent {
 				return HealthCheckResult{
 					Status:   HealthStatusDegraded,
@@ -495,7 +495,7 @@ func MemoryHealthCheck(maxUsagePercent float64) *HealthCheck {
 					Metadata: metadata,
 				}
 			}
-			
+
 			return HealthCheckResult{
 				Status:   HealthStatusHealthy,
 				Message:  fmt.Sprintf("Memory usage normal: %.2f%%", usagePercent),
@@ -513,12 +513,12 @@ func GoroutineHealthCheck(maxGoroutines int) *HealthCheck {
 		Enabled:  true,
 		CheckFunc: func(ctx context.Context) HealthCheckResult {
 			count := runtime.NumGoroutine()
-			
+
 			metadata := map[string]interface{}{
 				"goroutine_count": count,
 				"max_allowed":     maxGoroutines,
 			}
-			
+
 			if count > maxGoroutines {
 				return HealthCheckResult{
 					Status:   HealthStatusDegraded,
@@ -526,7 +526,7 @@ func GoroutineHealthCheck(maxGoroutines int) *HealthCheck {
 					Metadata: metadata,
 				}
 			}
-			
+
 			return HealthCheckResult{
 				Status:   HealthStatusHealthy,
 				Message:  fmt.Sprintf("Goroutine count normal: %d", count),
@@ -545,7 +545,7 @@ func HTTPHealthCheck(name, url string, timeout time.Duration) *HealthCheck {
 		Timeout:  timeout,
 		CheckFunc: func(ctx context.Context) HealthCheckResult {
 			client := &http.Client{Timeout: timeout}
-			
+
 			req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 			if err != nil {
 				return HealthCheckResult{
@@ -554,16 +554,16 @@ func HTTPHealthCheck(name, url string, timeout time.Duration) *HealthCheck {
 					Error:   err,
 				}
 			}
-			
+
 			start := time.Now()
 			resp, err := client.Do(req)
 			duration := time.Since(start)
-			
+
 			metadata := map[string]interface{}{
 				"url":              url,
 				"response_time_ms": duration.Milliseconds(),
 			}
-			
+
 			if err != nil {
 				return HealthCheckResult{
 					Status:   HealthStatusUnhealthy,
@@ -573,9 +573,9 @@ func HTTPHealthCheck(name, url string, timeout time.Duration) *HealthCheck {
 				}
 			}
 			defer resp.Body.Close()
-			
+
 			metadata["status_code"] = resp.StatusCode
-			
+
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 				return HealthCheckResult{
 					Status:   HealthStatusHealthy,
@@ -583,7 +583,7 @@ func HTTPHealthCheck(name, url string, timeout time.Duration) *HealthCheck {
 					Metadata: metadata,
 				}
 			}
-			
+
 			return HealthCheckResult{
 				Status:   HealthStatusUnhealthy,
 				Message:  fmt.Sprintf("HTTP check failed (%d)", resp.StatusCode),
@@ -601,12 +601,12 @@ func HTTPHealthCheck(name, url string, timeout time.Duration) *HealthCheck {
 //
 // The implementation requires platform-specific code and additional dependencies:
 //   - Unix/Linux: golang.org/x/sys/unix
-//   - Windows: golang.org/x/sys/windows  
+//   - Windows: golang.org/x/sys/windows
 //   - Cross-platform (recommended): github.com/shirou/gopsutil/v3/disk
 //
 // Example cross-platform implementation:
 //   import "github.com/shirou/gopsutil/v3/disk"
-//   
+//
 //   func DiskSpaceHealthCheck(path string, maxUsage float64) *HealthCheck {
 //     return &HealthCheck{
 //       Name: "disk_space",
@@ -616,7 +616,7 @@ func HTTPHealthCheck(name, url string, timeout time.Duration) *HealthCheck {
 //           return HealthCheckResult{Status: HealthStatusUnhealthy, Error: err}
 //         }
 //         if usage.UsedPercent > maxUsage {
-//           return HealthCheckResult{Status: HealthStatusDegraded, 
+//           return HealthCheckResult{Status: HealthStatusDegraded,
 //             Message: fmt.Sprintf("Disk usage: %.1f%%", usage.UsedPercent)}
 //         }
 //         return HealthCheckResult{Status: HealthStatusHealthy,

@@ -13,7 +13,7 @@ import (
 
 // Default configuration constants
 const (
-	DefaultBaseInterval         = 1 * time.Second
+	DefaultBaseInterval        = 1 * time.Second
 	DefaultBurstSize           = 5
 	DefaultMaxInterval         = 30 * time.Second
 	DefaultAdaptationRate      = 0.5
@@ -21,27 +21,27 @@ const (
 	DefaultBurstRefillRate     = 10 * time.Second
 	DefaultHealthWindow        = 5 * time.Minute
 	DefaultAdaptationThreshold = 1 * time.Second
-	DefaultErrorRateThreshold  = 0.1  // 10% error rate
+	DefaultErrorRateThreshold  = 0.1 // 10% error rate
 	DefaultConsecutiveErrLimit = 5
-	DefaultMinChangeThreshold  = 0.1  // 10% minimum change
+	DefaultMinChangeThreshold  = 0.1 // 10% minimum change
 )
 
 // Adaptation behavior constants
 const (
-	ErrorRateMultiplier        = 3.0  // Up to 4x slower at 100% error rate (1 + 3)
-	BurstIncreaseThreshold     = 0.05 // 5% error rate - allow larger bursts
-	BurstDecreaseThreshold     = 0.2  // 20% error rate - reduce bursts
-	BurstIncreaseMultiplier    = 1.5  // Increase burst size by 50%
-	BurstDecreaseMultiplier    = 0.5  // Decrease burst size by 50%
+	ErrorRateMultiplier     = 3.0  // Up to 4x slower at 100% error rate (1 + 3)
+	BurstIncreaseThreshold  = 0.05 // 5% error rate - allow larger bursts
+	BurstDecreaseThreshold  = 0.2  // 20% error rate - reduce bursts
+	BurstIncreaseMultiplier = 1.5  // Increase burst size by 50%
+	BurstDecreaseMultiplier = 0.5  // Decrease burst size by 50%
 	// Caps the rate slowdown caused by consecutive errors to prevent excessive delays
 	// in the adaptation algorithm.
-	MaxConsecutiveMultiplier   = 10.0
+	MaxConsecutiveMultiplier = 10.0
 )
 
 // Health tracking efficiency constants
 const (
-	MaxHealthErrors           = 1000  // Maximum health errors to track (memory protection)
-	HealthCleanupInterval     = 100   // Clean up after every N error reports
+	MaxHealthErrors       = 1000 // Maximum health errors to track (memory protection)
+	HealthCleanupInterval = 100  // Clean up after every N error reports
 	// Retain 50% of entries when truncating to avoid frequent re-truncation.
 	// This approach minimizes the need for frequent re-truncation, which can be
 	// computationally expensive, by proactively retaining only the most relevant entries.
@@ -79,13 +79,13 @@ type AdaptiveRateLimiter struct {
 	burstMu         sync.Mutex
 
 	// Rate limiting strategies
-	strategy        RateLimitStrategy
+	strategy RateLimitStrategy
 
 	// Health tracking
-	healthWindow    time.Duration
-	healthErrors    []time.Time
-	healthErrorCount int  // Counter for cleanup efficiency
-	healthMu        sync.Mutex
+	healthWindow     time.Duration
+	healthErrors     []time.Time
+	healthErrorCount int // Counter for cleanup efficiency
+	healthMu         sync.Mutex
 }
 
 // RateLimitStrategy defines different rate limiting approaches
@@ -94,31 +94,31 @@ type RateLimitStrategy int
 const (
 	StrategyFixed    RateLimitStrategy = iota // Fixed rate limiting
 	StrategyAdaptive                          // Adaptive based on errors
-	StrategyBurst                            // Burst-aware limiting
-	StrategyHybrid                           // Combination of adaptive and burst
+	StrategyBurst                             // Burst-aware limiting
+	StrategyHybrid                            // Combination of adaptive and burst
 )
 
 // RateLimiterConfig configures the adaptive rate limiter
 type RateLimiterConfig struct {
-	BaseInterval         time.Duration     `yaml:"base_interval" json:"base_interval"`
-	BurstSize            int               `yaml:"burst_size" json:"burst_size"`
-	MaxInterval          time.Duration     `yaml:"max_interval" json:"max_interval"`
-	AdaptationRate       float64           `yaml:"adaptation_rate" json:"adaptation_rate"`
-	Strategy             RateLimitStrategy `yaml:"strategy" json:"strategy"`
-	BurstRefillRate      time.Duration     `yaml:"burst_refill_rate" json:"burst_refill_rate"`
-	HealthWindow         time.Duration     `yaml:"health_window" json:"health_window"`
+	BaseInterval    time.Duration     `yaml:"base_interval" json:"base_interval"`
+	BurstSize       int               `yaml:"burst_size" json:"burst_size"`
+	MaxInterval     time.Duration     `yaml:"max_interval" json:"max_interval"`
+	AdaptationRate  float64           `yaml:"adaptation_rate" json:"adaptation_rate"`
+	Strategy        RateLimitStrategy `yaml:"strategy" json:"strategy"`
+	BurstRefillRate time.Duration     `yaml:"burst_refill_rate" json:"burst_refill_rate"`
+	HealthWindow    time.Duration     `yaml:"health_window" json:"health_window"`
 
 	// Adaptation sensitivity controls
-	AdaptationThreshold  time.Duration     `yaml:"adaptation_threshold" json:"adaptation_threshold"`   // Minimum time between adaptations
-	ErrorRateThreshold   float64           `yaml:"error_rate_threshold" json:"error_rate_threshold"`   // Error rate that triggers adaptation
-	ConsecutiveErrLimit  int               `yaml:"consecutive_err_limit" json:"consecutive_err_limit"` // Consecutive errors threshold
-	MinChangeThreshold   float64           `yaml:"min_change_threshold" json:"min_change_threshold"`   // Minimum rate change percentage
+	AdaptationThreshold time.Duration `yaml:"adaptation_threshold" json:"adaptation_threshold"`   // Minimum time between adaptations
+	ErrorRateThreshold  float64       `yaml:"error_rate_threshold" json:"error_rate_threshold"`   // Error rate that triggers adaptation
+	ConsecutiveErrLimit int           `yaml:"consecutive_err_limit" json:"consecutive_err_limit"` // Consecutive errors threshold
+	MinChangeThreshold  float64       `yaml:"min_change_threshold" json:"min_change_threshold"`   // Minimum rate change percentage
 }
 
 // getDefaultConfig returns a configuration with production-safe defaults
 func getDefaultConfig() *RateLimiterConfig {
 	return &RateLimiterConfig{
-		BaseInterval:         DefaultBaseInterval,
+		BaseInterval:        DefaultBaseInterval,
 		BurstSize:           DefaultBurstSize,
 		MaxInterval:         DefaultMaxInterval,
 		AdaptationRate:      DefaultAdaptationRate,

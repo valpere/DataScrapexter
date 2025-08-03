@@ -45,7 +45,7 @@ func (cs *CanvasSpoofing) GetSpoofedData(original string) string {
 	if !cs.enabled {
 		return original
 	}
-	
+
 	// Add slight variations to canvas data to avoid fingerprinting
 	variation := cs.variations[mathrand.Intn(len(cs.variations))]
 	return original + variation
@@ -56,12 +56,12 @@ func (cs *CanvasSpoofing) GenerateFingerprint() *CanvasFingerprint {
 	// Generate random canvas data
 	data := generateRandomCanvasData()
 	hash := generateHash(data)
-	
+
 	return &CanvasFingerprint{
 		Data:      data,
 		Hash:      hash,
-		Width:     800 + mathrand.Intn(400),  // 800-1200
-		Height:    600 + mathrand.Intn(200),  // 600-800
+		Width:     800 + mathrand.Intn(400), // 800-1200
+		Height:    600 + mathrand.Intn(200), // 600-800
 		Spoofed:   cs.enabled,
 		Timestamp: time.Now(),
 	}
@@ -69,13 +69,13 @@ func (cs *CanvasSpoofing) GenerateFingerprint() *CanvasFingerprint {
 
 // WebGLFingerprint represents WebGL fingerprinting data
 type WebGLFingerprint struct {
-	Renderer         string
-	Vendor           string
-	Version          string
-	ShadingLanguage  string
-	Extensions       []string
-	Parameters       map[string]interface{}
-	Spoofed          bool
+	Renderer        string
+	Vendor          string
+	Version         string
+	ShadingLanguage string
+	Extensions      []string
+	Parameters      map[string]interface{}
+	Spoofed         bool
 }
 
 // WebGLSpoofing provides WebGL fingerprinting evasion
@@ -102,7 +102,7 @@ func (ws *WebGLSpoofing) GetRandomProfile() WebGLFingerprint {
 	if !ws.enabled {
 		return WebGLFingerprint{}
 	}
-	
+
 	profile := ws.profiles[mathrand.Intn(len(ws.profiles))]
 	profile.Spoofed = true
 	return profile
@@ -110,13 +110,13 @@ func (ws *WebGLSpoofing) GetRandomProfile() WebGLFingerprint {
 
 // AudioFingerprint represents audio context fingerprinting data
 type AudioFingerprint struct {
-	SampleRate       float64
-	BufferSize       int
-	Channels         int
-	ContextState     string
-	OscillatorHash   string
-	AnalyserData     []float64
-	Spoofed          bool
+	SampleRate     float64
+	BufferSize     int
+	Channels       int
+	ContextState   string
+	OscillatorHash string
+	AnalyserData   []float64
+	Spoofed        bool
 }
 
 // AudioSpoofing provides audio fingerprinting evasion
@@ -145,13 +145,13 @@ func (as *AudioSpoofing) GenerateFingerprint() *AudioFingerprint {
 	if as.enabled {
 		sampleRate += (mathrand.Float64() - 0.5) * as.noise
 	}
-	
+
 	bufferSize := 256
 	if as.enabled {
 		bufferSizes := []int{256, 512, 1024, 2048, 4096}
 		bufferSize = bufferSizes[mathrand.Intn(len(bufferSizes))]
 	}
-	
+
 	return &AudioFingerprint{
 		SampleRate:     sampleRate,
 		BufferSize:     bufferSize,
@@ -213,20 +213,20 @@ func (ss *ScreenSpoofing) GetRandomFingerprint() ScreenFingerprint {
 			Spoofed:          false,
 		}
 	}
-	
+
 	preset := ss.presets[mathrand.Intn(len(ss.presets))]
-	
+
 	// Add slight variations
 	if ss.variation > 0 {
 		variation := int(float64(preset.Width) * ss.variation)
 		preset.Width += mathrand.Intn(variation*2) - variation
 		preset.AvailWidth = preset.Width
-		
+
 		variation = int(float64(preset.Height) * ss.variation)
 		preset.Height += mathrand.Intn(variation*2) - variation
 		preset.AvailHeight = preset.Height - 40 // Account for taskbar
 	}
-	
+
 	preset.Spoofed = true
 	return preset
 }
@@ -240,16 +240,16 @@ type FontFingerprint struct {
 
 // FontSpoofing provides font fingerprinting evasion
 type FontSpoofing struct {
-	enabled  bool
-	baseFonts []string
+	enabled    bool
+	baseFonts  []string
 	extraFonts []string
 }
 
 // NewFontSpoofing creates a new font spoofing system
 func NewFontSpoofing(enabled bool) *FontSpoofing {
 	return &FontSpoofing{
-		enabled:   enabled,
-		baseFonts: getBaseFonts(),
+		enabled:    enabled,
+		baseFonts:  getBaseFonts(),
 		extraFonts: getExtraFonts(),
 	}
 }
@@ -264,24 +264,24 @@ func (fs *FontSpoofing) GetRandomFontList() []string {
 	if !fs.enabled {
 		return fs.baseFonts
 	}
-	
+
 	// Start with base fonts
 	fonts := make([]string, len(fs.baseFonts))
 	copy(fonts, fs.baseFonts)
-	
+
 	// Add random selection of extra fonts
 	numExtra := mathrand.Intn(len(fs.extraFonts)/2) + 1
 	mathrand.Shuffle(len(fs.extraFonts), func(i, j int) {
 		fs.extraFonts[i], fs.extraFonts[j] = fs.extraFonts[j], fs.extraFonts[i]
 	})
-	
+
 	fonts = append(fonts, fs.extraFonts[:numExtra]...)
-	
+
 	// Shuffle the final list
 	mathrand.Shuffle(len(fonts), func(i, j int) {
 		fonts[i], fonts[j] = fonts[j], fonts[i]
 	})
-	
+
 	return fonts
 }
 
@@ -308,11 +308,11 @@ func NewFingerprintingEvader(enabled bool) *FingerprintingEvader {
 // GenerateCompleteFingerprint generates a complete spoofed fingerprint
 func (fe *FingerprintingEvader) GenerateCompleteFingerprint() map[string]interface{} {
 	return map[string]interface{}{
-		"canvas":  fe.Canvas.GenerateFingerprint(),
-		"webgl":   fe.WebGL.GetRandomProfile(),
-		"audio":   fe.Audio.GenerateFingerprint(),
-		"screen":  fe.Screen.GetRandomFingerprint(),
-		"fonts":   fe.Font.GetRandomFontList(),
+		"canvas":    fe.Canvas.GenerateFingerprint(),
+		"webgl":     fe.WebGL.GetRandomProfile(),
+		"audio":     fe.Audio.GenerateFingerprint(),
+		"screen":    fe.Screen.GetRandomFingerprint(),
+		"fonts":     fe.Font.GetRandomFontList(),
 		"timestamp": time.Now(),
 	}
 }
@@ -338,7 +338,7 @@ func generateCanvasVariations() []string {
 			logEntropyFailure("canvas_variations", err)
 			return staticVariations
 		} else {
-		variations[i] = hex.EncodeToString(bytes)
+			variations[i] = hex.EncodeToString(bytes)
 		}
 	}
 	return variations
@@ -371,7 +371,7 @@ func generateOscillatorHash(spoofed bool) string {
 	if !spoofed {
 		return "standard_oscillator_hash"
 	}
-	
+
 	hash := make([]byte, 8)
 	if _, err := rand.Read(hash); err != nil {
 		// Fallback to deterministic time-based hash if crypto/rand fails
@@ -436,7 +436,7 @@ func getCommonScreenSizes() []ScreenFingerprint {
 
 func getBaseFonts() []string {
 	return []string{
-		"Arial", "Arial Black", "Comic Sans MS", "Courier New", "Georgia", 
+		"Arial", "Arial Black", "Comic Sans MS", "Courier New", "Georgia",
 		"Impact", "Lucida Console", "Lucida Sans Unicode", "Palatino Linotype",
 		"Tahoma", "Times New Roman", "Trebuchet MS", "Verdana",
 	}
@@ -456,32 +456,32 @@ func getExtraFonts() []string {
 func logEntropyFailure(context string, err error) {
 	// Structure the security event for monitoring systems
 	_ = map[string]interface{}{
-		"event_type":    "entropy_failure",
-		"component":     "fingerprint",
-		"context":       context,
-		"error":         err.Error(),
-		"severity":      "critical",
-		"timestamp":     time.Now().UTC(),
-		"impact":        "fallback_to_static_values",
-		"action_taken":  "continued_operation_with_static_fallback",
+		"event_type":   "entropy_failure",
+		"component":    "fingerprint",
+		"context":      context,
+		"error":        err.Error(),
+		"severity":     "critical",
+		"timestamp":    time.Now().UTC(),
+		"impact":       "fallback_to_static_values",
+		"action_taken": "continued_operation_with_static_fallback",
 	}
-	
+
 	// In production, this should trigger immediate alerts
 	// Entropy failures are critical security events that need investigation
 	// Implement proper logging infrastructure in production:
 	// 1. Send to SIEM/security monitoring system
 	// 2. Trigger alerts for security teams
 	// 3. Consider automatic remediation if patterns are detected
-	
+
 	// For now, log to stderr as this is a critical security issue
 	// In production, replace with proper structured logging
 	logMessage := fmt.Sprintf("CRITICAL SECURITY EVENT: Entropy failure in %s: %v", context, err)
-	
+
 	// This would be sent to security monitoring in production
 	// Example production logging:
 	// securityLogger.Critical("entropy_failure", securityEvent)
 	// alertManager.TriggerAlert("entropy_failure", securityEvent)
-	
+
 	// Temporary stderr logging for visibility
 	fmt.Fprintf(os.Stderr, "[SECURITY] %s\n", logMessage)
 }

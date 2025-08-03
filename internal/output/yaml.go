@@ -51,7 +51,7 @@ func NewYAMLWriter(config YAMLConfig) (*YAMLWriter, error) {
 	if config.FilePath == "" {
 		return nil, fmt.Errorf("YAML file path is required")
 	}
-	
+
 	// Set defaults
 	if config.Indent == 0 {
 		config.Indent = 2
@@ -72,20 +72,27 @@ func NewYAMLWriter(config YAMLConfig) (*YAMLWriter, error) {
 	if config.GeneratorVersion == "" {
 		config.GeneratorVersion = "1.0"
 	}
-	// Apply sensible metadata defaults only if not explicitly configured
+	// METADATA INCLUSION BEHAVIOR:
+	// When MetadataExplicit is false (default), metadata is automatically included
+	// When MetadataExplicit is true, metadata inclusion follows the IncludeMetadata setting
+	//
+	// To explicitly control metadata:
+	// 1. Use NewYAMLWriterWithExplicitMetadata(config, true/false), OR
+	// 2. Set config.MetadataExplicit = true and config.IncludeMetadata = true/false
+	//
+	// Default behavior (when not explicitly set): metadata is included for better traceability
 	if !config.MetadataExplicit {
-		// Default to including metadata unless explicitly disabled
 		config.IncludeMetadata = true
 	}
-	
+
 	file, err := os.Create(config.FilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create YAML file: %w", err)
 	}
-	
+
 	encoder := yaml.NewEncoder(file)
 	encoder.SetIndent(config.Indent)
-	
+
 	writer := &YAMLWriter{
 		file:       file,
 		encoder:    encoder,
@@ -93,7 +100,7 @@ func NewYAMLWriter(config YAMLConfig) (*YAMLWriter, error) {
 		records:    make([]map[string]interface{}, 0, config.BufferSize),
 		isFirstDoc: true,
 	}
-	
+
 	return writer, nil
 }
 
@@ -114,7 +121,7 @@ func (w *YAMLWriter) WriteRecord(record map[string]interface{}) error {
 			return err
 		}
 	}
-	
+
 	w.records = append(w.records, record)
 	return nil
 }
@@ -153,12 +160,12 @@ func (w *YAMLWriter) Close() error {
 	if err := w.flush(); err != nil {
 		return err
 	}
-	
+
 	// Close encoder and file
 	if err := w.encoder.Close(); err != nil {
 		return err
 	}
-	
+
 	return w.file.Close()
 }
 
@@ -172,7 +179,7 @@ func (w *YAMLWriter) flush() error {
 	if len(w.records) == 0 {
 		return nil
 	}
-	
+
 	if w.config.MultiDocument {
 		// Write each record as a separate YAML document
 		for _, record := range w.records {
@@ -186,7 +193,7 @@ func (w *YAMLWriter) flush() error {
 			return err
 		}
 	}
-	
+
 	w.records = w.records[:0] // Clear the slice but keep capacity
 	return nil
 }
@@ -195,7 +202,7 @@ func (w *YAMLWriter) flush() error {
 func (w *YAMLWriter) writeDocument(record map[string]interface{}) error {
 	// Process the record based on configuration
 	processedRecord := w.processRecord(record)
-	
+
 	// Write document separator if not the first document
 	if !w.isFirstDoc {
 		if _, err := w.file.WriteString("---\n"); err != nil {
@@ -203,7 +210,7 @@ func (w *YAMLWriter) writeDocument(record map[string]interface{}) error {
 		}
 	}
 	w.isFirstDoc = false
-	
+
 	return w.encoder.Encode(processedRecord)
 }
 
@@ -213,7 +220,7 @@ func (w *YAMLWriter) writeArrayDocument(records []map[string]interface{}) error 
 	for i, record := range records {
 		processedRecords[i] = w.processRecord(record)
 	}
-	
+
 	// Add configurable metadata if this is the first write
 	if w.isFirstDoc && w.config.IncludeMetadata {
 		document := map[string]interface{}{
@@ -231,25 +238,25 @@ func (w *YAMLWriter) writeArrayDocument(records []map[string]interface{}) error 
 		// No metadata, just encode the data directly
 		w.isFirstDoc = false
 	}
-	
+
 	return w.encoder.Encode(processedRecords)
 }
 
 // processRecord processes a record according to configuration
 func (w *YAMLWriter) processRecord(record map[string]interface{}) map[string]interface{} {
 	processed := make(map[string]interface{})
-	
+
 	for key, value := range record {
 		// Skip null values if not including them
 		if !w.config.IncludeNull && value == nil {
 			continue
 		}
-		
+
 		// Process the value
 		processedValue := w.processValue(value)
 		processed[key] = processedValue
 	}
-	
+
 	return processed
 }
 
@@ -258,7 +265,7 @@ func (w *YAMLWriter) processValue(value interface{}) interface{} {
 	if value == nil {
 		return nil
 	}
-	
+
 	switch v := value.(type) {
 	case map[string]interface{}:
 		processed := make(map[string]interface{})
@@ -269,14 +276,14 @@ func (w *YAMLWriter) processValue(value interface{}) interface{} {
 			processed[key] = w.processValue(val)
 		}
 		return processed
-		
+
 	case []interface{}:
 		processed := make([]interface{}, len(v))
 		for i, val := range v {
 			processed[i] = w.processValue(val)
 		}
 		return processed
-		
+
 	case []map[string]interface{}:
 		processed := make([]map[string]interface{}, len(v))
 		for i, val := range v {
@@ -287,15 +294,15 @@ func (w *YAMLWriter) processValue(value interface{}) interface{} {
 			}
 		}
 		return processed
-		
+
 	case string:
 		// Handle special string formatting
 		return w.processString(v)
-		
+
 	case time.Time:
 		// Format time consistently
 		return v.Format(time.RFC3339)
-		
+
 	default:
 		return value
 	}
@@ -311,7 +318,7 @@ func (w *YAMLWriter) processString(s string) interface{} {
 			Value: s,
 		}
 	}
-	
+
 	// Handle strings that need quoting
 	if w.needsQuoting(s) {
 		return &yaml.Node{
@@ -320,7 +327,7 @@ func (w *YAMLWriter) processString(s string) interface{} {
 			Value: s,
 		}
 	}
-	
+
 	return s
 }
 
@@ -328,34 +335,34 @@ func (w *YAMLWriter) processString(s string) interface{} {
 func (w *YAMLWriter) needsQuoting(s string) bool {
 	// YAML special values that need quoting
 	yamlSpecialValues := map[string]bool{
-		"true":  true, "false": true, "yes": true, "no": true,
+		"true": true, "false": true, "yes": true, "no": true,
 		"on": true, "off": true, "null": true, "~": true,
 		"True": true, "False": true, "Yes": true, "No": true,
 		"On": true, "Off": true, "Null": true, "NULL": true,
 		"TRUE": true, "FALSE": true, "YES": true, "NO": true,
 		"ON": true, "OFF": true,
 	}
-	
+
 	if yamlSpecialValues[s] {
 		return true
 	}
-	
+
 	// Check if it looks like a number
 	if w.looksLikeNumber(s) {
 		return true
 	}
-	
+
 	// Check for special characters at the beginning
 	if len(s) > 0 {
 		first := s[0]
-		if first == '-' || first == '?' || first == ':' || first == '[' || 
-		   first == ']' || first == '{' || first == '}' || first == '|' || 
-		   first == '>' || first == '*' || first == '&' || first == '!' ||
-		   first == '%' || first == '@' || first == '`' {
+		if first == '-' || first == '?' || first == ':' || first == '[' ||
+			first == ']' || first == '{' || first == '}' || first == '|' ||
+			first == '>' || first == '*' || first == '&' || first == '!' ||
+			first == '%' || first == '@' || first == '`' {
 			return true
 		}
 	}
-	
+
 	// Check for strings that contain special sequences
 	specialSequences := []string{"\\n", "\\t", "\\r", "\n", "\t", "\r"}
 	for _, seq := range specialSequences {
@@ -363,7 +370,7 @@ func (w *YAMLWriter) needsQuoting(s string) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -372,7 +379,7 @@ func (w *YAMLWriter) looksLikeNumber(s string) bool {
 	if len(s) == 0 {
 		return false
 	}
-	
+
 	// Simple check for numeric patterns
 	for i, r := range s {
 		if i == 0 && (r == '-' || r == '+') {
@@ -386,14 +393,14 @@ func (w *YAMLWriter) looksLikeNumber(s string) bool {
 		}
 		return false
 	}
-	
+
 	return true
 }
 
 // YAMLDocument represents a structured YAML document
 type YAMLDocument struct {
-	Metadata YAMLMetadata               `yaml:"metadata"`
-	Data     []map[string]interface{}   `yaml:"data"`
+	Metadata YAMLMetadata             `yaml:"metadata"`
+	Data     []map[string]interface{} `yaml:"data"`
 }
 
 // YAMLMetadata represents metadata for YAML documents
@@ -427,17 +434,17 @@ func NewStreamingYAMLWriter(config YAMLConfig) (*StreamingYAMLWriter, error) {
 	if config.FilePath == "" {
 		return nil, fmt.Errorf("YAML file path is required")
 	}
-	
+
 	file, err := os.Create(config.FilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create YAML file: %w", err)
 	}
-	
+
 	encoder := yaml.NewEncoder(file)
 	if config.Indent > 0 {
 		encoder.SetIndent(config.Indent)
 	}
-	
+
 	return &StreamingYAMLWriter{
 		file:    file,
 		encoder: encoder,
@@ -453,7 +460,7 @@ func (sw *StreamingYAMLWriter) WriteRecord(record map[string]interface{}) error 
 			return err
 		}
 	}
-	
+
 	sw.count++
 	return sw.encoder.Encode(record)
 }
@@ -493,22 +500,22 @@ func ValidateYAMLConfig(config YAMLConfig) error {
 	if config.FilePath == "" {
 		return fmt.Errorf("file path is required")
 	}
-	
+
 	if config.Indent < 0 || config.Indent > 10 {
 		return fmt.Errorf("indent must be between 0 and 10")
 	}
-	
+
 	if config.ArrayFormat != "" && config.ArrayFormat != "flow" && config.ArrayFormat != "block" {
 		return fmt.Errorf("array_format must be 'flow' or 'block'")
 	}
-	
+
 	if config.MapFormat != "" && config.MapFormat != "flow" && config.MapFormat != "block" {
 		return fmt.Errorf("map_format must be 'flow' or 'block'")
 	}
-	
+
 	if config.BufferSize < 0 {
 		return fmt.Errorf("buffer size must be non-negative")
 	}
-	
+
 	return nil
 }

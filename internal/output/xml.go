@@ -23,16 +23,16 @@ type XMLWriter struct {
 
 // XMLConfig configuration for XML output
 type XMLConfig struct {
-	FilePath     string `json:"file"`
-	RootElement  string `json:"root_element"`
-	RecordElement string `json:"record_element"`
-	Indent       bool   `json:"indent"`
-	IndentString string `json:"indent_string"`
-	PrettyPrint  bool   `json:"pretty_print"`
-	Encoding     string `json:"encoding"`
-	Standalone   bool   `json:"standalone"`
-	Version      string `json:"version"`
-	BufferSize   int    `json:"buffer_size"`
+	FilePath      string        `json:"file"`
+	RootElement   string        `json:"root_element"`
+	RecordElement string        `json:"record_element"`
+	Indent        bool          `json:"indent"`
+	IndentString  string        `json:"indent_string"`
+	PrettyPrint   bool          `json:"pretty_print"`
+	Encoding      string        `json:"encoding"`
+	Standalone    bool          `json:"standalone"`
+	Version       string        `json:"version"`
+	BufferSize    int           `json:"buffer_size"`
 	FlushInterval time.Duration `json:"flush_interval"`
 }
 
@@ -41,7 +41,7 @@ func NewXMLWriter(config XMLConfig) (*XMLWriter, error) {
 	if config.FilePath == "" {
 		return nil, fmt.Errorf("XML file path is required")
 	}
-	
+
 	// Set defaults
 	if config.RootElement == "" {
 		config.RootElement = "data"
@@ -61,17 +61,17 @@ func NewXMLWriter(config XMLConfig) (*XMLWriter, error) {
 	if config.BufferSize == 0 {
 		config.BufferSize = 1000
 	}
-	
+
 	file, err := os.Create(config.FilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create XML file: %w", err)
 	}
-	
+
 	encoder := xml.NewEncoder(file)
 	if config.Indent || config.PrettyPrint {
 		encoder.Indent("", config.IndentString)
 	}
-	
+
 	writer := &XMLWriter{
 		file:       file,
 		encoder:    encoder,
@@ -80,19 +80,19 @@ func NewXMLWriter(config XMLConfig) (*XMLWriter, error) {
 		rootName:   config.RootElement,
 		recordName: config.RecordElement,
 	}
-	
+
 	// Write XML declaration
 	if err := writer.writeXMLDeclaration(); err != nil {
 		file.Close()
 		return nil, fmt.Errorf("failed to write XML declaration: %w", err)
 	}
-	
+
 	// Write root element start tag
 	if err := writer.writeRootStart(); err != nil {
 		file.Close()
 		return nil, fmt.Errorf("failed to write root element: %w", err)
 	}
-	
+
 	return writer, nil
 }
 
@@ -113,7 +113,7 @@ func (w *XMLWriter) WriteRecord(record map[string]interface{}) error {
 			return err
 		}
 	}
-	
+
 	w.records = append(w.records, record)
 	return nil
 }
@@ -152,17 +152,17 @@ func (w *XMLWriter) Close() error {
 	if err := w.flush(); err != nil {
 		return err
 	}
-	
+
 	// Write root element end tag
 	if err := w.writeRootEnd(); err != nil {
 		return err
 	}
-	
+
 	// Close encoder and file
 	if err := w.encoder.Flush(); err != nil {
 		return err
 	}
-	
+
 	return w.file.Close()
 }
 
@@ -178,7 +178,7 @@ func (w *XMLWriter) flush() error {
 			return err
 		}
 	}
-	
+
 	w.records = w.records[:0] // Clear the slice but keep capacity
 	return w.encoder.Flush()
 }
@@ -190,7 +190,7 @@ func (w *XMLWriter) writeXMLDeclaration() error {
 		declaration += ` standalone="yes"`
 	}
 	declaration += "?>\n"
-	
+
 	_, err := w.file.WriteString(declaration)
 	return err
 }
@@ -219,21 +219,21 @@ func (w *XMLWriter) writeRecord(record map[string]interface{}) error {
 	if err := w.encoder.EncodeToken(startElement); err != nil {
 		return err
 	}
-	
+
 	// Sort keys for consistent output
 	keys := make([]string, 0, len(record))
 	for key := range record {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	
+
 	for _, key := range keys {
 		value := record[key]
 		if err := w.writeElement(key, value); err != nil {
 			return err
 		}
 	}
-	
+
 	endElement := xml.EndElement{Name: xml.Name{Local: w.recordName}}
 	return w.encoder.EncodeToken(endElement)
 }
@@ -242,7 +242,7 @@ func (w *XMLWriter) writeRecord(record map[string]interface{}) error {
 func (w *XMLWriter) writeElement(name string, value interface{}) error {
 	// Sanitize element name
 	elementName := sanitizeXMLName(name)
-	
+
 	if value == nil {
 		// Empty element for nil values
 		element := xml.StartElement{
@@ -254,7 +254,7 @@ func (w *XMLWriter) writeElement(name string, value interface{}) error {
 		}
 		return w.encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: elementName}})
 	}
-	
+
 	switch v := value.(type) {
 	case map[string]interface{}:
 		return w.writeComplexElement(elementName, v)
@@ -273,16 +273,16 @@ func (w *XMLWriter) writeSimpleElement(name string, value interface{}) error {
 		Name: xml.Name{Local: name},
 		Attr: []xml.Attr{{Name: xml.Name{Local: "type"}, Value: getXMLType(value)}},
 	}
-	
+
 	if err := w.encoder.EncodeToken(startElement); err != nil {
 		return err
 	}
-	
+
 	text := fmt.Sprintf("%v", value)
 	if err := w.encoder.EncodeToken(xml.CharData(text)); err != nil {
 		return err
 	}
-	
+
 	endElement := xml.EndElement{Name: xml.Name{Local: name}}
 	return w.encoder.EncodeToken(endElement)
 }
@@ -293,17 +293,17 @@ func (w *XMLWriter) writeComplexElement(name string, obj map[string]interface{})
 		Name: xml.Name{Local: name},
 		Attr: []xml.Attr{{Name: xml.Name{Local: "type"}, Value: "object"}},
 	}
-	
+
 	if err := w.encoder.EncodeToken(startElement); err != nil {
 		return err
 	}
-	
+
 	for key, value := range obj {
 		if err := w.writeElement(key, value); err != nil {
 			return err
 		}
 	}
-	
+
 	endElement := xml.EndElement{Name: xml.Name{Local: name}}
 	return w.encoder.EncodeToken(endElement)
 }
@@ -317,18 +317,18 @@ func (w *XMLWriter) writeArrayElement(name string, arr []interface{}) error {
 			{Name: xml.Name{Local: "length"}, Value: fmt.Sprintf("%d", len(arr))},
 		},
 	}
-	
+
 	if err := w.encoder.EncodeToken(startElement); err != nil {
 		return err
 	}
-	
+
 	for i, item := range arr {
 		itemName := fmt.Sprintf("item_%d", i)
 		if err := w.writeElement(itemName, item); err != nil {
 			return err
 		}
 	}
-	
+
 	endElement := xml.EndElement{Name: xml.Name{Local: name}}
 	return w.encoder.EncodeToken(endElement)
 }
@@ -342,18 +342,18 @@ func (w *XMLWriter) writeArrayOfMapsElement(name string, arr []map[string]interf
 			{Name: xml.Name{Local: "length"}, Value: fmt.Sprintf("%d", len(arr))},
 		},
 	}
-	
+
 	if err := w.encoder.EncodeToken(startElement); err != nil {
 		return err
 	}
-	
+
 	for i, item := range arr {
 		itemName := fmt.Sprintf("item_%d", i)
 		if err := w.writeComplexElement(itemName, item); err != nil {
 			return err
 		}
 	}
-	
+
 	endElement := xml.EndElement{Name: xml.Name{Local: name}}
 	return w.encoder.EncodeToken(endElement)
 }
@@ -456,12 +456,13 @@ func isXMLNameChar(r rune) bool {
 	}
 	return false
 }
+
 // getXMLType returns the XML type for a value
 func getXMLType(value interface{}) string {
 	if value == nil {
 		return "nil"
 	}
-	
+
 	switch value.(type) {
 	case bool:
 		return "boolean"
@@ -500,7 +501,7 @@ func (r XMLRecord) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	if err := e.EncodeToken(start); err != nil {
 		return err
 	}
-	
+
 	for key, value := range r.Data {
 		element := XMLElement{
 			XMLName: xml.Name{Local: sanitizeXMLName(key)},
@@ -510,7 +511,7 @@ func (r XMLRecord) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 			return err
 		}
 	}
-	
+
 	return e.EncodeToken(xml.EndElement{Name: start.Name})
 }
 
@@ -519,19 +520,19 @@ func ValidateXMLConfig(config XMLConfig) error {
 	if config.FilePath == "" {
 		return fmt.Errorf("file path is required")
 	}
-	
+
 	if config.RootElement != "" && !isValidXMLName(config.RootElement) {
 		return fmt.Errorf("invalid root element name: %s", config.RootElement)
 	}
-	
+
 	if config.RecordElement != "" && !isValidXMLName(config.RecordElement) {
 		return fmt.Errorf("invalid record element name: %s", config.RecordElement)
 	}
-	
+
 	if config.BufferSize < 0 {
 		return fmt.Errorf("buffer size must be non-negative")
 	}
-	
+
 	return nil
 }
 
@@ -540,20 +541,20 @@ func isValidXMLName(name string) bool {
 	if len(name) == 0 {
 		return false
 	}
-	
+
 	// Check first character
 	first := rune(name[0])
 	if !((first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z') || first == '_') {
 		return false
 	}
-	
+
 	// Check remaining characters
 	for _, r := range name[1:] {
-		if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || 
-		     (r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.') {
+		if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') ||
+			(r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.') {
 			return false
 		}
 	}
-	
+
 	return true
 }

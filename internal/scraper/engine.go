@@ -168,7 +168,7 @@ func NewEngine(config *Config) (*Engine, error) {
 		} else {
 			// Convert legacy config to new format with production defaults
 			rlConfig = &RateLimiterConfig{
-				BaseInterval:         config.RateLimit,
+				BaseInterval:        config.RateLimit,
 				BurstSize:           config.BurstSize,
 				Strategy:            StrategyFixed,
 				MaxInterval:         config.RateLimit * 10,
@@ -258,7 +258,6 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 		result.Errors = append(result.Errors, err.Error())
 		return result, err
 	}
-
 
 	// Extract fields with error tracking
 	successCount := 0
@@ -549,7 +548,7 @@ func (e *Engine) GetErrorRecoveryStats() map[string]interface{} {
 
 	return map[string]interface{}{
 		"circuit_breakers": e.errorService.GetCircuitBreakerStats(),
-		"cache":           e.errorService.GetCacheStats(),
+		"cache":            e.errorService.GetCacheStats(),
 	}
 }
 
@@ -602,7 +601,7 @@ func (e *Engine) ScrapeWithPagination(ctx context.Context, baseURL string, extra
 	errors := make([]string, 0)
 
 	currentURL := baseURL
-	pageNum := 0  // Start from 0 for offset-based pagination
+	pageNum := 0 // Start from 0 for offset-based pagination
 	maxPages := e.config.Pagination.MaxPages
 	if maxPages <= 0 {
 		maxPages = 10 // Default safety limit

@@ -52,25 +52,25 @@ type DashboardData struct {
 
 // DashboardSummary provides summary statistics
 type DashboardSummary struct {
-	TotalRequests     int64         `json:"total_requests"`
-	SuccessfulPages   int64         `json:"successful_pages"`
-	FailedPages       int64         `json:"failed_pages"`
-	ActiveJobs        int           `json:"active_jobs"`
-	QueuedJobs        int           `json:"queued_jobs"`
-	Uptime           time.Duration `json:"uptime"`
-	MemoryUsage      float64       `json:"memory_usage_mb"`
-	CPUUsage         float64       `json:"cpu_usage_percent"`
+	TotalRequests   int64         `json:"total_requests"`
+	SuccessfulPages int64         `json:"successful_pages"`
+	FailedPages     int64         `json:"failed_pages"`
+	ActiveJobs      int           `json:"active_jobs"`
+	QueuedJobs      int           `json:"queued_jobs"`
+	Uptime          time.Duration `json:"uptime"`
+	MemoryUsage     float64       `json:"memory_usage_mb"`
+	CPUUsage        float64       `json:"cpu_usage_percent"`
 }
 
 // ChartData represents data for charts
 type ChartData struct {
-	ID          string                 `json:"id"`
-	Type        string                 `json:"type"`
-	Title       string                 `json:"title"`
-	Labels      []string               `json:"labels"`
-	Datasets    []ChartDataset         `json:"datasets"`
-	Options     map[string]interface{} `json:"options"`
-	UpdateURL   string                 `json:"update_url,omitempty"`
+	ID        string                 `json:"id"`
+	Type      string                 `json:"type"`
+	Title     string                 `json:"title"`
+	Labels    []string               `json:"labels"`
+	Datasets  []ChartDataset         `json:"datasets"`
+	Options   map[string]interface{} `json:"options"`
+	UpdateURL string                 `json:"update_url,omitempty"`
 }
 
 // ChartDataset represents a dataset for charts
@@ -98,59 +98,59 @@ type JobTrackerConfig struct {
 
 // JobStatus represents the status of a scraping job
 type JobStatus struct {
-	ID            string                 `json:"id"`
-	Name          string                 `json:"name"`
-	Status        string                 `json:"status"`
-	StartTime     time.Time              `json:"start_time"`
-	EndTime       *time.Time             `json:"end_time,omitempty"`
-	Duration      time.Duration          `json:"duration"`
-	Progress      float64                `json:"progress"`
-	PagesScraped  int64                  `json:"pages_scraped"`
-	RecordsFound  int64                  `json:"records_found"`
-	Errors        int64                  `json:"errors"`
-	CurrentURL    string                 `json:"current_url,omitempty"`
-	Config        map[string]interface{} `json:"config,omitempty"`
-	Metrics       JobMetrics             `json:"metrics"`
+	ID           string                 `json:"id"`
+	Name         string                 `json:"name"`
+	Status       string                 `json:"status"`
+	StartTime    time.Time              `json:"start_time"`
+	EndTime      *time.Time             `json:"end_time,omitempty"`
+	Duration     time.Duration          `json:"duration"`
+	Progress     float64                `json:"progress"`
+	PagesScraped int64                  `json:"pages_scraped"`
+	RecordsFound int64                  `json:"records_found"`
+	Errors       int64                  `json:"errors"`
+	CurrentURL   string                 `json:"current_url,omitempty"`
+	Config       map[string]interface{} `json:"config,omitempty"`
+	Metrics      JobMetrics             `json:"metrics"`
 }
 
 // JobMetrics detailed metrics for a job
 type JobMetrics struct {
-	RequestsPerSecond float64           `json:"requests_per_second"`
-	SuccessRate       float64           `json:"success_rate"`
-	AverageResponseTime time.Duration  `json:"average_response_time"`
-	ErrorsByType      map[string]int64  `json:"errors_by_type"`
-	ProxyUsage        map[string]int64  `json:"proxy_usage"`
+	RequestsPerSecond   float64          `json:"requests_per_second"`
+	SuccessRate         float64          `json:"success_rate"`
+	AverageResponseTime time.Duration    `json:"average_response_time"`
+	ErrorsByType        map[string]int64 `json:"errors_by_type"`
+	ProxyUsage          map[string]int64 `json:"proxy_usage"`
 }
 
 // AlertManager manages alerts and notifications
 type AlertManager struct {
-	alerts   []Alert
-	rules    []AlertRule
-	mu       sync.RWMutex
-	config   AlertConfig
+	alerts []Alert
+	rules  []AlertRule
+	mu     sync.RWMutex
+	config AlertConfig
 }
 
 // AlertConfig configuration for alerts
 type AlertConfig struct {
-	EnableEmail    bool          `json:"enable_email"`
-	EnableSlack    bool          `json:"enable_slack"`
-	EnableWebhook  bool          `json:"enable_webhook"`
-	CheckInterval  time.Duration `json:"check_interval"`
+	EnableEmail     bool          `json:"enable_email"`
+	EnableSlack     bool          `json:"enable_slack"`
+	EnableWebhook   bool          `json:"enable_webhook"`
+	CheckInterval   time.Duration `json:"check_interval"`
 	RetentionPeriod time.Duration `json:"retention_period"`
 }
 
 // Alert represents an alert
 type Alert struct {
-	ID          string                 `json:"id"`
-	Level       AlertLevel             `json:"level"`
-	Title       string                 `json:"title"`
-	Message     string                 `json:"message"`
-	Timestamp   time.Time              `json:"timestamp"`
-	Source      string                 `json:"source"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	Acknowledged bool                  `json:"acknowledged"`
-	AcknowledgedBy string              `json:"acknowledged_by,omitempty"`
-	AcknowledgedAt *time.Time          `json:"acknowledged_at,omitempty"`
+	ID             string                 `json:"id"`
+	Level          AlertLevel             `json:"level"`
+	Title          string                 `json:"title"`
+	Message        string                 `json:"message"`
+	Timestamp      time.Time              `json:"timestamp"`
+	Source         string                 `json:"source"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	Acknowledged   bool                   `json:"acknowledged"`
+	AcknowledgedBy string                 `json:"acknowledged_by,omitempty"`
+	AcknowledgedAt *time.Time             `json:"acknowledged_at,omitempty"`
 }
 
 // AlertLevel represents alert severity levels
@@ -165,12 +165,12 @@ const (
 
 // AlertRule defines conditions for triggering alerts
 type AlertRule struct {
-	Name        string                                    `json:"name"`
-	Condition   func(metrics map[string]interface{}) bool `json:"-"`
-	Level       AlertLevel                                `json:"level"`
-	Message     string                                    `json:"message"`
-	Cooldown    time.Duration                             `json:"cooldown"`
-	LastTriggered *time.Time                             `json:"last_triggered,omitempty"`
+	Name          string                                    `json:"name"`
+	Condition     func(metrics map[string]interface{}) bool `json:"-"`
+	Level         AlertLevel                                `json:"level"`
+	Message       string                                    `json:"message"`
+	Cooldown      time.Duration                             `json:"cooldown"`
+	LastTriggered *time.Time                                `json:"last_triggered,omitempty"`
 }
 
 // NewDashboard creates a new monitoring dashboard
@@ -245,7 +245,7 @@ func NewAlertManager(config AlertConfig) *AlertManager {
 // Start starts the dashboard server
 func (d *Dashboard) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
-	
+
 	// Dashboard routes
 	mux.HandleFunc(d.config.Path, d.dashboardHandler)
 	mux.HandleFunc(d.config.Path+"/api/data", d.apiDataHandler)
@@ -253,12 +253,12 @@ func (d *Dashboard) Start(ctx context.Context) error {
 	mux.HandleFunc(d.config.Path+"/api/alerts", d.apiAlertsHandler)
 	mux.HandleFunc(d.config.Path+"/api/charts/", d.apiChartsHandler)
 	mux.HandleFunc(d.config.Path+"/static/", d.staticHandler)
-	
+
 	// Health endpoints
 	mux.HandleFunc("/health", d.healthManager.HealthHandler())
 	mux.HandleFunc("/ready", d.healthManager.ReadinessHandler())
 	mux.HandleFunc("/live", d.healthManager.LivenessHandler())
-	
+
 	// Metrics endpoint
 	mux.Handle("/metrics", d.metricsManager.MetricsHandler())
 
@@ -278,7 +278,7 @@ func (d *Dashboard) Start(ctx context.Context) error {
 // dashboardHandler serves the main dashboard page
 func (d *Dashboard) dashboardHandler(w http.ResponseWriter, r *http.Request) {
 	data := d.getDashboardData()
-	
+
 	w.Header().Set("Content-Type", "text/html")
 	err := d.templates.ExecuteTemplate(w, "dashboard.html", data)
 	if err != nil {
@@ -289,7 +289,7 @@ func (d *Dashboard) dashboardHandler(w http.ResponseWriter, r *http.Request) {
 // apiDataHandler serves dashboard data as JSON
 func (d *Dashboard) apiDataHandler(w http.ResponseWriter, r *http.Request) {
 	data := d.getDashboardData()
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)
 }
@@ -297,7 +297,7 @@ func (d *Dashboard) apiDataHandler(w http.ResponseWriter, r *http.Request) {
 // apiJobsHandler serves job data as JSON
 func (d *Dashboard) apiJobsHandler(w http.ResponseWriter, r *http.Request) {
 	jobs := d.jobTracker.GetAllJobs()
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(jobs)
 }
@@ -310,14 +310,14 @@ func (d *Dashboard) apiAlertsHandler(w http.ResponseWriter, r *http.Request) {
 			AlertID string `json:"alert_id"`
 			User    string `json:"user"`
 		}
-		
+
 		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
 			d.alertManager.AcknowledgeAlert(req.AlertID, req.User)
 		}
 	}
-	
+
 	alerts := d.alertManager.GetActiveAlerts()
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(alerts)
 }
@@ -325,9 +325,9 @@ func (d *Dashboard) apiAlertsHandler(w http.ResponseWriter, r *http.Request) {
 // apiChartsHandler serves chart data as JSON
 func (d *Dashboard) apiChartsHandler(w http.ResponseWriter, r *http.Request) {
 	chartType := r.URL.Path[len(d.config.Path+"/api/charts/"):]
-	
+
 	var chartData ChartData
-	
+
 	switch chartType {
 	case "requests":
 		chartData = d.getRequestsChart()
@@ -341,7 +341,7 @@ func (d *Dashboard) apiChartsHandler(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(chartData)
 }
@@ -361,7 +361,7 @@ func (d *Dashboard) staticHandler(w http.ResponseWriter, r *http.Request) {
 			"error":          err.Error(),
 			"timestamp":      time.Now().UTC(),
 		})
-		
+
 		// Generic error message that doesn't expose security mechanism details
 		http.Error(w, "Resource not found", http.StatusNotFound)
 		return
@@ -372,9 +372,9 @@ func (d *Dashboard) staticHandler(w http.ResponseWriter, r *http.Request) {
 func (d *Dashboard) serveStaticFileSafely(w http.ResponseWriter, r *http.Request) error {
 	// Extract the requested file path
 	requestedPath := r.URL.Path[len(d.config.Path+"/static/"):]
-	
+
 	// SECURITY: Strict allowlist - only allow predefined safe files
-	safeFiles := map[string]struct{
+	safeFiles := map[string]struct {
 		contentType string
 		content     string
 	}{
@@ -387,13 +387,13 @@ func (d *Dashboard) serveStaticFileSafely(w http.ResponseWriter, r *http.Request
 			content:     d.getDefaultJS(),
 		},
 	}
-	
+
 	// Check if requested file is in our safe allowlist
 	file, exists := safeFiles[requestedPath]
 	if !exists {
 		return fmt.Errorf("file not in allowlist: %s", requestedPath)
 	}
-	
+
 	// Serve the safe file
 	w.Header().Set("Content-Type", file.contentType)
 	w.Header().Set("Cache-Control", "public, max-age=3600")
@@ -407,26 +407,26 @@ func (d *Dashboard) serveStaticFileSafely(w http.ResponseWriter, r *http.Request
 func (d *Dashboard) logSecurityEvent(eventType string, details map[string]interface{}) {
 	// Add common fields to the security event
 	securityEvent := map[string]interface{}{
-		"event_type":     eventType,
-		"component":      "dashboard",
-		"severity":       "security",
-		"service":        "datascrapexter",
+		"event_type": eventType,
+		"component":  "dashboard",
+		"severity":   "security",
+		"service":    "datascrapexter",
 	}
-	
+
 	// Merge in the specific event details
 	for k, v := range details {
 		securityEvent[k] = v
 	}
-	
+
 	// Log as structured JSON for security monitoring tools
 	// In production, this should be sent to a security monitoring system
 	// such as SIEM, security analytics platform, or dedicated log aggregator
-	
+
 	// For now, log to stderr for visibility
 	// In production, replace with proper structured logging to security monitoring systems
 	logMessage := fmt.Sprintf("[SECURITY EVENT] %s: %v", eventType, details)
 	fmt.Fprintf(os.Stderr, "%s\n", logMessage)
-	
+
 	// Future: Integrate with security monitoring systems
 	// Example integrations:
 	// - Send to SIEM (Splunk, ELK, etc.)
@@ -440,7 +440,7 @@ func (d *Dashboard) getDashboardData() DashboardData {
 	metrics := d.metricsManager.GetMetrics()
 	jobs := d.jobTracker.GetActiveJobs()
 	alerts := d.alertManager.GetActiveAlerts()
-	
+
 	return DashboardData{
 		Title:           d.config.Title,
 		Timestamp:       time.Now(),
@@ -463,9 +463,9 @@ func (d *Dashboard) getSummary() DashboardSummary {
 		FailedPages:     700,
 		ActiveJobs:      3,
 		QueuedJobs:      7,
-		Uptime:         time.Since(startTime),
-		MemoryUsage:    245.7,
-		CPUUsage:       23.4,
+		Uptime:          time.Since(startTime),
+		MemoryUsage:     245.7,
+		CPUUsage:        23.4,
 	}
 }
 
@@ -482,7 +482,7 @@ func (d *Dashboard) isValidStaticFilePath(path string) bool {
 			return false
 		}
 	}
-	
+
 	// Additional pattern validation - prevent suspicious patterns
 	suspiciousPatterns := []string{
 		"../", "..\\",
@@ -490,13 +490,13 @@ func (d *Dashboard) isValidStaticFilePath(path string) bool {
 		"//", "\\\\",
 		".", "..",
 	}
-	
+
 	for _, pattern := range suspiciousPatterns {
 		if strings.Contains(path, pattern) {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -645,17 +645,17 @@ func (d *Dashboard) getRequestsChart() ChartData {
 	// Generate mock data - in practice, this would query actual metrics
 	labels := []string{}
 	data := []float64{}
-	
+
 	now := time.Now()
 	for i := 23; i >= 0; i-- {
 		labels = append(labels, now.Add(-time.Duration(i)*time.Hour).Format("15:04"))
 		data = append(data, float64(100+i*5))
 	}
-	
+
 	return ChartData{
-		ID:    "requests-chart",
-		Type:  "line",
-		Title: "Requests per Hour",
+		ID:     "requests-chart",
+		Type:   "line",
+		Title:  "Requests per Hour",
 		Labels: labels,
 		Datasets: []ChartDataset{
 			{
@@ -672,13 +672,13 @@ func (d *Dashboard) getRequestsChart() ChartData {
 // getErrorsChart generates error rate chart
 func (d *Dashboard) getErrorsChart() ChartData {
 	return ChartData{
-		ID:    "errors-chart",
-		Type:  "doughnut",
-		Title: "Error Distribution",
+		ID:     "errors-chart",
+		Type:   "doughnut",
+		Title:  "Error Distribution",
 		Labels: []string{"Success", "4xx Errors", "5xx Errors", "Network Errors"},
 		Datasets: []ChartDataset{
 			{
-				Data: []float64{85, 8, 4, 3},
+				Data:            []float64{85, 8, 4, 3},
 				BackgroundColor: "#4CAF50,#FF9800,#F44336,#9C27B0",
 			},
 		},
@@ -690,16 +690,16 @@ func (d *Dashboard) getPerformanceChart() ChartData {
 	// Generate response time data
 	labels := []string{}
 	data := []float64{}
-	
+
 	for i := 0; i < 24; i++ {
 		labels = append(labels, fmt.Sprintf("%02d:00", i))
 		data = append(data, 500+float64(i*10))
 	}
-	
+
 	return ChartData{
-		ID:    "performance-chart",
-		Type:  "bar",
-		Title: "Average Response Time (ms)",
+		ID:     "performance-chart",
+		Type:   "bar",
+		Title:  "Average Response Time (ms)",
 		Labels: labels,
 		Datasets: []ChartDataset{
 			{
@@ -714,9 +714,9 @@ func (d *Dashboard) getPerformanceChart() ChartData {
 // getResourcesChart generates system resources chart
 func (d *Dashboard) getResourcesChart() ChartData {
 	return ChartData{
-		ID:    "resources-chart",
-		Type:  "line",
-		Title: "System Resources",
+		ID:     "resources-chart",
+		Type:   "line",
+		Title:  "System Resources",
 		Labels: []string{"00:00", "04:00", "08:00", "12:00", "16:00", "20:00"},
 		Datasets: []ChartDataset{
 			{
@@ -739,11 +739,11 @@ func (d *Dashboard) getResourcesChart() ChartData {
 func (jt *JobTracker) StartJob(job *JobStatus) {
 	jt.mu.Lock()
 	defer jt.mu.Unlock()
-	
+
 	job.StartTime = time.Now()
 	job.Status = "running"
 	jt.jobs[job.ID] = job
-	
+
 	// Clean up old jobs if necessary
 	if len(jt.jobs) > jt.config.MaxJobs {
 		jt.cleanupOldJobs()
@@ -753,7 +753,7 @@ func (jt *JobTracker) StartJob(job *JobStatus) {
 func (jt *JobTracker) UpdateJob(jobID string, updates map[string]interface{}) {
 	jt.mu.Lock()
 	defer jt.mu.Unlock()
-	
+
 	if job, exists := jt.jobs[jobID]; exists {
 		// Update job fields based on the updates map
 		if progress, ok := updates["progress"].(float64); ok {
@@ -771,7 +771,7 @@ func (jt *JobTracker) UpdateJob(jobID string, updates map[string]interface{}) {
 		if url, ok := updates["current_url"].(string); ok {
 			job.CurrentURL = url
 		}
-		
+
 		job.Duration = time.Since(job.StartTime)
 	}
 }
@@ -779,18 +779,18 @@ func (jt *JobTracker) UpdateJob(jobID string, updates map[string]interface{}) {
 func (jt *JobTracker) CompleteJob(jobID string, success bool) {
 	jt.mu.Lock()
 	defer jt.mu.Unlock()
-	
+
 	if job, exists := jt.jobs[jobID]; exists {
 		now := time.Now()
 		job.EndTime = &now
 		job.Duration = now.Sub(job.StartTime)
-		
+
 		if success {
 			job.Status = "completed"
 		} else {
 			job.Status = "failed"
 		}
-		
+
 		job.Progress = 100.0
 	}
 }
@@ -798,36 +798,36 @@ func (jt *JobTracker) CompleteJob(jobID string, success bool) {
 func (jt *JobTracker) GetAllJobs() []JobStatus {
 	jt.mu.RLock()
 	defer jt.mu.RUnlock()
-	
+
 	jobs := make([]JobStatus, 0, len(jt.jobs))
 	for _, job := range jt.jobs {
 		jobs = append(jobs, *job)
 	}
-	
+
 	// Sort by start time (newest first)
 	sort.Slice(jobs, func(i, j int) bool {
 		return jobs[i].StartTime.After(jobs[j].StartTime)
 	})
-	
+
 	return jobs
 }
 
 func (jt *JobTracker) GetActiveJobs() []JobStatus {
 	all := jt.GetAllJobs()
 	active := make([]JobStatus, 0)
-	
+
 	for _, job := range all {
 		if job.Status == "running" || job.Status == "queued" {
 			active = append(active, job)
 		}
 	}
-	
+
 	return active
 }
 
 func (jt *JobTracker) cleanupOldJobs() {
 	cutoff := time.Now().Add(-jt.config.RetentionPeriod)
-	
+
 	for id, job := range jt.jobs {
 		if job.StartTime.Before(cutoff) && job.Status != "running" {
 			delete(jt.jobs, id)
@@ -839,14 +839,14 @@ func (jt *JobTracker) cleanupOldJobs() {
 func (am *AlertManager) AddAlert(alert Alert) {
 	am.mu.Lock()
 	defer am.mu.Unlock()
-	
+
 	alert.Timestamp = time.Now()
 	if alert.ID == "" {
 		alert.ID = fmt.Sprintf("alert_%d", time.Now().UnixNano())
 	}
-	
+
 	am.alerts = append(am.alerts, alert)
-	
+
 	// Clean up old alerts
 	am.cleanupOldAlerts()
 }
@@ -854,7 +854,7 @@ func (am *AlertManager) AddAlert(alert Alert) {
 func (am *AlertManager) AcknowledgeAlert(alertID, user string) {
 	am.mu.Lock()
 	defer am.mu.Unlock()
-	
+
 	for i := range am.alerts {
 		if am.alerts[i].ID == alertID {
 			now := time.Now()
@@ -869,27 +869,27 @@ func (am *AlertManager) AcknowledgeAlert(alertID, user string) {
 func (am *AlertManager) GetActiveAlerts() []Alert {
 	am.mu.RLock()
 	defer am.mu.RUnlock()
-	
+
 	active := make([]Alert, 0)
 	for _, alert := range am.alerts {
 		if !alert.Acknowledged {
 			active = append(active, alert)
 		}
 	}
-	
+
 	return active
 }
 
 func (am *AlertManager) cleanupOldAlerts() {
 	cutoff := time.Now().Add(-am.config.RetentionPeriod)
-	
+
 	filtered := make([]Alert, 0)
 	for _, alert := range am.alerts {
 		if alert.Timestamp.After(cutoff) || !alert.Acknowledged {
 			filtered = append(filtered, alert)
 		}
 	}
-	
+
 	am.alerts = filtered
 }
 
@@ -904,21 +904,21 @@ func (d *Dashboard) setupAlertRules() {
 	// Add default alert rules
 	d.alertManager.rules = []AlertRule{
 		{
-			Name:    "High Error Rate",
-			Level:   AlertLevelWarning,
-			Message: "Error rate has exceeded 10%",
+			Name:     "High Error Rate",
+			Level:    AlertLevelWarning,
+			Message:  "Error rate has exceeded 10%",
 			Cooldown: 5 * time.Minute,
 		},
 		{
-			Name:    "High Memory Usage",
-			Level:   AlertLevelWarning,
-			Message: "Memory usage has exceeded 80%",
+			Name:     "High Memory Usage",
+			Level:    AlertLevelWarning,
+			Message:  "Memory usage has exceeded 80%",
 			Cooldown: 10 * time.Minute,
 		},
 		{
-			Name:    "Job Failure",
-			Level:   AlertLevelError,
-			Message: "Scraping job has failed",
+			Name:     "Job Failure",
+			Level:    AlertLevelError,
+			Message:  "Scraping job has failed",
 			Cooldown: 1 * time.Minute,
 		},
 	}

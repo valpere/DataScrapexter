@@ -36,10 +36,10 @@ func TestNewManagerWithNilConfig(t *testing.T) {
 
 func TestGetWriter(t *testing.T) {
 	tests := []struct {
-		name           string
-		format         string
-		expectError    bool
-		expectedType   string
+		name         string
+		format       string
+		expectError  bool
+		expectedType string
 	}{
 		{
 			name:         "JSON writer",

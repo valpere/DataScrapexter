@@ -56,14 +56,14 @@ const (
 
 // CircuitBreaker implements circuit breaker pattern for error recovery
 type CircuitBreaker struct {
-	name              string
-	maxFailures       int
-	resetTimeout      time.Duration
-	state             CircuitBreakerState
-	failures          int
-	lastFailureTime   time.Time
-	nextAttemptTime   time.Time
-	mu                sync.RWMutex
+	name            string
+	maxFailures     int
+	resetTimeout    time.Duration
+	state           CircuitBreakerState
+	failures        int
+	lastFailureTime time.Time
+	nextAttemptTime time.Time
+	mu              sync.RWMutex
 }
 
 // CircuitBreakerConfig configures circuit breaker behavior
@@ -85,11 +85,11 @@ const (
 
 // FallbackConfig configures fallback behavior
 type FallbackConfig struct {
-	Strategy     FallbackStrategy          `yaml:"strategy" json:"strategy"`
-	CacheTimeout time.Duration             `yaml:"cache_timeout" json:"cache_timeout"`
-	DefaultValue interface{}               `yaml:"default_value" json:"default_value"`
-	Alternative  string                    `yaml:"alternative" json:"alternative"`
-	Degraded     map[string]interface{}    `yaml:"degraded" json:"degraded"`
+	Strategy     FallbackStrategy       `yaml:"strategy" json:"strategy"`
+	CacheTimeout time.Duration          `yaml:"cache_timeout" json:"cache_timeout"`
+	DefaultValue interface{}            `yaml:"default_value" json:"default_value"`
+	Alternative  string                 `yaml:"alternative" json:"alternative"`
+	Degraded     map[string]interface{} `yaml:"degraded" json:"degraded"`
 }
 
 // FallbackRegistry manages fallback strategies for different operations
@@ -376,14 +376,14 @@ func (s *Service) executeAlternativeOperation(operationName, alternative string)
 	switch alternative {
 	case "mobile_version":
 		return map[string]interface{}{
-			"source": "mobile_fallback",
-			"message": "Using mobile version as fallback",
+			"source":    "mobile_fallback",
+			"message":   "Using mobile version as fallback",
 			"operation": operationName,
 		}, nil
 	case "api_fallback":
 		return map[string]interface{}{
-			"source": "api_fallback",
-			"message": "Using API as fallback to HTML scraping",
+			"source":    "api_fallback",
+			"message":   "Using API as fallback to HTML scraping",
 			"operation": operationName,
 		}, nil
 	case "cached_alternative":
@@ -391,10 +391,10 @@ func (s *Service) executeAlternativeOperation(operationName, alternative string)
 		return s.getCachedResult(alternative+"_"+operationName, time.Hour)
 	default:
 		return map[string]interface{}{
-			"source": "generic_alternative",
+			"source":      "generic_alternative",
 			"alternative": alternative,
-			"operation": operationName,
-			"message": "Alternative strategy executed",
+			"operation":   operationName,
+			"message":     "Alternative strategy executed",
 		}, nil
 	}
 }
@@ -524,7 +524,7 @@ func (s *Service) GetExitCode(err error) int {
 	case strings.Contains(errStr, "config") || strings.Contains(errStr, "yaml"):
 		return 2 // Configuration error
 	case strings.Contains(errStr, "network") || strings.Contains(errStr, "timeout") ||
-		 strings.Contains(errStr, "connection") || strings.Contains(errStr, "host"):
+		strings.Contains(errStr, "connection") || strings.Contains(errStr, "host"):
 		return 3 // Network error
 	case strings.Contains(errStr, "parse") || strings.Contains(errStr, "selector"):
 		return 4 // Parsing error

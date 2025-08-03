@@ -17,52 +17,52 @@ import (
 // MetricsManager manages Prometheus metrics for DataScrapexter
 type MetricsManager struct {
 	// Request metrics
-	requestsTotal     *prometheus.CounterVec
-	requestDuration   *prometheus.HistogramVec
-	requestsInFlight  *prometheus.GaugeVec
-	requestErrors     *prometheus.CounterVec
-	requestRetries    *prometheus.CounterVec
-	
+	requestsTotal    *prometheus.CounterVec
+	requestDuration  *prometheus.HistogramVec
+	requestsInFlight *prometheus.GaugeVec
+	requestErrors    *prometheus.CounterVec
+	requestRetries   *prometheus.CounterVec
+
 	// Scraping metrics
 	pagesScraped      *prometheus.CounterVec
 	extractionSuccess *prometheus.CounterVec
 	extractionErrors  *prometheus.CounterVec
 	recordsExtracted  *prometheus.CounterVec
 	extractionTime    *prometheus.HistogramVec
-	
+
 	// Anti-detection metrics
 	proxyUsage        *prometheus.CounterVec
 	captchaSolved     *prometheus.CounterVec
 	captchaFailed     *prometheus.CounterVec
 	captchaSolveTime  *prometheus.HistogramVec
 	userAgentRotation *prometheus.CounterVec
-	
+
 	// Output metrics
-	outputSuccess     *prometheus.CounterVec
-	outputErrors      *prometheus.CounterVec
-	outputTime        *prometheus.HistogramVec
-	outputSize        *prometheus.HistogramVec
-	recordsWritten    *prometheus.CounterVec
-	
+	outputSuccess  *prometheus.CounterVec
+	outputErrors   *prometheus.CounterVec
+	outputTime     *prometheus.HistogramVec
+	outputSize     *prometheus.HistogramVec
+	recordsWritten *prometheus.CounterVec
+
 	// System metrics
-	memoryUsage       prometheus.Gauge
-	cpuUsage          prometheus.Gauge
-	goroutineCount    prometheus.Gauge
-	
+	memoryUsage    prometheus.Gauge
+	cpuUsage       prometheus.Gauge
+	goroutineCount prometheus.Gauge
+
 	// Job metrics
-	jobsTotal         *prometheus.CounterVec
-	jobDuration       *prometheus.HistogramVec
-	jobsActive        prometheus.Gauge
-	jobsQueued        prometheus.Gauge
-	
+	jobsTotal   *prometheus.CounterVec
+	jobDuration *prometheus.HistogramVec
+	jobsActive  prometheus.Gauge
+	jobsQueued  prometheus.Gauge
+
 	// Rate limiting metrics
-	rateLimitHits     *prometheus.CounterVec
-	rateLimitWaits    *prometheus.HistogramVec
-	
+	rateLimitHits  *prometheus.CounterVec
+	rateLimitWaits *prometheus.HistogramVec
+
 	// Custom metrics
-	customMetrics     map[string]prometheus.Collector
-	customMutex       sync.RWMutex
-	
+	customMetrics map[string]prometheus.Collector
+	customMutex   sync.RWMutex
+
 	// Configuration
 	namespace string
 	subsystem string
@@ -71,13 +71,13 @@ type MetricsManager struct {
 
 // MetricsConfig configuration for metrics
 type MetricsConfig struct {
-	Namespace         string            `json:"namespace"`
-	Subsystem         string            `json:"subsystem"`
-	Labels            map[string]string `json:"labels"`
-	EnableGoMetrics   bool              `json:"enable_go_metrics"`
-	EnableProcessMetrics bool           `json:"enable_process_metrics"`
-	MetricsPath       string            `json:"metrics_path"`
-	ListenAddress     string            `json:"listen_address"`
+	Namespace            string            `json:"namespace"`
+	Subsystem            string            `json:"subsystem"`
+	Labels               map[string]string `json:"labels"`
+	EnableGoMetrics      bool              `json:"enable_go_metrics"`
+	EnableProcessMetrics bool              `json:"enable_process_metrics"`
+	MetricsPath          string            `json:"metrics_path"`
+	ListenAddress        string            `json:"listen_address"`
 }
 
 // NewMetricsManager creates a new metrics manager
@@ -94,16 +94,16 @@ func NewMetricsManager(config MetricsConfig) *MetricsManager {
 	if config.ListenAddress == "" {
 		config.ListenAddress = ":9090"
 	}
-	
+
 	mm := &MetricsManager{
 		namespace:     config.Namespace,
 		subsystem:     config.Subsystem,
 		labels:        config.Labels,
 		customMetrics: make(map[string]prometheus.Collector),
 	}
-	
+
 	mm.initializeMetrics()
-	
+
 	return mm
 }
 
@@ -119,7 +119,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"method", "status_code", "host", "job_id"},
 	)
-	
+
 	mm.requestDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: mm.namespace,
@@ -130,7 +130,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"method", "host", "job_id"},
 	)
-	
+
 	mm.requestsInFlight = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: mm.namespace,
@@ -140,7 +140,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"host", "job_id"},
 	)
-	
+
 	mm.requestErrors = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: mm.namespace,
@@ -150,7 +150,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"error_type", "host", "job_id"},
 	)
-	
+
 	mm.requestRetries = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: mm.namespace,
@@ -160,7 +160,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"reason", "host", "job_id"},
 	)
-	
+
 	// Scraping metrics
 	mm.pagesScraped = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -171,7 +171,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"host", "job_id", "status"},
 	)
-	
+
 	mm.extractionSuccess = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: mm.namespace,
@@ -181,7 +181,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"field", "job_id"},
 	)
-	
+
 	mm.extractionErrors = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: mm.namespace,
@@ -191,7 +191,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"field", "error_type", "job_id"},
 	)
-	
+
 	mm.recordsExtracted = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: mm.namespace,
@@ -201,7 +201,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"job_id"},
 	)
-	
+
 	mm.extractionTime = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: mm.namespace,
@@ -212,7 +212,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"job_id"},
 	)
-	
+
 	// Anti-detection metrics
 	mm.proxyUsage = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -223,7 +223,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"proxy_host", "status", "job_id"},
 	)
-	
+
 	mm.captchaSolved = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: mm.namespace,
@@ -233,7 +233,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"captcha_type", "solver", "job_id"},
 	)
-	
+
 	mm.captchaFailed = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: mm.namespace,
@@ -243,7 +243,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"captcha_type", "solver", "error_type", "job_id"},
 	)
-	
+
 	mm.captchaSolveTime = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: mm.namespace,
@@ -254,7 +254,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"captcha_type", "solver", "job_id"},
 	)
-	
+
 	mm.userAgentRotation = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: mm.namespace,
@@ -264,7 +264,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"user_agent_type", "job_id"},
 	)
-	
+
 	// Output metrics
 	mm.outputSuccess = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -275,7 +275,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"format", "job_id"},
 	)
-	
+
 	mm.outputErrors = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: mm.namespace,
@@ -285,7 +285,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"format", "error_type", "job_id"},
 	)
-	
+
 	mm.outputTime = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: mm.namespace,
@@ -296,7 +296,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"format", "job_id"},
 	)
-	
+
 	mm.outputSize = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: mm.namespace,
@@ -307,7 +307,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"format", "job_id"},
 	)
-	
+
 	mm.recordsWritten = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: mm.namespace,
@@ -317,7 +317,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"format", "job_id"},
 	)
-	
+
 	// System metrics
 	mm.memoryUsage = promauto.NewGauge(
 		prometheus.GaugeOpts{
@@ -327,7 +327,7 @@ func (mm *MetricsManager) initializeMetrics() {
 			Help:      "Current memory usage in bytes",
 		},
 	)
-	
+
 	mm.cpuUsage = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: mm.namespace,
@@ -336,7 +336,7 @@ func (mm *MetricsManager) initializeMetrics() {
 			Help:      "Current CPU usage percentage",
 		},
 	)
-	
+
 	mm.goroutineCount = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: mm.namespace,
@@ -345,7 +345,7 @@ func (mm *MetricsManager) initializeMetrics() {
 			Help:      "Current number of goroutines",
 		},
 	)
-	
+
 	// Job metrics
 	mm.jobsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -356,7 +356,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"status", "job_type"},
 	)
-	
+
 	mm.jobDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: mm.namespace,
@@ -367,7 +367,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"job_id", "job_type"},
 	)
-	
+
 	mm.jobsActive = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: mm.namespace,
@@ -376,7 +376,7 @@ func (mm *MetricsManager) initializeMetrics() {
 			Help:      "Number of currently active jobs",
 		},
 	)
-	
+
 	mm.jobsQueued = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: mm.namespace,
@@ -385,7 +385,7 @@ func (mm *MetricsManager) initializeMetrics() {
 			Help:      "Number of jobs in queue",
 		},
 	)
-	
+
 	// Rate limiting metrics
 	mm.rateLimitHits = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -396,7 +396,7 @@ func (mm *MetricsManager) initializeMetrics() {
 		},
 		[]string{"host", "job_id"},
 	)
-	
+
 	mm.rateLimitWaits = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: mm.namespace,
@@ -534,11 +534,11 @@ func (mm *MetricsManager) RegisterCustomCounter(name, help string, labels []stri
 		},
 		labels,
 	)
-	
+
 	mm.customMutex.Lock()
 	mm.customMetrics[name] = counter
 	mm.customMutex.Unlock()
-	
+
 	return counter
 }
 
@@ -552,11 +552,11 @@ func (mm *MetricsManager) RegisterCustomGauge(name, help string, labels []string
 		},
 		labels,
 	)
-	
+
 	mm.customMutex.Lock()
 	mm.customMetrics[name] = gauge
 	mm.customMutex.Unlock()
-	
+
 	return gauge
 }
 
@@ -571,11 +571,11 @@ func (mm *MetricsManager) RegisterCustomHistogram(name, help string, labels []st
 		},
 		labels,
 	)
-	
+
 	mm.customMutex.Lock()
 	mm.customMetrics[name] = histogram
 	mm.customMutex.Unlock()
-	
+
 	return histogram
 }
 
@@ -596,17 +596,17 @@ func (mm *MetricsManager) MetricsHandler() http.Handler {
 func (mm *MetricsManager) StartMetricsServer(ctx context.Context, address, path string) error {
 	mux := http.NewServeMux()
 	mux.Handle(path, mm.MetricsHandler())
-	
+
 	server := &http.Server{
 		Addr:    address,
 		Handler: mux,
 	}
-	
+
 	go func() {
 		<-ctx.Done()
 		server.Shutdown(context.Background())
 	}()
-	
+
 	return server.ListenAndServe()
 }
 
@@ -615,29 +615,29 @@ func (mm *MetricsManager) StartMetricsServer(ctx context.Context, address, path 
 // For full metric values, use the Prometheus /metrics endpoint directly.
 func (mm *MetricsManager) GetMetrics() map[string]interface{} {
 	metrics := make(map[string]interface{})
-	
+
 	// Get current system metrics (these have actual values)
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	
+
 	metrics["system"] = map[string]interface{}{
-		"memory_alloc_bytes":   m.Alloc,
-		"memory_sys_bytes":     m.Sys,
-		"goroutines_count":     runtime.NumGoroutine(),
-		"gc_cycles":           m.NumGC,
+		"memory_alloc_bytes": m.Alloc,
+		"memory_sys_bytes":   m.Sys,
+		"goroutines_count":   runtime.NumGoroutine(),
+		"gc_cycles":          m.NumGC,
 	}
-	
+
 	// Metric registry information
 	metrics["metric_families"] = map[string]interface{}{
-		"requests_total":       "Counter - Total HTTP requests made",
-		"jobs_active":         "Gauge - Currently active scraping jobs", 
-		"memory_usage_bytes":  "Gauge - Current memory usage",
-		"extraction_success":  "Counter - Successful data extractions",
-		"captcha_solved":      "Counter - CAPTCHAs successfully solved",
+		"requests_total":     "Counter - Total HTTP requests made",
+		"jobs_active":        "Gauge - Currently active scraping jobs",
+		"memory_usage_bytes": "Gauge - Current memory usage",
+		"extraction_success": "Counter - Successful data extractions",
+		"captcha_solved":     "Counter - CAPTCHAs successfully solved",
 	}
-	
+
 	metrics["note"] = "For current metric values, query the /metrics endpoint"
-	
+
 	return metrics
 }
 
@@ -666,14 +666,14 @@ func (mm *MetricsManager) Reset() {
 	mm.memoryUsage.Set(0)
 	mm.cpuUsage.Set(0)
 	mm.goroutineCount.Set(0)
-	
+
 	// Reset requests in flight gauge
 	mm.requestsInFlight.Reset()
-	
+
 	// Note: Counter metrics (requestsTotal, requestErrors, etc.) cannot be reset
 	// in Prometheus as they are monotonically increasing. This is by design.
 	// For testing, use separate metric registries or test doubles.
-	
+
 	// Clear histogram observations (this doesn't reset the total count)
 	// Histograms maintain their bucket structure but observations are cleared in test env
 	// Production note: Histogram reset behavior may vary by implementation
@@ -684,10 +684,10 @@ func (mm *MetricsManager) Reset() {
 func (mm *MetricsManager) ResetTestMetrics() {
 	// Create new registry for test isolation if needed
 	// This is the proper way to reset metrics in tests
-	
+
 	// Reset all gauge metrics
 	mm.Reset()
-	
+
 	// For counters and histograms, the proper approach is to use
 	// separate metric registries in tests or mock implementations
 	// Counter values are intentionally persistent in Prometheus

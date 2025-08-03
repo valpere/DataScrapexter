@@ -43,7 +43,7 @@ func NewTLSFingerprinter() *TLSFingerprinter {
 // GetRandomConfig returns a random TLS configuration
 func (tf *TLSFingerprinter) GetRandomConfig() *tls.Config {
 	profile := tf.profiles[rand.Intn(len(tf.profiles))]
-	
+
 	return &tls.Config{
 		MinVersion:               profile.MinVersion,
 		MaxVersion:               profile.MaxVersion,
@@ -53,7 +53,7 @@ func (tf *TLSFingerprinter) GetRandomConfig() *tls.Config {
 		InsecureSkipVerify:       profile.InsecureSkipVerify,
 		ServerName:               profile.ServerName,
 		ClientSessionCache:       tls.NewLRUClientSessionCache(64),
-		Renegotiation:           tls.RenegotiateOnceAsClient,
+		Renegotiation:            tls.RenegotiateOnceAsClient,
 		PreferServerCipherSuites: false,
 	}
 }
@@ -69,9 +69,9 @@ func (tf *TLSFingerprinter) GetChromeConfig() *tls.Config {
 			tls.CurveP256,
 			tls.CurveP384,
 		},
-		NextProtos: []string{"h2", "http/1.1"},
+		NextProtos:         []string{"h2", "http/1.1"},
 		ClientSessionCache: tls.NewLRUClientSessionCache(64),
-		Renegotiation: tls.RenegotiateOnceAsClient,
+		Renegotiation:      tls.RenegotiateOnceAsClient,
 	}
 }
 
@@ -87,9 +87,9 @@ func (tf *TLSFingerprinter) GetFirefoxConfig() *tls.Config {
 			tls.CurveP384,
 			tls.CurveP521,
 		},
-		NextProtos: []string{"h2", "http/1.1"},
+		NextProtos:         []string{"h2", "http/1.1"},
 		ClientSessionCache: tls.NewLRUClientSessionCache(32),
-		Renegotiation: tls.RenegotiateOnceAsClient,
+		Renegotiation:      tls.RenegotiateOnceAsClient,
 	}
 }
 
@@ -119,12 +119,12 @@ func (calc *JA3Calculator) Calculate(config *tls.Config) string {
 	if version == 0 {
 		version = tls.VersionTLS13
 	}
-	
+
 	cipherSuites := config.CipherSuites
 	if len(cipherSuites) == 0 {
 		cipherSuites = getDefaultCipherSuites()
 	}
-	
+
 	// Format: TLSVersion,CipherSuites,Extensions,EllipticCurves,ECPointFormats
 	return fmt.Sprintf("%d,%v,773-35-16-5-10-51-43-13-45-28,23-24-25,0",
 		version, cipherSuites)
@@ -133,19 +133,19 @@ func (calc *JA3Calculator) Calculate(config *tls.Config) string {
 // Randomize randomizes JA3 fingerprint elements
 func (calc *JA3Calculator) Randomize(base JA3Fingerprint) JA3Fingerprint {
 	randomized := base
-	
+
 	// Shuffle cipher suites order
 	rand.Shuffle(len(randomized.CipherSuites), func(i, j int) {
-		randomized.CipherSuites[i], randomized.CipherSuites[j] = 
+		randomized.CipherSuites[i], randomized.CipherSuites[j] =
 			randomized.CipherSuites[j], randomized.CipherSuites[i]
 	})
-	
+
 	// Randomize some extensions order
 	rand.Shuffle(len(randomized.Extensions), func(i, j int) {
-		randomized.Extensions[i], randomized.Extensions[j] = 
+		randomized.Extensions[i], randomized.Extensions[j] =
 			randomized.Extensions[j], randomized.Extensions[i]
 	})
-	
+
 	return randomized
 }
 
@@ -159,13 +159,13 @@ type TLSRotator struct {
 // NewTLSRotator creates a new TLS rotator
 func NewTLSRotator() *TLSRotator {
 	fp := NewTLSFingerprinter()
-	
+
 	configs := []*tls.Config{
 		fp.GetChromeConfig(),
 		fp.GetFirefoxConfig(),
 		fp.GetRandomConfig(),
 	}
-	
+
 	return &TLSRotator{
 		fingerprinter: fp,
 		configs:       configs,
@@ -191,20 +191,20 @@ func (tr *TLSRotator) CustomDialer() func(network, addr string) (net.Conn, error
 			Timeout:   30 * time.Second,
 			KeepAlive: 30 * time.Second,
 		}
-		
+
 		if network == "tcp" && isHTTPSAddr(addr) {
 			// Use custom TLS config for HTTPS
 			conn, err := d.Dial(network, addr)
 			if err != nil {
 				return nil, err
 			}
-			
+
 			tlsConfig := tr.GetRandom()
 			tlsConn := tls.Client(conn, tlsConfig)
-			
+
 			return tlsConn, nil
 		}
-		
+
 		return d.Dial(network, addr)
 	}
 }
@@ -317,7 +317,7 @@ func isHTTPSAddrWithConfig(addr string, config *TLSConfig) bool {
 	if u, err := url.Parse(addr); err == nil && u.Scheme != "" {
 		return u.Scheme == "https"
 	}
-	
+
 	// Handle host:port format (including IPv6)
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -329,13 +329,13 @@ func isHTTPSAddrWithConfig(addr string, config *TLSConfig) bool {
 		// Applications should explicitly specify the scheme (https://) if HTTPS is required
 		return false
 	}
-	
+
 	// Parse port number for better validation
 	portNum, err := strconv.Atoi(port)
 	if err != nil {
 		return false
 	}
-	
+
 	// Common HTTPS ports
 	switch portNum {
 	case 443, 8443, 9443:

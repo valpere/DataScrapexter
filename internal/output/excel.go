@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -52,23 +51,23 @@ type ExcelWriter struct {
 
 // ExcelConfig configuration for Excel output
 type ExcelConfig struct {
-	FilePath       string            `json:"file"`
-	SheetName      string            `json:"sheet_name"`
-	IncludeHeaders bool              `json:"include_headers"`
-	AutoFilter     bool              `json:"auto_filter"`
-	FreezePane     bool              `json:"freeze_pane"`
-	BufferSize     int               `json:"buffer_size"`
-	ColumnWidths   map[string]int    `json:"column_widths"`
-	HeaderStyle    ExcelCellStyle    `json:"header_style"`
-	DataStyle      ExcelCellStyle    `json:"data_style"`
-	DateFormat     string            `json:"date_format"`
-	NumberFormat   string            `json:"number_format"`
-	MaxSheetRows     int               `json:"max_sheet_rows"`
-	MaxCellLength    int               `json:"max_cell_length"`
-	MaxArrayElements int               `json:"max_array_elements"` // Maximum array elements to prevent memory issues
-	CreateIndex      bool              `json:"create_index"`
-	Compression      bool              `json:"compression"`
-	Logger           Logger            `json:"-"` // Optional logger interface for structured logging
+	FilePath         string         `json:"file"`
+	SheetName        string         `json:"sheet_name"`
+	IncludeHeaders   bool           `json:"include_headers"`
+	AutoFilter       bool           `json:"auto_filter"`
+	FreezePane       bool           `json:"freeze_pane"`
+	BufferSize       int            `json:"buffer_size"`
+	ColumnWidths     map[string]int `json:"column_widths"`
+	HeaderStyle      ExcelCellStyle `json:"header_style"`
+	DataStyle        ExcelCellStyle `json:"data_style"`
+	DateFormat       string         `json:"date_format"`
+	NumberFormat     string         `json:"number_format"`
+	MaxSheetRows     int            `json:"max_sheet_rows"`
+	MaxCellLength    int            `json:"max_cell_length"`
+	MaxArrayElements int            `json:"max_array_elements"` // Maximum array elements to prevent memory issues
+	CreateIndex      bool           `json:"create_index"`
+	Compression      bool           `json:"compression"`
+	Logger           Logger         `json:"-"` // Optional logger interface for structured logging
 }
 
 // ExcelCellStyle defines cell styling options
@@ -116,7 +115,7 @@ func NewExcelWriter(config ExcelConfig) (*ExcelWriter, error) {
 	if config.FilePath == "" {
 		return nil, fmt.Errorf("Excel file path is required")
 	}
-	
+
 	// Set defaults
 	if config.SheetName == "" {
 		config.SheetName = "Sheet1"
@@ -139,15 +138,15 @@ func NewExcelWriter(config ExcelConfig) (*ExcelWriter, error) {
 	if config.Logger == nil {
 		config.Logger = &DefaultLogger{}
 	}
-	
+
 	file := excelize.NewFile()
-	
+
 	// Create or rename the default sheet
 	defaultSheet := file.GetSheetName(0)
 	if defaultSheet != config.SheetName {
 		file.SetSheetName(defaultSheet, config.SheetName)
 	}
-	
+
 	writer := &ExcelWriter{
 		file:      file,
 		config:    config,
@@ -155,7 +154,7 @@ func NewExcelWriter(config ExcelConfig) (*ExcelWriter, error) {
 		row:       1,
 		records:   make([]map[string]interface{}, 0, config.BufferSize),
 	}
-	
+
 	return writer, nil
 }
 
@@ -176,7 +175,7 @@ func (w *ExcelWriter) WriteRecord(record map[string]interface{}) error {
 			return err
 		}
 	}
-	
+
 	w.records = append(w.records, record)
 	return nil
 }
@@ -215,12 +214,12 @@ func (w *ExcelWriter) Close() error {
 	if err := w.flush(); err != nil {
 		return err
 	}
-	
+
 	// Apply final formatting
 	if err := w.applyFinalFormatting(); err != nil {
 		return err
 	}
-	
+
 	// Save the file
 	return w.file.SaveAs(w.config.FilePath)
 }
@@ -235,7 +234,7 @@ func (w *ExcelWriter) flush() error {
 	if len(w.records) == 0 {
 		return nil
 	}
-	
+
 	// Extract headers if not already done
 	if w.headers == nil {
 		w.extractHeaders()
@@ -245,14 +244,14 @@ func (w *ExcelWriter) flush() error {
 			}
 		}
 	}
-	
+
 	// Write records
 	for _, record := range w.records {
 		if err := w.writeRecord(record); err != nil {
 			return err
 		}
 	}
-	
+
 	w.records = w.records[:0] // Clear the slice but keep capacity
 	return nil
 }
@@ -260,20 +259,20 @@ func (w *ExcelWriter) flush() error {
 // extractHeaders extracts all unique column headers from records
 func (w *ExcelWriter) extractHeaders() {
 	headerSet := make(map[string]bool)
-	
+
 	for _, record := range w.records {
 		for key := range record {
 			headerSet[key] = true
 		}
 	}
-	
+
 	// Convert to sorted slice for consistent order
 	w.headers = make([]string, 0, len(headerSet))
 	for header := range headerSet {
 		w.headers = append(w.headers, header)
 	}
 	sort.Strings(w.headers)
-	
+
 	// Add index column if requested
 	if w.config.CreateIndex {
 		w.headers = append([]string{"Index"}, w.headers...)
@@ -287,13 +286,13 @@ func (w *ExcelWriter) writeHeaders() error {
 		if err := w.file.SetCellValue(w.sheetName, cell, header); err != nil {
 			return err
 		}
-		
+
 		// Apply header style
 		if err := w.applyHeaderStyle(cell); err != nil {
 			return err
 		}
 	}
-	
+
 	w.row++
 	return nil
 }
@@ -304,10 +303,10 @@ func (w *ExcelWriter) writeRecord(record map[string]interface{}) error {
 	if w.row > w.config.MaxSheetRows {
 		return w.createNewSheet()
 	}
-	
+
 	for col, header := range w.headers {
 		cell := columnName(col+1) + strconv.Itoa(w.row)
-		
+
 		var value interface{}
 		if header == "Index" && w.config.CreateIndex {
 			value = w.row - 1 // Subtract 1 for header row
@@ -317,20 +316,20 @@ func (w *ExcelWriter) writeRecord(record map[string]interface{}) error {
 		} else {
 			value = record[header]
 		}
-		
+
 		// Process the value
 		processedValue := w.processValue(value)
-		
+
 		if err := w.file.SetCellValue(w.sheetName, cell, processedValue); err != nil {
 			return err
 		}
-		
+
 		// Apply data style
 		if err := w.applyDataStyle(cell, value); err != nil {
 			return err
 		}
 	}
-	
+
 	w.row++
 	return nil
 }
@@ -340,7 +339,7 @@ func (w *ExcelWriter) processValue(value interface{}) interface{} {
 	if value == nil {
 		return ""
 	}
-	
+
 	switch v := value.(type) {
 	case time.Time:
 		return v
@@ -349,11 +348,11 @@ func (w *ExcelWriter) processValue(value interface{}) interface{} {
 		maxArrayElements := w.getMaxArrayElements()
 		if len(v) > maxArrayElements {
 			// Log truncation using configured logger - sanitize for security
-			w.config.Logger.Warnf("Excel: Truncating array from %d to %d elements for memory efficiency", 
+			w.config.Logger.Warnf("Excel: Truncating array from %d to %d elements for memory efficiency",
 				len(v), maxArrayElements)
 			v = v[:maxArrayElements]
 		}
-		
+
 		// Use efficient string builder for large arrays
 		if len(v) > 100 {
 			var builder strings.Builder
@@ -387,10 +386,9 @@ func (w *ExcelWriter) processValue(value interface{}) interface{} {
 			maxLength = DefaultExcelMaxCellLength
 		}
 		if len(v) > maxLength {
-			// Log data truncation using configured logger - sanitize file path
-			filename := filepath.Base(w.config.FilePath)
-			w.config.Logger.Warnf("Excel: Truncating cell data from %d to %d characters (file: %s)", 
-				len(v), maxLength, filename)
+			// Log data truncation using configured logger - avoid exposing file paths for security
+			w.config.Logger.Warnf("Excel: Truncating cell data from %d to %d characters (output_id: %p)",
+				len(v), maxLength, w)
 			return v[:maxLength]
 		}
 		return v
@@ -425,7 +423,7 @@ func (w *ExcelWriter) applyHeaderStyle(cell string) error {
 		}
 		return w.file.SetCellStyle(w.sheetName, cell, cell, style)
 	}
-	
+
 	// Apply custom header style
 	return w.applyCustomStyle(cell, w.config.HeaderStyle)
 }
@@ -471,7 +469,7 @@ func (w *ExcelWriter) applyNumberStyle(cell string) error {
 // applyCustomStyle applies custom cell styling
 func (w *ExcelWriter) applyCustomStyle(cell string, cellStyle ExcelCellStyle) error {
 	style := &excelize.Style{}
-	
+
 	// Font
 	if cellStyle.Font.Size > 0 || cellStyle.Font.Bold || cellStyle.Font.Color != "" {
 		style.Font = &excelize.Font{
@@ -486,7 +484,7 @@ func (w *ExcelWriter) applyCustomStyle(cell string, cellStyle ExcelCellStyle) er
 			style.Font.Family = cellStyle.Font.Family
 		}
 	}
-	
+
 	// Fill
 	if cellStyle.Fill.Color != "" {
 		style.Fill = excelize.Fill{
@@ -501,7 +499,7 @@ func (w *ExcelWriter) applyCustomStyle(cell string, cellStyle ExcelCellStyle) er
 			style.Fill.Pattern = 1
 		}
 	}
-	
+
 	// Alignment
 	if cellStyle.Alignment.Horizontal != "" || cellStyle.Alignment.Vertical != "" {
 		style.Alignment = &excelize.Alignment{
@@ -510,18 +508,18 @@ func (w *ExcelWriter) applyCustomStyle(cell string, cellStyle ExcelCellStyle) er
 			WrapText:   cellStyle.Alignment.WrapText,
 		}
 	}
-	
+
 	// Number format
 	if cellStyle.NumFmt != "" {
 		// This would need to be converted to Excel format ID
 		style.NumFmt = 1 // Default to general format
 	}
-	
+
 	styleID, err := w.file.NewStyle(style)
 	if err != nil {
 		return err
 	}
-	
+
 	return w.file.SetCellStyle(w.sheetName, cell, cell, styleID)
 }
 
@@ -541,18 +539,18 @@ func (w *ExcelWriter) applyFinalFormatting() error {
 	for col, header := range w.headers {
 		colName := columnName(col + 1)
 		width := 15.0 // Default width
-		
+
 		if w.config.ColumnWidths != nil {
 			if customWidth, exists := w.config.ColumnWidths[header]; exists {
 				width = float64(customWidth)
 			}
 		}
-		
+
 		if err := w.file.SetColWidth(w.sheetName, colName, colName, width); err != nil {
 			return err
 		}
 	}
-	
+
 	// Apply auto filter
 	if w.config.AutoFilter && len(w.headers) > 0 {
 		lastCol := columnName(len(w.headers))
@@ -563,7 +561,7 @@ func (w *ExcelWriter) applyFinalFormatting() error {
 			}
 		}
 	}
-	
+
 	// Freeze pane
 	if w.config.FreezePane && w.config.IncludeHeaders {
 		if err := w.file.SetPanes(w.sheetName, &excelize.Panes{
@@ -575,7 +573,7 @@ func (w *ExcelWriter) applyFinalFormatting() error {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
@@ -583,23 +581,23 @@ func (w *ExcelWriter) applyFinalFormatting() error {
 func (w *ExcelWriter) createNewSheet() error {
 	// Generate new sheet name
 	newSheetName := fmt.Sprintf("%s_%d", w.config.SheetName, len(w.file.GetSheetList()))
-	
+
 	// Create new sheet
 	index, err := w.file.NewSheet(newSheetName)
 	if err != nil {
 		return err
 	}
-	
+
 	// Switch to new sheet
 	w.file.SetActiveSheet(index)
 	w.sheetName = newSheetName
 	w.row = 1
-	
+
 	// Write headers if configured
 	if w.config.IncludeHeaders {
 		return w.writeHeaders()
 	}
-	
+
 	return nil
 }
 
@@ -624,7 +622,7 @@ type ExcelWorkbook struct {
 // NewExcelWorkbook creates a new Excel workbook
 func NewExcelWorkbook(config ExcelConfig) (*ExcelWorkbook, error) {
 	file := excelize.NewFile()
-	
+
 	return &ExcelWorkbook{
 		file:    file,
 		config:  config,
@@ -637,19 +635,19 @@ func (wb *ExcelWorkbook) GetOrCreateWriter(sheetName string) (*ExcelWriter, erro
 	if writer, exists := wb.writers[sheetName]; exists {
 		return writer, nil
 	}
-	
+
 	// Create new sheet
 	index, err := wb.file.NewSheet(sheetName)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	wb.file.SetActiveSheet(index)
-	
+
 	// Create writer for this sheet
 	config := wb.config
 	config.SheetName = sheetName
-	
+
 	writer := &ExcelWriter{
 		file:      wb.file,
 		config:    config,
@@ -657,7 +655,7 @@ func (wb *ExcelWorkbook) GetOrCreateWriter(sheetName string) (*ExcelWriter, erro
 		row:       1,
 		records:   make([]map[string]interface{}, 0, config.BufferSize),
 	}
-	
+
 	wb.writers[sheetName] = writer
 	return writer, nil
 }
@@ -673,7 +671,7 @@ func (wb *ExcelWorkbook) Save() error {
 			return err
 		}
 	}
-	
+
 	return wb.file.SaveAs(wb.config.FilePath)
 }
 
@@ -687,18 +685,18 @@ func ValidateExcelConfig(config ExcelConfig) error {
 	if config.FilePath == "" {
 		return fmt.Errorf("file path is required")
 	}
-	
+
 	if !strings.HasSuffix(strings.ToLower(config.FilePath), ".xlsx") {
 		return fmt.Errorf("file path must end with .xlsx")
 	}
-	
+
 	if config.BufferSize < 0 {
 		return fmt.Errorf("buffer size must be non-negative")
 	}
-	
+
 	if config.MaxSheetRows < 1 || config.MaxSheetRows > DefaultExcelMaxSheetRows {
 		return fmt.Errorf("max sheet rows must be between 1 and 1048576")
 	}
-	
+
 	return nil
 }

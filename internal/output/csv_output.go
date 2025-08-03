@@ -58,7 +58,7 @@ func WriteCSVToFile(filename string, data []map[string]interface{}) error {
 	}
 
 	logger.WithFields(map[string]interface{}{
-		"filename":    filename,
+		"filename":     filename,
 		"record_count": len(data),
 		"column_count": len(headers),
 	}).Info("CSV file written successfully")

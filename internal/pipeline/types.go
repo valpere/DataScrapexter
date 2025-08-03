@@ -15,13 +15,13 @@ import (
 
 // Pre-compiled regular expressions and text processors for performance
 var (
-	spacesRegex        = regexp.MustCompile(`\s+`)
-	htmlTagsRegex      = regexp.MustCompile(`<[^>]*>`)
-	intCleanRegex      = regexp.MustCompile(`[^0-9-]`)
-	numberExtractRegex = regexp.MustCompile(`\d+(?:\.\d+)?`)
-	currencyCleanRegex = regexp.MustCompile(`[^\d.-]`)
+	spacesRegex          = regexp.MustCompile(`\s+`)
+	htmlTagsRegex        = regexp.MustCompile(`<[^>]*>`)
+	intCleanRegex        = regexp.MustCompile(`[^0-9-]`)
+	numberExtractRegex   = regexp.MustCompile(`\d+(?:\.\d+)?`)
+	currencyCleanRegex   = regexp.MustCompile(`[^\d.-]`)
 	currencyNumericRegex = regexp.MustCompile(`([+-]?\d{1,}(?:[,\s]\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)`) // Extract numeric values from currency strings
-	titleCaser         = cases.Title(language.English) // Modern replacement for deprecated strings.Title
+	titleCaser           = cases.Title(language.English)                                              // Modern replacement for deprecated strings.Title
 )
 
 // TransformRule defines a single transformation rule
