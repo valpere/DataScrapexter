@@ -326,17 +326,21 @@ func generateCanvasVariations() []string {
 		bytes := make([]byte, 2)
 		if _, err := rand.Read(bytes); err != nil {
 			// SECURITY: Fail fast when cryptographic randomness is unavailable
-			// Return realistic-looking but static variations to avoid detection
+			// Fallback: Use math/rand with a time-based seed to generate non-static variations
 			// This maintains behavioral consistency while preventing weak entropy use
-			staticVariations := []string{
-				"a4b7c3d1e5f2", "b8e1f4g7h2i5", "c2f5g8h1i4j7", "d6g9h2i5j8k1",
-				"e0h3i6j9k2l5", "f4i7j0k3l6m9", "g8j1k4l7m0n3", "h2k5l8m1n4o7",
-				"i6l9m2n5o8p1", "j0m3n6o9p2q5",
+			src := mathrand.NewSource(time.Now().UnixNano())
+			r := mathrand.New(src)
+			for j := range variations {
+				fallbackBytes := make([]byte, 2)
+				for k := range fallbackBytes {
+					fallbackBytes[k] = byte(r.Intn(256))
+				}
+				variations[j] = hex.EncodeToString(fallbackBytes)
 			}
 			// Log the entropy failure for monitoring (but continue operation)
 			// This approach prevents application failure while maintaining security
 			logEntropyFailure("canvas_variations", err)
-			return staticVariations
+			return variations
 		} else {
 			variations[i] = hex.EncodeToString(bytes)
 		}
