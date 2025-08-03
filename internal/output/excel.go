@@ -33,7 +33,8 @@ func (l *DefaultLogger) Infof(format string, args ...interface{}) {
 
 // Excel-specific default limits (can be overridden via ExcelConfig)
 const (
-	// DefaultExcelMaxCellLength is the default maximum characters in a single Excel cell
+	// DefaultExcelMaxCellLength is the default maximum characters in a single Excel cell (32,767).
+	// This value matches Excel's documented cell character limit: https://support.microsoft.com/en-us/office/excel-specifications-and-limits-1672b34a-7043-467e-8e27-269d656771c3
 	DefaultExcelMaxCellLength = 32767
 	// DefaultExcelMaxSheetRows is the default maximum rows per sheet in Excel
 	DefaultExcelMaxSheetRows = 1048576
