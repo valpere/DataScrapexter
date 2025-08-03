@@ -336,6 +336,8 @@ func generateCanvasVariations() ([]string, error) {
 		bytes := make([]byte, 2)
 		if _, err := rand.Read(bytes); err != nil {
 			// SECURITY: Fail fast when cryptographic randomness is unavailable
+			// TODO: Consider adding metrics to track entropy failure frequency for monitoring system health.
+			// This would help detect patterns of entropy exhaustion or system-level cryptographic issues.
 			logEntropyFailure("canvas_variations", err)
 			return nil, fmt.Errorf("crypto/rand failed: %w", err)
 		} else {

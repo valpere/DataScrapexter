@@ -74,7 +74,10 @@ func NewYAMLWriter(config YAMLConfig) (*YAMLWriter, error) {
 	if config.GeneratorVersion == "" {
 		config.GeneratorVersion = "1.0"
 	}
-	// Default: include metadata for traceability unless explicitly disabled
+	// TODO: The metadata inclusion logic using MetadataExplicit flag could be confusing.
+	// Consider using a pointer *bool for IncludeMetadata to distinguish between
+	// explicitly set false vs unset (nil), making the configuration interface clearer.
+	// For now, default to including metadata for traceability unless explicitly disabled
 	if !config.MetadataExplicit {
 		config.IncludeMetadata = true
 	}

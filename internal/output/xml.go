@@ -398,6 +398,9 @@ func sanitizeXMLName(name string) string {
 	if len(xmlNameCache) < 1000 { // Limit cache size to prevent memory issues
 		xmlNameCache[name] = result
 	}
+	// TODO: Consider implementing an LRU eviction policy instead of a simple size check
+	// to maintain better cache efficiency under varying workloads. This would ensure
+	// frequently used names remain cached while evicting least recently used entries.
 	xmlNameMutex.Unlock()
 
 	return result

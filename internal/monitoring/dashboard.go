@@ -487,7 +487,7 @@ func (d *Dashboard) logSecurityEvent(eventType string, details map[string]interf
 // getDashboardData collects all data for the dashboard
 func (d *Dashboard) getDashboardData() DashboardData {
 	health := d.healthManager.GetHealth()
-	metrics := d.metricsManager.GetMetricsInfo()
+	metrics := d.metricsManager.GetMetricsMetadata()
 	jobs := d.jobTracker.GetActiveJobs()
 	alerts := d.alertManager.GetActiveAlerts()
 
