@@ -63,11 +63,12 @@ type ExcelConfig struct {
 	DataStyle      ExcelCellStyle    `json:"data_style"`
 	DateFormat     string            `json:"date_format"`
 	NumberFormat   string            `json:"number_format"`
-	MaxSheetRows   int               `json:"max_sheet_rows"`
-	MaxCellLength  int               `json:"max_cell_length"`
-	CreateIndex    bool              `json:"create_index"`
-	Compression    bool              `json:"compression"`
-	Logger         Logger            `json:"-"` // Optional logger interface for structured logging
+	MaxSheetRows     int               `json:"max_sheet_rows"`
+	MaxCellLength    int               `json:"max_cell_length"`
+	MaxArrayElements int               `json:"max_array_elements"` // Maximum array elements to prevent memory issues
+	CreateIndex      bool              `json:"create_index"`
+	Compression      bool              `json:"compression"`
+	Logger           Logger            `json:"-"` // Optional logger interface for structured logging
 }
 
 // ExcelCellStyle defines cell styling options
@@ -344,12 +345,34 @@ func (w *ExcelWriter) processValue(value interface{}) interface{} {
 	case time.Time:
 		return v
 	case []interface{}:
-		// Convert arrays to comma-separated strings
-		var parts []string
-		for _, item := range v {
-			parts = append(parts, fmt.Sprintf("%v", item))
+		// Convert arrays to comma-separated strings with configurable limits
+		maxArrayElements := w.getMaxArrayElements()
+		if len(v) > maxArrayElements {
+			// Log truncation using configured logger - sanitize for security
+			w.config.Logger.Warnf("Excel: Truncating array from %d to %d elements for memory efficiency", 
+				len(v), maxArrayElements)
+			v = v[:maxArrayElements]
 		}
-		return strings.Join(parts, ", ")
+		
+		// Use efficient string builder for large arrays
+		if len(v) > 100 {
+			var builder strings.Builder
+			builder.Grow(len(v) * 10) // Pre-allocate space estimation
+			for i, item := range v {
+				if i > 0 {
+					builder.WriteString(", ")
+				}
+				builder.WriteString(fmt.Sprintf("%v", item))
+			}
+			return builder.String()
+		} else {
+			// Use slice approach for smaller arrays
+			var parts []string
+			for _, item := range v {
+				parts = append(parts, fmt.Sprintf("%v", item))
+			}
+			return strings.Join(parts, ", ")
+		}
 	case map[string]interface{}:
 		// Convert objects to JSON-like strings
 		var parts []string
@@ -500,6 +523,16 @@ func (w *ExcelWriter) applyCustomStyle(cell string, cellStyle ExcelCellStyle) er
 	}
 	
 	return w.file.SetCellStyle(w.sheetName, cell, cell, styleID)
+}
+
+// getMaxArrayElements returns the maximum number of array elements to process
+// This prevents memory issues with very large arrays in Excel cells
+func (w *ExcelWriter) getMaxArrayElements() int {
+	if w.config.MaxArrayElements > 0 {
+		return w.config.MaxArrayElements
+	}
+	// Default limit to prevent memory issues
+	return 1000
 }
 
 // applyFinalFormatting applies final formatting to the worksheet

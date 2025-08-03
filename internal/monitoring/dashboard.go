@@ -349,9 +349,10 @@ func (d *Dashboard) apiChartsHandler(w http.ResponseWriter, r *http.Request) {
 // SECURITY: This implementation uses strict allowlisting to prevent path traversal
 // PRODUCTION NOTE: For production deployment, use go:embed or nginx/CDN
 func (d *Dashboard) staticHandler(w http.ResponseWriter, r *http.Request) {
-	// SECURITY: Implement secure static file serving
+	// SECURITY: Implement secure static file serving with generic error messages
 	if err := d.serveStaticFileSafely(w, r); err != nil {
-		http.Error(w, "File access denied", http.StatusForbidden)
+		// Generic error message that doesn't expose security mechanism details
+		http.Error(w, "Resource not found", http.StatusNotFound)
 		return
 	}
 }

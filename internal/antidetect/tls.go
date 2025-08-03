@@ -23,6 +23,11 @@ type TLSFingerprintConfig struct {
 	ServerName         string
 }
 
+// TLSConfig provides general TLS behavior configuration
+type TLSConfig struct {
+	DefaultToHTTPS bool `json:"default_to_https"` // Whether to assume HTTPS for ambiguous addresses
+}
+
 // TLSFingerprinter provides TLS fingerprinting evasion
 type TLSFingerprinter struct {
 	profiles []TLSFingerprintConfig
@@ -306,7 +311,8 @@ func getDefaultCipherSuites() []uint16 {
 	}
 }
 
-func isHTTPSAddr(addr string) bool {
+// isHTTPSAddrWithConfig determines HTTPS usage with configurable fallback behavior
+func isHTTPSAddrWithConfig(addr string, config *TLSConfig) bool {
 	// First try to parse as URL to handle full URLs
 	if u, err := url.Parse(addr); err == nil && u.Scheme != "" {
 		return u.Scheme == "https"
@@ -315,7 +321,11 @@ func isHTTPSAddr(addr string) bool {
 	// Handle host:port format (including IPv6)
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		// For hostnames without explicit port, default to HTTP to prevent TLS handshake failures
+		// Use configurable fallback behavior for ambiguous cases
+		if config != nil && config.DefaultToHTTPS {
+			return true
+		}
+		// Conservative default: assume HTTP to prevent TLS handshake failures
 		// Applications should explicitly specify the scheme (https://) if HTTPS is required
 		return false
 	}
@@ -333,9 +343,17 @@ func isHTTPSAddr(addr string) bool {
 	case 80, 8080, 3000, 8000: // Common HTTP ports
 		return false
 	default:
-		// For non-standard ports, be conservative and assume HTTP
-		// This prevents TLS handshake failures on HTTP services
+		// For non-standard ports, use configurable behavior
+		if config != nil && config.DefaultToHTTPS {
+			return true
+		}
+		// Conservative default: assume HTTP to prevent TLS handshake failures
 		// Applications should explicitly specify the scheme if using HTTPS on non-standard ports
 		return false
 	}
+}
+
+// isHTTPSAddr provides backward-compatible HTTPS detection with conservative defaults
+func isHTTPSAddr(addr string) bool {
+	return isHTTPSAddrWithConfig(addr, nil)
 }

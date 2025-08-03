@@ -264,6 +264,7 @@ type TwoCaptchaSolver struct {
 	apiKey         string
 	client         *http.Client
 	baseURL        string
+	parsedBaseURL  *url.URL // Pre-parsed URL for efficiency and consistency
 	requestTimeout time.Duration
 	retryConfig    CaptchaRetryConfig
 }
@@ -278,10 +279,21 @@ type CaptchaRetryConfig struct {
 
 // NewTwoCaptchaSolver creates a new 2Captcha solver with enhanced security
 func NewTwoCaptchaSolver(apiKey string) *TwoCaptchaSolver {
+	baseURL := "https://2captcha.com"
+	
+	// Parse and validate base URL during initialization for consistency
+	parsedURL, err := url.Parse(baseURL)
+	if err != nil {
+		// This should never happen with a hardcoded URL, but handle gracefully
+		// Log error in production and fall back to runtime parsing
+		parsedURL = nil
+	}
+	
 	return &TwoCaptchaSolver{
 		apiKey:         apiKey,
 		client:         createSecureHTTPClient(),
-		baseURL:        "https://2captcha.com",
+		baseURL:        baseURL,
+		parsedBaseURL:  parsedURL, // Pre-parsed for efficiency
 		requestTimeout: 15 * time.Second, // Per-request timeout
 		retryConfig: CaptchaRetryConfig{
 			MaxRetries:    3,
@@ -451,10 +463,15 @@ func (tc *TwoCaptchaSolver) GetStats(ctx context.Context) (map[string]interface{
 
 // makeRequest makes an HTTP request to 2Captcha API
 func (tc *TwoCaptchaSolver) makeRequest(ctx context.Context, endpoint string, params map[string]string) ([]byte, error) {
-	// Build URL using proper URL construction for robustness
-	baseURL, err := url.Parse(tc.baseURL)
-	if err != nil {
-		return nil, fmt.Errorf("invalid base URL: %w", err)
+	// Use pre-parsed base URL for consistency and efficiency
+	baseURL := tc.parsedBaseURL
+	if baseURL == nil {
+		// Fallback to runtime parsing if initialization failed
+		var err error
+		baseURL, err = url.Parse(tc.baseURL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid base URL: %w", err)
+		}
 	}
 	
 	// Use ResolveReference for robust URL construction
