@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -351,6 +352,16 @@ func (d *Dashboard) apiChartsHandler(w http.ResponseWriter, r *http.Request) {
 func (d *Dashboard) staticHandler(w http.ResponseWriter, r *http.Request) {
 	// SECURITY: Implement secure static file serving with generic error messages
 	if err := d.serveStaticFileSafely(w, r); err != nil {
+		// Structured logging for security monitoring (internal diagnostics)
+		d.logSecurityEvent("static_file_access_denied", map[string]interface{}{
+			"remote_addr":    r.RemoteAddr,
+			"user_agent":     r.Header.Get("User-Agent"),
+			"requested_path": r.URL.Path,
+			"method":         r.Method,
+			"error":          err.Error(),
+			"timestamp":      time.Now().UTC(),
+		})
+		
 		// Generic error message that doesn't expose security mechanism details
 		http.Error(w, "Resource not found", http.StatusNotFound)
 		return
@@ -389,6 +400,38 @@ func (d *Dashboard) serveStaticFileSafely(w http.ResponseWriter, r *http.Request
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Write([]byte(file.content))
 	return nil
+}
+
+// logSecurityEvent logs security-related events for monitoring and analysis
+// This provides detailed internal logging while maintaining generic user-facing errors
+func (d *Dashboard) logSecurityEvent(eventType string, details map[string]interface{}) {
+	// Add common fields to the security event
+	securityEvent := map[string]interface{}{
+		"event_type":     eventType,
+		"component":      "dashboard",
+		"severity":       "security",
+		"service":        "datascrapexter",
+	}
+	
+	// Merge in the specific event details
+	for k, v := range details {
+		securityEvent[k] = v
+	}
+	
+	// Log as structured JSON for security monitoring tools
+	// In production, this should be sent to a security monitoring system
+	// such as SIEM, security analytics platform, or dedicated log aggregator
+	
+	// For now, log to stderr for visibility
+	// In production, replace with proper structured logging to security monitoring systems
+	logMessage := fmt.Sprintf("[SECURITY EVENT] %s: %v", eventType, details)
+	fmt.Fprintf(os.Stderr, "%s\n", logMessage)
+	
+	// Future: Integrate with security monitoring systems
+	// Example integrations:
+	// - Send to SIEM (Splunk, ELK, etc.)
+	// - Trigger security alerts
+	// - Emit metrics for dashboards
 }
 
 // getDashboardData collects all data for the dashboard

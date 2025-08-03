@@ -482,6 +482,11 @@ func (tc *TwoCaptchaSolver) makeRequest(ctx context.Context, endpoint string, pa
 	
 	fullURL := baseURL.ResolveReference(endpointURL)
 	
+	// SECURITY: Validate final URL to prevent SSRF attacks
+	if err := validateCaptchaURL(fullURL); err != nil {
+		return nil, fmt.Errorf("URL validation failed: %w", err)
+	}
+	
 	// Use url.Values for proper parameter encoding
 	values := url.Values{}
 	for key, value := range params {
@@ -778,4 +783,73 @@ func (ac *AntiCaptchaSolver) makeJSONRequest(ctx context.Context, endpoint strin
 	}
 	
 	return io.ReadAll(resp.Body)
+}
+
+// validateCaptchaURL validates URLs to prevent SSRF attacks
+// This ensures that constructed URLs only point to expected CAPTCHA service domains
+func validateCaptchaURL(targetURL *url.URL) error {
+	// SECURITY: Strict allowlist of valid CAPTCHA service domains
+	// This prevents SSRF attacks by only allowing connections to known CAPTCHA services
+	allowedDomains := map[string]bool{
+		"2captcha.com":       true,
+		"anti-captcha.com":   true,
+		"capmonster.cloud":   true,
+		"deathbycaptcha.com": true,
+		// Add additional trusted CAPTCHA service domains as needed
+		// Each domain should be verified and approved by security team
+	}
+	
+	// Validate scheme - only allow HTTPS for security
+	if targetURL.Scheme != "https" {
+		return fmt.Errorf("only HTTPS scheme allowed, got: %s", targetURL.Scheme)
+	}
+	
+	// Extract and validate hostname
+	hostname := targetURL.Hostname()
+	if hostname == "" {
+		return fmt.Errorf("empty hostname not allowed")
+	}
+	
+	// Check against allowlist
+	if !allowedDomains[hostname] {
+		return fmt.Errorf("domain not in allowlist: %s", hostname)
+	}
+	
+	// Additional security checks
+	if targetURL.Port() != "" {
+		// Only allow standard HTTPS port or explicitly approved ports
+		port := targetURL.Port()
+		if port != "443" {
+			return fmt.Errorf("non-standard port not allowed: %s", port)
+		}
+	}
+	
+	// Prevent requests to internal/private networks
+	if isPrivateIP(hostname) {
+		return fmt.Errorf("requests to private networks not allowed: %s", hostname)
+	}
+	
+	return nil
+}
+
+// isPrivateIP checks if a hostname resolves to a private/internal IP address
+// This prevents SSRF attacks targeting internal infrastructure
+func isPrivateIP(hostname string) bool {
+	// Simple hostname checks for common internal addresses
+	// In production, implement proper IP resolution and range checking
+	internalHostnames := []string{
+		"localhost", "127.0.0.1", "::1",
+		"169.254.", "192.168.", "10.", "172.16.", "172.17.", 
+		"172.18.", "172.19.", "172.20.", "172.21.", "172.22.",
+		"172.23.", "172.24.", "172.25.", "172.26.", "172.27.",
+		"172.28.", "172.29.", "172.30.", "172.31.",
+	}
+	
+	for _, internal := range internalHostnames {
+		if strings.Contains(hostname, internal) {
+			return true
+		}
+	}
+	
+	return false
 }

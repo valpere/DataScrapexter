@@ -641,8 +641,24 @@ func (mm *MetricsManager) GetMetrics() map[string]interface{} {
 	return metrics
 }
 
-// Reset resets all metrics (useful for testing)
-// Note: Counters cannot be reset to zero (Prometheus design), only gauges and histograms
+// Reset resets select metrics for testing scenarios
+//
+// IMPORTANT PROMETHEUS LIMITATIONS:
+// - Counter metrics (e.g., requestsTotal, requestErrors) cannot be reset by design
+// - Counters are monotonically increasing and preserve their values across resets
+// - Only gauge metrics can be reset to zero
+// - Histogram bucket counts cannot be reset (they behave like counters)
+//
+// TESTING ALTERNATIVES:
+// 1. Use separate metric registries for tests (recommended)
+// 2. Create mock implementations for unit tests
+// 3. Use testify/mock for metric interfaces
+// 4. Reset only gauges and use relative measurements for counters
+//
+// PRODUCTION USAGE:
+// - This method should NEVER be called in production
+// - Metrics are designed to be persistent for monitoring and alerting
+// - Resetting metrics in production breaks observability
 func (mm *MetricsManager) Reset() {
 	// Reset gauge metrics to zero
 	mm.jobsActive.Set(0)

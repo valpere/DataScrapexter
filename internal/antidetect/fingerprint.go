@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	mathrand "math/rand"
+	"os"
 	"time"
 )
 
@@ -333,6 +335,7 @@ func generateCanvasVariations() []string {
 			}
 			// Log the entropy failure for monitoring (but continue operation)
 			// This approach prevents application failure while maintaining security
+			logEntropyFailure("canvas_variations", err)
 			return staticVariations
 		} else {
 		variations[i] = hex.EncodeToString(bytes)
@@ -446,4 +449,39 @@ func getExtraFonts() []string {
 		"Monaco", "MS Sans Serif", "MS Serif", "Segoe UI", "Symbol",
 		"Webdings", "Wingdings", "Century Gothic", "Book Antiqua",
 	}
+}
+
+// logEntropyFailure logs entropy generation failures for security monitoring
+// This is critical for detecting entropy issues that could compromise anti-detection
+func logEntropyFailure(context string, err error) {
+	// Structure the security event for monitoring systems
+	_ = map[string]interface{}{
+		"event_type":    "entropy_failure",
+		"component":     "fingerprint",
+		"context":       context,
+		"error":         err.Error(),
+		"severity":      "critical",
+		"timestamp":     time.Now().UTC(),
+		"impact":        "fallback_to_static_values",
+		"action_taken":  "continued_operation_with_static_fallback",
+	}
+	
+	// In production, this should trigger immediate alerts
+	// Entropy failures are critical security events that need investigation
+	// Implement proper logging infrastructure in production:
+	// 1. Send to SIEM/security monitoring system
+	// 2. Trigger alerts for security teams
+	// 3. Consider automatic remediation if patterns are detected
+	
+	// For now, log to stderr as this is a critical security issue
+	// In production, replace with proper structured logging
+	logMessage := fmt.Sprintf("CRITICAL SECURITY EVENT: Entropy failure in %s: %v", context, err)
+	
+	// This would be sent to security monitoring in production
+	// Example production logging:
+	// securityLogger.Critical("entropy_failure", securityEvent)
+	// alertManager.TriggerAlert("entropy_failure", securityEvent)
+	
+	// Temporary stderr logging for visibility
+	fmt.Fprintf(os.Stderr, "[SECURITY] %s\n", logMessage)
 }

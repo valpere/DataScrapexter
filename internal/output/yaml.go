@@ -36,6 +36,14 @@ type YAMLConfig struct {
 	GeneratorName    string `json:"generator_name"`
 	GeneratorVersion string `json:"generator_version"`
 	IncludeMetadata  bool   `json:"include_metadata"`
+	MetadataExplicit bool   `json:"-"` // Internal flag to track if metadata inclusion was explicitly set
+}
+
+// NewYAMLWriterWithExplicitMetadata creates a new YAML writer with explicit metadata configuration
+func NewYAMLWriterWithExplicitMetadata(config YAMLConfig, includeMetadata bool) (*YAMLWriter, error) {
+	config.IncludeMetadata = includeMetadata
+	config.MetadataExplicit = true
+	return NewYAMLWriter(config)
 }
 
 // NewYAMLWriter creates a new YAML writer
@@ -64,10 +72,9 @@ func NewYAMLWriter(config YAMLConfig) (*YAMLWriter, error) {
 	if config.GeneratorVersion == "" {
 		config.GeneratorVersion = "1.0"
 	}
-	// Default to including metadata only if not explicitly set
-	// This respects user configuration while providing sensible defaults
-	if !config.IncludeMetadata && config.GeneratorName == "DataScrapexter" {
-		// Only set default if using default generator name (indicating no explicit config)
+	// Apply sensible metadata defaults only if not explicitly configured
+	if !config.MetadataExplicit {
+		// Default to including metadata unless explicitly disabled
 		config.IncludeMetadata = true
 	}
 	
