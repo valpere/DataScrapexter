@@ -6,8 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	mathrand "math/rand"
-	"os"
 	"time"
 )
 
@@ -473,16 +473,8 @@ func logEntropyFailure(context string, err error) {
 	// 2. Trigger alerts for security teams
 	// 3. Consider automatic remediation if patterns are detected
 
-	// For now, log to stderr as this is a critical security issue
-	// In production, replace with proper structured logging
-	logMessage := fmt.Sprintf("CRITICAL SECURITY EVENT: Entropy failure in %s: %v", context, err)
-
-	// This would be sent to security monitoring in production
-	// Example production logging:
-	// securityLogger.Critical("entropy_failure", securityEvent)
-	// alertManager.TriggerAlert("entropy_failure", securityEvent)
-
-	// Temporary stderr logging for visibility
+	// Use structured logging for critical security events
+	// In production, configure slog to send to security monitoring systems
 	slog.Error("CRITICAL SECURITY EVENT: Entropy failure",
 		slog.String("event_type", "entropy_failure"),
 		slog.String("component", "fingerprint"),

@@ -641,28 +641,20 @@ func (mm *MetricsManager) GetMetrics() map[string]interface{} {
 	return metrics
 }
 
-// Reset resets select metrics for testing scenarios.
+// Reset is deprecated and should not be used.
 //
-// Deprecated: Use separate test metric registries instead. This method should
-// NEVER be called in production as it breaks monitoring and alerting. Only
-// gauge metrics can be reset; counter metrics are monotonically increasing
-// by design in Prometheus.
+// Deprecated: Use separate test metric registries instead. This method
+// panics to prevent accidental use in production. Counter metrics cannot
+// be reset in Prometheus by design.
 func (mm *MetricsManager) Reset() {
 	panic("MetricsManager.Reset is deprecated and should not be used. Use separate test metric registries instead.")
 }
 
-// ResetTestMetrics provides a more comprehensive reset for testing environments.
+// ResetTestMetrics is deprecated and should not be used.
 //
-// Deprecated: Use separate test metric registries instead. This method should
-// only be used in test environments, never in production.
+// Deprecated: Use separate test metric registries instead. This method
+// panics to prevent accidental use. Prometheus metrics should be isolated
+// using separate registries for testing.
 func (mm *MetricsManager) ResetTestMetrics() {
-	// Create new registry for test isolation if needed
-	// This is the proper way to reset metrics in tests
-
-	// Reset all gauge metrics
-	mm.Reset()
-
-	// For counters and histograms, the proper approach is to use
-	// separate metric registries in tests or mock implementations
-	// Counter values are intentionally persistent in Prometheus
+	panic("MetricsManager.ResetTestMetrics is deprecated and should not be used. Use separate test metric registries instead.")
 }

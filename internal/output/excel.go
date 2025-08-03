@@ -365,9 +365,9 @@ func (w *ExcelWriter) processValue(value interface{}) interface{} {
 			maxLength = DefaultExcelMaxCellLength
 		}
 		if len(v) > maxLength {
-			// Log data truncation using configured logger - avoid exposing file paths for security
-			w.config.Logger.Warnf("Excel: Truncating cell data from %d to %d characters (output_id: %p)",
-				len(v), maxLength, w)
+			// Log data truncation using configured logger - avoid information disclosure
+			w.config.Logger.Warnf("Excel: Truncating cell data from %d to %d characters",
+				len(v), maxLength)
 			return v[:maxLength]
 		}
 		return v

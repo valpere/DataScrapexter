@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+
 // XMLWriter implements the Writer interface for XML output
 type XMLWriter struct {
 	file       *os.File
@@ -201,7 +202,7 @@ func (w *XMLWriter) writeRootStart() error {
 		Name: xml.Name{Local: w.rootName},
 		Attr: []xml.Attr{
 			{Name: xml.Name{Local: "generated"}, Value: time.Now().Format(time.RFC3339)},
-			{Name: xml.Name{Local: "generator"}, Value: "DataScrapexter"},
+			{Name: xml.Name{Local: "generator"}, Value: DefaultGeneratorName},
 		},
 	}
 	return w.encoder.EncodeToken(startElement)

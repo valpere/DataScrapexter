@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log/slog"
 	"net/http"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -423,10 +423,16 @@ func (d *Dashboard) logSecurityEvent(eventType string, details map[string]interf
 	// In production, this should be sent to a security monitoring system
 	// such as SIEM, security analytics platform, or dedicated log aggregator
 
-	// For now, log to stderr for visibility
-	// In production, replace with proper structured logging to security monitoring systems
-	logMessage := fmt.Sprintf("[SECURITY EVENT] %s: %v", eventType, details)
-	fmt.Fprintf(os.Stderr, "%s\n", logMessage)
+	// Use structured logging for security events
+	// In production, configure slog to send to security monitoring systems (SIEM, etc.)
+	slog.Error("SECURITY EVENT",
+		slog.String("event_type", eventType),
+		slog.Any("details", details),
+		slog.String("component", "dashboard"),
+		slog.String("severity", "security"),
+		slog.String("service", "datascrapexter"),
+		slog.Time("timestamp", time.Now().UTC()),
+	)
 
 	// Future: Integrate with security monitoring systems
 	// Example integrations:

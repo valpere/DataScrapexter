@@ -11,6 +11,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	// DefaultGeneratorName is the default generator name for metadata
+	DefaultGeneratorName = "DataScrapexter"
+)
+
 // YAMLWriter implements the Writer interface for YAML output
 type YAMLWriter struct {
 	file       *os.File
@@ -67,7 +72,7 @@ func NewYAMLWriter(config YAMLConfig) (*YAMLWriter, error) {
 	}
 	// Set metadata defaults
 	if config.GeneratorName == "" {
-		config.GeneratorName = "DataScrapexter"
+		config.GeneratorName = DefaultGeneratorName
 	}
 	if config.GeneratorVersion == "" {
 		config.GeneratorVersion = "1.0"
