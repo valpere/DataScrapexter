@@ -648,23 +648,7 @@ func (mm *MetricsManager) GetMetrics() map[string]interface{} {
 // gauge metrics can be reset; counter metrics are monotonically increasing
 // by design in Prometheus.
 func (mm *MetricsManager) Reset() {
-	// Reset gauge metrics to zero
-	mm.jobsActive.Set(0)
-	mm.jobsQueued.Set(0)
-	mm.memoryUsage.Set(0)
-	mm.cpuUsage.Set(0)
-	mm.goroutineCount.Set(0)
-
-	// Reset requests in flight gauge
-	mm.requestsInFlight.Reset()
-
-	// Note: Counter metrics (requestsTotal, requestErrors, etc.) cannot be reset
-	// in Prometheus as they are monotonically increasing. This is by design.
-	// For testing, use separate metric registries or test doubles.
-
-	// Clear histogram observations (this doesn't reset the total count)
-	// Histograms maintain their bucket structure but observations are cleared in test env
-	// Production note: Histogram reset behavior may vary by implementation
+	panic("MetricsManager.Reset is deprecated and should not be used. Use separate test metric registries instead.")
 }
 
 // ResetTestMetrics provides a more comprehensive reset for testing environments.
