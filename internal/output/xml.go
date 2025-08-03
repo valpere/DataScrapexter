@@ -362,6 +362,10 @@ func (w *XMLWriter) writeArrayOfMapsElement(name string, arr []map[string]interf
 // Helper functions
 
 // sanitizeXMLName ensures the name is valid for XML according to Unicode rules
+// Implements XML 1.0 Name and NameChar specification:
+// - The first character must be a NameStartChar (letter, underscore, or colon, but colon is discouraged).
+// - Subsequent characters must be NameChar (letters, digits, '.', '-', '_', ':', combining chars, extenders).
+// See: https://www.w3.org/TR/xml/#NT-Name
 func sanitizeXMLName(name string) string {
 	if name == "" {
 		return "element"
