@@ -346,9 +346,21 @@ func (d *Dashboard) apiChartsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(chartData)
 }
 
-// staticHandler serves static files for the dashboard
-// SECURITY: This implementation uses strict allowlisting to prevent path traversal
-// PRODUCTION NOTE: For production deployment, use go:embed or nginx/CDN
+// staticHandler serves static files for the dashboard.
+//
+// SECURITY: This implementation uses a strict allowlist for static files.
+// Only files explicitly listed in serveStaticFileSafely() can be served.
+// This is intentional to prevent path traversal, unauthorized file access,
+// and other attacks. Do NOT relax this allowlist without careful validation.
+//
+// SAFE EXTENSION: To add more static files, add them to the allowlist in
+// serveStaticFileSafely(), ensuring the file name is hardcoded and the content
+// is trusted. Never use user input to construct file paths.
+//
+// PRODUCTION NOTE: For production deployments, consider using go:embed for
+// static assets, or serve files via a CDN or reverse proxy (e.g., nginx).
+// This handler is intentionally restrictive and not suitable for serving
+// arbitrary files.
 func (d *Dashboard) staticHandler(w http.ResponseWriter, r *http.Request) {
 	// SECURITY: Implement secure static file serving with generic error messages
 	if err := d.serveStaticFileSafely(w, r); err != nil {
