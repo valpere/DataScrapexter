@@ -18,14 +18,14 @@ import (
 // SQLite connection parameter constants
 const (
 	// Connection string parameters
-	DefaultSQLiteBusyTimeout = 5000    // milliseconds
-	DefaultSQLiteJournalMode = "WAL"   // Write-Ahead Logging for better concurrency
-	DefaultSQLiteForeignKeys = "on"    // Enable foreign key constraints
+	DefaultSQLiteBusyTimeout = 5000  // milliseconds
+	DefaultSQLiteJournalMode = "WAL" // Write-Ahead Logging for better concurrency
+	DefaultSQLiteForeignKeys = "on"  // Enable foreign key constraints
 
 	// PRAGMA optimization parameters
-	DefaultSQLiteSynchronous = "NORMAL" // Balance between safety and performance
-	DefaultSQLiteCacheSize   = 10000    // Number of pages to cache
-	DefaultSQLiteTempStore   = "memory" // Store temporary tables in memory
+	DefaultSQLiteSynchronous = "NORMAL"  // Balance between safety and performance
+	DefaultSQLiteCacheSize   = 10000     // Number of pages to cache
+	DefaultSQLiteTempStore   = "memory"  // Store temporary tables in memory
 	DefaultSQLiteMmapSize    = 268435456 // 256MB memory-mapped I/O
 )
 
@@ -270,7 +270,7 @@ func (w *SQLiteWriter) inferColumnType(data []map[string]interface{}, column str
 					time.RFC3339Nano,
 					time.RFC1123,
 					time.RFC1123Z,
-					"2006-01-02", // ISO date
+					"2006-01-02",          // ISO date
 					"2006-01-02 15:04:05", // Common datetime format
 				}
 				for _, format := range timeFormats {

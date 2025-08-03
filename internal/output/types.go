@@ -17,6 +17,8 @@ const (
 	FormatXML        OutputFormat = "xml"
 	FormatYAML       OutputFormat = "yaml"
 	FormatTSV        OutputFormat = "tsv"
+	FormatExcel      OutputFormat = "excel"
+	FormatParquet    OutputFormat = "parquet"
 	FormatPostgreSQL OutputFormat = "postgresql"
 	FormatSQLite     OutputFormat = "sqlite"
 )
@@ -44,7 +46,7 @@ const (
 
 // ValidOutputFormats returns all valid output format values
 func ValidOutputFormats() []OutputFormat {
-	return []OutputFormat{FormatJSON, FormatCSV, FormatXML, FormatYAML, FormatTSV, FormatPostgreSQL, FormatSQLite}
+	return []OutputFormat{FormatJSON, FormatCSV, FormatXML, FormatYAML, FormatTSV, FormatExcel, FormatParquet, FormatPostgreSQL, FormatSQLite}
 }
 
 // ValidConflictStrategies returns all valid conflict strategy values
@@ -121,6 +123,7 @@ func GetReservedWords(dialect string) map[string]bool {
 		return postgresReservedWords
 	}
 }
+
 // SQL column type validation
 var (
 	// Valid PostgreSQL column types
@@ -148,10 +151,10 @@ var (
 
 // System column definitions - consistent across database implementations
 const (
-	SystemColumnCreatedAt         = "created_at"
-	SystemColumnCreatedAtType     = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP" // PostgreSQL format
-	SystemColumnCreatedAtSQLiteName = "created_at"                        // SQLite column name
-	SystemColumnCreatedAtSQLiteType = "DATETIME DEFAULT CURRENT_TIMESTAMP" // SQLite column type
+	SystemColumnCreatedAt           = "created_at"
+	SystemColumnCreatedAtType       = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP" // PostgreSQL format
+	SystemColumnCreatedAtSQLiteName = "created_at"                          // SQLite column name
+	SystemColumnCreatedAtSQLiteType = "DATETIME DEFAULT CURRENT_TIMESTAMP"  // SQLite column type
 
 	// Database-specific limits
 	MaxPostgreSQLIdentifierLength = 63  // PostgreSQL maximum identifier length
@@ -161,17 +164,17 @@ const (
 // Time format patterns for quick validation before parsing
 // Compiled once at package initialization for better performance
 var (
-	compiledTimeFormatPatterns []struct{
+	compiledTimeFormatPatterns []struct {
 		minLen, maxLen int
-		pattern *regexp.Regexp
+		pattern        *regexp.Regexp
 	}
 )
 
 // Initialize time format patterns once at package load
 func init() {
-	compiledTimeFormatPatterns = []struct{
+	compiledTimeFormatPatterns = []struct {
 		minLen, maxLen int
-		pattern *regexp.Regexp
+		pattern        *regexp.Regexp
 	}{
 		// RFC3339 format: "2006-01-02T15:04:05Z07:00"
 		{19, 35, regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}`)},
@@ -368,6 +371,10 @@ func (of OutputFormat) GetFileExtension() string {
 		return ".yaml"
 	case FormatTSV:
 		return ".tsv"
+	case FormatExcel:
+		return ".xlsx"
+	case FormatParquet:
+		return ".parquet"
 	default:
 		return ".txt"
 	}
@@ -386,6 +393,10 @@ func (of OutputFormat) GetMimeType() string {
 		return "application/yaml"
 	case FormatTSV:
 		return "text/tab-separated-values"
+	case FormatExcel:
+		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	case FormatParquet:
+		return "application/octet-stream"
 	default:
 		return "text/plain"
 	}
@@ -419,11 +430,11 @@ type Result struct {
 
 // Statistics contains output statistics
 type Statistics struct {
-	TotalRecords    int           `json:"total_records"`
-	TotalFiles      int           `json:"total_files"`
-	TotalSize       int64         `json:"total_size"`
-	ProcessingTime  time.Duration `json:"processing_time"`
-	AverageFileSize int64         `json:"average_file_size"`
+	TotalRecords    int            `json:"total_records"`
+	TotalFiles      int            `json:"total_files"`
+	TotalSize       int64          `json:"total_size"`
+	ProcessingTime  time.Duration  `json:"processing_time"`
+	AverageFileSize int64          `json:"average_file_size"`
 	Formats         map[string]int `json:"formats"`
 }
 
@@ -491,9 +502,9 @@ var SupportedFormats = []string{
 	"yaml",
 	"txt",
 	"html",
-	"jsonl",     // JSON Lines
+	"jsonl",      // JSON Lines
 	"postgresql", // PostgreSQL database
-	"sqlite",    // SQLite database
+	"sqlite",     // SQLite database
 }
 
 // DefaultConfigs provides default configurations for each format

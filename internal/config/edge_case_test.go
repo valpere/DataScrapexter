@@ -161,7 +161,7 @@ func TestLoadFromFileEdgeCases(t *testing.T) {
 			errorMsg:    "yaml",
 		},
 		{
-			name: "file with carriage return whitespace", 
+			name: "file with carriage return whitespace",
 			setupFile: func() string {
 				filePath := filepath.Join(tempDir, "cr_whitespace.yaml")
 				os.WriteFile(filePath, []byte("   \n\t  \r\n  "), 0644)
@@ -231,7 +231,7 @@ fields:
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filePath := tt.setupFile()
-			
+
 			config, err := LoadFromFile(filePath)
 
 			if tt.expectError {
@@ -279,12 +279,12 @@ func TestGenerateTemplateEdgeCases(t *testing.T) {
 			}()
 
 			config := GenerateTemplate(tt.templateType)
-			
+
 			if !tt.expectPanic {
 				if config == nil {
 					t.Error("config should not be nil")
 				}
-				
+
 				// Validate generated config has basic required fields
 				if config.Name == "" {
 					t.Error("generated config should have a name")
@@ -489,7 +489,7 @@ func TestEnvironmentVariableEdgeCases(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name: "undefined environment variable",
+			name:    "undefined environment variable",
 			envVars: map[string]string{},
 			configYAML: `
 name: test
@@ -546,8 +546,8 @@ output:
 		{
 			name: "multiple environment variables",
 			envVars: map[string]string{
-				"HOST": "example.com",
-				"PORT": "8080",
+				"HOST":     "example.com",
+				"PORT":     "8080",
 				"PROTOCOL": "https",
 			},
 			configYAML: `
@@ -592,4 +592,3 @@ output:
 		})
 	}
 }
-

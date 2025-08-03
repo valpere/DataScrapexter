@@ -265,7 +265,7 @@ func NormalizeURL(rawURL string) string {
 
 	// Remove default ports
 	if (u.Scheme == "http" && strings.HasSuffix(u.Host, ":80")) ||
-	   (u.Scheme == "https" && strings.HasSuffix(u.Host, ":443")) {
+		(u.Scheme == "https" && strings.HasSuffix(u.Host, ":443")) {
 		if idx := strings.LastIndex(u.Host, ":"); idx != -1 {
 			u.Host = u.Host[:idx]
 		}

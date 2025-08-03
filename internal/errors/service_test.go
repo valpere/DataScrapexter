@@ -233,8 +233,8 @@ func TestService_ConfigureFallback_AllStrategies(t *testing.T) {
 				Alternative: "mobile_version",
 			},
 			expected: map[string]interface{}{
-				"source": "mobile_fallback",
-				"message": "Using mobile version as fallback",
+				"source":    "mobile_fallback",
+				"message":   "Using mobile version as fallback",
 				"operation": "alternative_strategy_test",
 			},
 		},

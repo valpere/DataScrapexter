@@ -173,10 +173,10 @@ func (m MockDataGenerator) GenerateProductData() map[string]interface{} {
 // GenerateNewsData creates mock news article data
 func (m MockDataGenerator) GenerateNewsData() map[string]interface{} {
 	return map[string]interface{}{
-		"headline":    "Breaking News Story",
-		"author":      "John Doe",
-		"date":        "2025-01-15",
-		"content":     "This is the article content...",
-		"category":    "technology",
+		"headline": "Breaking News Story",
+		"author":   "John Doe",
+		"date":     "2025-01-15",
+		"content":  "This is the article content...",
+		"category": "technology",
 	}
 }

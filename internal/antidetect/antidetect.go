@@ -68,10 +68,10 @@ func (rl *RateLimiter) Wait(ctx context.Context) error {
 
 // ProxyRotator manages proxy rotation
 type ProxyRotator struct {
-	proxies   []string
-	healthy   map[string]bool
-	mu        sync.RWMutex
-	index     int
+	proxies []string
+	healthy map[string]bool
+	mu      sync.RWMutex
+	index   int
 }
 
 // NewProxyRotator creates a new proxy rotator
@@ -291,6 +291,7 @@ const (
 	RecaptchaV3
 	HCaptcha
 	FunCaptcha
+	ImageCaptcha // Generic image-based CAPTCHA type
 )
 
 // NewCaptchaDetector creates a new CAPTCHA detector

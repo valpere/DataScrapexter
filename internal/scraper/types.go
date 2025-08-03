@@ -97,16 +97,16 @@ type ExtractionResult struct {
 
 // ExtractionMetadata contains metadata about the extraction operation
 type ExtractionMetadata struct {
-	TotalFields       int           `json:"total_fields"`
-	ExtractedFields   int           `json:"extracted_fields"`
-	FailedFields      int           `json:"failed_fields"`
-	ProcessingTime    time.Duration `json:"processing_time"`
-	RequiredFieldsOK  bool          `json:"required_fields_ok"`
-	DocumentSize      int64         `json:"document_size"`
-	ErrorCount        int           `json:"error_count"`
-	WarningCount      int           `json:"warning_count"`
-	Duration          time.Duration `json:"duration"`
-	Timestamp         time.Time     `json:"timestamp"`
+	TotalFields      int           `json:"total_fields"`
+	ExtractedFields  int           `json:"extracted_fields"`
+	FailedFields     int           `json:"failed_fields"`
+	ProcessingTime   time.Duration `json:"processing_time"`
+	RequiredFieldsOK bool          `json:"required_fields_ok"`
+	DocumentSize     int64         `json:"document_size"`
+	ErrorCount       int           `json:"error_count"`
+	WarningCount     int           `json:"warning_count"`
+	Duration         time.Duration `json:"duration"`
+	Timestamp        time.Time     `json:"timestamp"`
 }
 
 // Selector represents a CSS selector with validation
@@ -128,36 +128,36 @@ func (s *Selector) ValidateSelector(expression string) error {
 
 // Config represents the scraper engine configuration
 type Config struct {
-	MaxRetries      int                    `yaml:"max_retries" json:"max_retries"`
-	RetryDelay      time.Duration          `yaml:"retry_delay" json:"retry_delay"`
-	Timeout         time.Duration          `yaml:"timeout" json:"timeout"`
-	FollowRedirects bool                   `yaml:"follow_redirects" json:"follow_redirects"`
-	MaxRedirects    int                    `yaml:"max_redirects" json:"max_redirects"`
-	RateLimit       time.Duration          `yaml:"rate_limit" json:"rate_limit"`
-	BurstSize       int                    `yaml:"burst_size" json:"burst_size"`
-	Headers         map[string]string      `yaml:"headers" json:"headers"`
-	UserAgents      []string               `yaml:"user_agents" json:"user_agents"`
-	Browser         *BrowserConfig         `yaml:"browser" json:"browser"`
-	Proxy           *ProxyConfig           `yaml:"proxy" json:"proxy"`
-	Pagination      *PaginationConfig      `yaml:"pagination" json:"pagination"`
-	RateLimiter     *RateLimiterConfig     `yaml:"rate_limiter" json:"rate_limiter"`
-	ErrorRecovery   *ErrorRecoveryConfig   `yaml:"error_recovery" json:"error_recovery"`
+	MaxRetries      int                  `yaml:"max_retries" json:"max_retries"`
+	RetryDelay      time.Duration        `yaml:"retry_delay" json:"retry_delay"`
+	Timeout         time.Duration        `yaml:"timeout" json:"timeout"`
+	FollowRedirects bool                 `yaml:"follow_redirects" json:"follow_redirects"`
+	MaxRedirects    int                  `yaml:"max_redirects" json:"max_redirects"`
+	RateLimit       time.Duration        `yaml:"rate_limit" json:"rate_limit"`
+	BurstSize       int                  `yaml:"burst_size" json:"burst_size"`
+	Headers         map[string]string    `yaml:"headers" json:"headers"`
+	UserAgents      []string             `yaml:"user_agents" json:"user_agents"`
+	Browser         *BrowserConfig       `yaml:"browser" json:"browser"`
+	Proxy           *ProxyConfig         `yaml:"proxy" json:"proxy"`
+	Pagination      *PaginationConfig    `yaml:"pagination" json:"pagination"`
+	RateLimiter     *RateLimiterConfig   `yaml:"rate_limiter" json:"rate_limiter"`
+	ErrorRecovery   *ErrorRecoveryConfig `yaml:"error_recovery" json:"error_recovery"`
 }
 
 // ProxyConfig represents proxy configuration for the scraper
 type ProxyConfig struct {
-	Enabled          bool             `yaml:"enabled" json:"enabled"`
-	Rotation         string           `yaml:"rotation" json:"rotation"`
-	HealthCheck      bool             `yaml:"health_check" json:"health_check"`
-	HealthCheckURL   string           `yaml:"health_check_url,omitempty" json:"health_check_url,omitempty"`
-	HealthCheckRate  time.Duration    `yaml:"health_check_rate" json:"health_check_rate"`
-	Timeout          time.Duration    `yaml:"timeout" json:"timeout"`
-	MaxRetries       int              `yaml:"max_retries" json:"max_retries"`
-	RetryDelay       time.Duration    `yaml:"retry_delay" json:"retry_delay"`
-	Providers        []ProxyProvider  `yaml:"providers" json:"providers"`
-	FailureThreshold int              `yaml:"failure_threshold" json:"failure_threshold"`
-	RecoveryTime     time.Duration    `yaml:"recovery_time" json:"recovery_time"`
-	TLS              *ProxyTLSConfig  `yaml:"tls,omitempty" json:"tls,omitempty"`
+	Enabled          bool            `yaml:"enabled" json:"enabled"`
+	Rotation         string          `yaml:"rotation" json:"rotation"`
+	HealthCheck      bool            `yaml:"health_check" json:"health_check"`
+	HealthCheckURL   string          `yaml:"health_check_url,omitempty" json:"health_check_url,omitempty"`
+	HealthCheckRate  time.Duration   `yaml:"health_check_rate" json:"health_check_rate"`
+	Timeout          time.Duration   `yaml:"timeout" json:"timeout"`
+	MaxRetries       int             `yaml:"max_retries" json:"max_retries"`
+	RetryDelay       time.Duration   `yaml:"retry_delay" json:"retry_delay"`
+	Providers        []ProxyProvider `yaml:"providers" json:"providers"`
+	FailureThreshold int             `yaml:"failure_threshold" json:"failure_threshold"`
+	RecoveryTime     time.Duration   `yaml:"recovery_time" json:"recovery_time"`
+	TLS              *ProxyTLSConfig `yaml:"tls,omitempty" json:"tls,omitempty"`
 }
 
 // ProxyProvider represents a proxy provider configuration
@@ -200,37 +200,36 @@ type BrowserConfig struct {
 	DisableJS      bool          `yaml:"disable_js" json:"disable_js"`
 }
 
-
 // PaginationType represents different pagination strategies
 type PaginationType string
 
 const (
-	PaginationTypeNextButton PaginationType = "next_button"   // Click next button
-	PaginationTypePages      PaginationType = "pages"         // Navigate through numbered pages
-	PaginationTypeURLPattern PaginationType = "url_pattern"   // URL pattern with page number
-	PaginationTypeScrolling  PaginationType = "scrolling"     // Infinite scroll or load more
-	PaginationTypeOffset     PaginationType = "offset"        // URL offset/limit parameters
+	PaginationTypeNextButton PaginationType = "next_button" // Click next button
+	PaginationTypePages      PaginationType = "pages"       // Navigate through numbered pages
+	PaginationTypeURLPattern PaginationType = "url_pattern" // URL pattern with page number
+	PaginationTypeScrolling  PaginationType = "scrolling"   // Infinite scroll or load more
+	PaginationTypeOffset     PaginationType = "offset"      // URL offset/limit parameters
 )
 
 // PaginationConfig represents pagination configuration
 type PaginationConfig struct {
-	Enabled      bool           `yaml:"enabled" json:"enabled"`
-	Type         PaginationType `yaml:"type" json:"type"`
-	MaxPages     int            `yaml:"max_pages,omitempty" json:"max_pages,omitempty"`
-	StartPage    int            `yaml:"start_page,omitempty" json:"start_page,omitempty"`
+	Enabled   bool           `yaml:"enabled" json:"enabled"`
+	Type      PaginationType `yaml:"type" json:"type"`
+	MaxPages  int            `yaml:"max_pages,omitempty" json:"max_pages,omitempty"`
+	StartPage int            `yaml:"start_page,omitempty" json:"start_page,omitempty"`
 
 	// Next button pagination
-	NextSelector     string        `yaml:"next_selector,omitempty" json:"next_selector,omitempty"`
-	NextButtonText   string        `yaml:"next_button_text,omitempty" json:"next_button_text,omitempty"`
-	WaitAfterClick   time.Duration `yaml:"wait_after_click,omitempty" json:"wait_after_click,omitempty"`
+	NextSelector   string        `yaml:"next_selector,omitempty" json:"next_selector,omitempty"`
+	NextButtonText string        `yaml:"next_button_text,omitempty" json:"next_button_text,omitempty"`
+	WaitAfterClick time.Duration `yaml:"wait_after_click,omitempty" json:"wait_after_click,omitempty"`
 
 	// Page numbers pagination
-	PageSelector     string `yaml:"page_selector,omitempty" json:"page_selector,omitempty"`
-	PageURLPattern   string `yaml:"page_url_pattern,omitempty" json:"page_url_pattern,omitempty"`
+	PageSelector   string `yaml:"page_selector,omitempty" json:"page_selector,omitempty"`
+	PageURLPattern string `yaml:"page_url_pattern,omitempty" json:"page_url_pattern,omitempty"`
 
 	// URL pattern pagination
-	URLTemplate      string `yaml:"url_template,omitempty" json:"url_template,omitempty"`
-	PageParam        string `yaml:"page_param,omitempty" json:"page_param,omitempty"`
+	URLTemplate string `yaml:"url_template,omitempty" json:"url_template,omitempty"`
+	PageParam   string `yaml:"page_param,omitempty" json:"page_param,omitempty"`
 
 	// Scrolling pagination
 	ScrollSelector   string        `yaml:"scroll_selector,omitempty" json:"scroll_selector,omitempty"`
@@ -238,33 +237,33 @@ type PaginationConfig struct {
 	ScrollPause      time.Duration `yaml:"scroll_pause,omitempty" json:"scroll_pause,omitempty"`
 
 	// Offset pagination
-	OffsetParam      string `yaml:"offset_param,omitempty" json:"offset_param,omitempty"`
-	LimitParam       string `yaml:"limit_param,omitempty" json:"limit_param,omitempty"`
-	PageSize         int    `yaml:"page_size,omitempty" json:"page_size,omitempty"`
+	OffsetParam string `yaml:"offset_param,omitempty" json:"offset_param,omitempty"`
+	LimitParam  string `yaml:"limit_param,omitempty" json:"limit_param,omitempty"`
+	PageSize    int    `yaml:"page_size,omitempty" json:"page_size,omitempty"`
 
 	// General settings
-	StopCondition    string        `yaml:"stop_condition,omitempty" json:"stop_condition,omitempty"`
+	StopCondition     string        `yaml:"stop_condition,omitempty" json:"stop_condition,omitempty"`
 	DelayBetweenPages time.Duration `yaml:"delay_between_pages,omitempty" json:"delay_between_pages,omitempty"`
-	ContinueOnError  bool          `yaml:"continue_on_error" json:"continue_on_error"`
+	ContinueOnError   bool          `yaml:"continue_on_error" json:"continue_on_error"`
 }
 
 // PaginationResult represents the result of a paginated scraping operation
 type PaginationResult struct {
-	Pages        []ScrapingResult `json:"pages"`
-	TotalPages   int              `json:"total_pages"`
-	ProcessedPages int            `json:"processed_pages"`
-	Success      bool             `json:"success"`
-	Errors       []string         `json:"errors,omitempty"`
-	Duration     time.Duration    `json:"duration"`
-	StartTime    time.Time        `json:"start_time"`
-	EndTime      time.Time        `json:"end_time"`
+	Pages          []ScrapingResult `json:"pages"`
+	TotalPages     int              `json:"total_pages"`
+	ProcessedPages int              `json:"processed_pages"`
+	Success        bool             `json:"success"`
+	Errors         []string         `json:"errors,omitempty"`
+	Duration       time.Duration    `json:"duration"`
+	StartTime      time.Time        `json:"start_time"`
+	EndTime        time.Time        `json:"end_time"`
 }
 
 // ErrorRecoveryConfig configures comprehensive error recovery mechanisms
 type ErrorRecoveryConfig struct {
-	Enabled         bool                           `yaml:"enabled" json:"enabled"`
-	CircuitBreakers map[string]CircuitBreakerSpec  `yaml:"circuit_breakers,omitempty" json:"circuit_breakers,omitempty"`
-	Fallbacks       map[string]FallbackSpec        `yaml:"fallbacks,omitempty" json:"fallbacks,omitempty"`
+	Enabled         bool                          `yaml:"enabled" json:"enabled"`
+	CircuitBreakers map[string]CircuitBreakerSpec `yaml:"circuit_breakers,omitempty" json:"circuit_breakers,omitempty"`
+	Fallbacks       map[string]FallbackSpec       `yaml:"fallbacks,omitempty" json:"fallbacks,omitempty"`
 }
 
 // CircuitBreakerSpec defines circuit breaker configuration for specific operations
@@ -275,7 +274,7 @@ type CircuitBreakerSpec struct {
 
 // FallbackSpec defines fallback strategy configuration for specific operations
 type FallbackSpec struct {
-	Strategy     string                 `yaml:"strategy" json:"strategy"`           // "cached", "default", "alternative", "degrade"
+	Strategy     string                 `yaml:"strategy" json:"strategy"` // "cached", "default", "alternative", "degrade"
 	CacheTimeout time.Duration          `yaml:"cache_timeout,omitempty" json:"cache_timeout,omitempty"`
 	DefaultValue interface{}            `yaml:"default_value,omitempty" json:"default_value,omitempty"`
 	Alternative  string                 `yaml:"alternative,omitempty" json:"alternative,omitempty"`

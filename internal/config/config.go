@@ -10,31 +10,31 @@ import (
 
 // ScraperConfig represents the complete configuration for a scraping job
 type ScraperConfig struct {
-	Name       string             `yaml:"name" json:"name"`
-	BaseURL    string             `yaml:"base_url" json:"base_url"`
-	URLs       []string           `yaml:"urls,omitempty" json:"urls,omitempty"`
-	UserAgents []string           `yaml:"user_agents,omitempty" json:"user_agents,omitempty"`
-	RateLimit  string             `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
-	Timeout    string             `yaml:"timeout,omitempty" json:"timeout,omitempty"`
-	MaxRetries int                `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
-	Retries    int                `yaml:"retries,omitempty" json:"retries,omitempty"` // Added missing field
-	Headers    map[string]string  `yaml:"headers,omitempty" json:"headers,omitempty"`
-	Cookies    map[string]string  `yaml:"cookies,omitempty" json:"cookies,omitempty"`
-	Proxy      *ProxyConfig       `yaml:"proxy,omitempty" json:"proxy,omitempty"`
-	Browser    *BrowserConfig     `yaml:"browser,omitempty" json:"browser,omitempty"`
-	Fields     []Field            `yaml:"fields" json:"fields"`
-	Pagination *PaginationConfig  `yaml:"pagination,omitempty" json:"pagination,omitempty"`
-	Output     OutputConfig       `yaml:"output" json:"output"`
+	Name       string            `yaml:"name" json:"name"`
+	BaseURL    string            `yaml:"base_url" json:"base_url"`
+	URLs       []string          `yaml:"urls,omitempty" json:"urls,omitempty"`
+	UserAgents []string          `yaml:"user_agents,omitempty" json:"user_agents,omitempty"`
+	RateLimit  string            `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
+	Timeout    string            `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	MaxRetries int               `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
+	Retries    int               `yaml:"retries,omitempty" json:"retries,omitempty"` // Added missing field
+	Headers    map[string]string `yaml:"headers,omitempty" json:"headers,omitempty"`
+	Cookies    map[string]string `yaml:"cookies,omitempty" json:"cookies,omitempty"`
+	Proxy      *ProxyConfig      `yaml:"proxy,omitempty" json:"proxy,omitempty"`
+	Browser    *BrowserConfig    `yaml:"browser,omitempty" json:"browser,omitempty"`
+	Fields     []Field           `yaml:"fields" json:"fields"`
+	Pagination *PaginationConfig `yaml:"pagination,omitempty" json:"pagination,omitempty"`
+	Output     OutputConfig      `yaml:"output" json:"output"`
 }
 
 // Field represents a single field to extract
 type Field struct {
-	Name      string         `yaml:"name" json:"name"`
-	Selector  string         `yaml:"selector" json:"selector"`
-	Type      string         `yaml:"type" json:"type"`
-	Required  bool           `yaml:"required,omitempty" json:"required,omitempty"`
-	Attribute string         `yaml:"attribute,omitempty" json:"attribute,omitempty"`
-	Default   interface{}    `yaml:"default,omitempty" json:"default,omitempty"`
+	Name      string          `yaml:"name" json:"name"`
+	Selector  string          `yaml:"selector" json:"selector"`
+	Type      string          `yaml:"type" json:"type"`
+	Required  bool            `yaml:"required,omitempty" json:"required,omitempty"`
+	Attribute string          `yaml:"attribute,omitempty" json:"attribute,omitempty"`
+	Default   interface{}     `yaml:"default,omitempty" json:"default,omitempty"`
 	Transform []TransformRule `yaml:"transform,omitempty" json:"transform,omitempty"`
 }
 
@@ -52,25 +52,25 @@ type PaginationConfig struct {
 
 // OutputConfig represents output configuration
 type OutputConfig struct {
-	Format       string `yaml:"format" json:"format"`
-	File         string `yaml:"file" json:"file"`
+	Format        string `yaml:"format" json:"format"`
+	File          string `yaml:"file" json:"file"`
 	EnableMetrics bool   `yaml:"enable_metrics,omitempty" json:"enable_metrics,omitempty"`
 }
 
 // ProxyConfig represents proxy configuration
 type ProxyConfig struct {
-	Enabled          bool             `yaml:"enabled" json:"enabled"`
-	Rotation         string           `yaml:"rotation,omitempty" json:"rotation,omitempty"`
-	HealthCheck      bool             `yaml:"health_check,omitempty" json:"health_check,omitempty"`
-	HealthCheckURL   string           `yaml:"health_check_url,omitempty" json:"health_check_url,omitempty"`
-	HealthCheckRate  string           `yaml:"health_check_rate,omitempty" json:"health_check_rate,omitempty"`
-	Timeout          string           `yaml:"timeout,omitempty" json:"timeout,omitempty"`
-	MaxRetries       int              `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
-	RetryDelay       string           `yaml:"retry_delay,omitempty" json:"retry_delay,omitempty"`
-	Providers        []ProxyProvider  `yaml:"providers,omitempty" json:"providers,omitempty"`
-	FailureThreshold int              `yaml:"failure_threshold,omitempty" json:"failure_threshold,omitempty"`
-	RecoveryTime     string           `yaml:"recovery_time,omitempty" json:"recovery_time,omitempty"`
-	TLS              *TLSConfig       `yaml:"tls,omitempty" json:"tls,omitempty"`
+	Enabled          bool            `yaml:"enabled" json:"enabled"`
+	Rotation         string          `yaml:"rotation,omitempty" json:"rotation,omitempty"`
+	HealthCheck      bool            `yaml:"health_check,omitempty" json:"health_check,omitempty"`
+	HealthCheckURL   string          `yaml:"health_check_url,omitempty" json:"health_check_url,omitempty"`
+	HealthCheckRate  string          `yaml:"health_check_rate,omitempty" json:"health_check_rate,omitempty"`
+	Timeout          string          `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	MaxRetries       int             `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
+	RetryDelay       string          `yaml:"retry_delay,omitempty" json:"retry_delay,omitempty"`
+	Providers        []ProxyProvider `yaml:"providers,omitempty" json:"providers,omitempty"`
+	FailureThreshold int             `yaml:"failure_threshold,omitempty" json:"failure_threshold,omitempty"`
+	RecoveryTime     string          `yaml:"recovery_time,omitempty" json:"recovery_time,omitempty"`
+	TLS              *TLSConfig      `yaml:"tls,omitempty" json:"tls,omitempty"`
 
 	// Legacy support for single proxy URL
 	URL      string `yaml:"url,omitempty" json:"url,omitempty"`

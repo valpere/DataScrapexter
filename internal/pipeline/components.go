@@ -171,13 +171,13 @@ func (dv *DataValidator) validateField(rule ValidationRule, value interface{}) e
 
 // RecordDeduplicator handles duplicate detection and removal
 type RecordDeduplicator struct {
-	Method       string   `yaml:"method" json:"method"`             // "hash", "field", "similarity"
-	Fields       []string `yaml:"fields,omitempty" json:"fields,omitempty"` // Fields to use for deduplication
-	Threshold    float64  `yaml:"threshold,omitempty" json:"threshold,omitempty"` // Similarity threshold
-	CacheSize    int      `yaml:"cache_size" json:"cache_size"`     // Size of deduplication cache
+	Method    string   `yaml:"method" json:"method"`                           // "hash", "field", "similarity"
+	Fields    []string `yaml:"fields,omitempty" json:"fields,omitempty"`       // Fields to use for deduplication
+	Threshold float64  `yaml:"threshold,omitempty" json:"threshold,omitempty"` // Similarity threshold
+	CacheSize int      `yaml:"cache_size" json:"cache_size"`                   // Size of deduplication cache
 
-	seenHashes   map[string]bool
-	seenRecords  []map[string]interface{}
+	seenHashes  map[string]bool
+	seenRecords []map[string]interface{}
 }
 
 // Deduplicate removes or marks duplicate records
@@ -264,7 +264,7 @@ func (rd *RecordDeduplicator) deduplicateBySimilarity(data map[string]interface{
 
 // DataEnricher handles data enrichment from external sources
 type DataEnricher struct {
-	Enrichers []Enricher `yaml:"enrichers" json:"enrichers"`
+	Enrichers []Enricher    `yaml:"enrichers" json:"enrichers"`
 	Timeout   time.Duration `yaml:"timeout" json:"timeout"`
 	Parallel  bool          `yaml:"parallel" json:"parallel"`
 }

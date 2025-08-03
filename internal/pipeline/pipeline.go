@@ -21,29 +21,29 @@ type DataPipeline struct {
 	Config *PipelineConfig
 
 	// State management
-	mu       sync.RWMutex
-	metrics  *PipelineMetrics
-	logger   Logger
+	mu      sync.RWMutex
+	metrics *PipelineMetrics
+	logger  Logger
 }
 
 // PipelineConfig holds pipeline configuration
 type PipelineConfig struct {
-	BufferSize     int           `yaml:"buffer_size" json:"buffer_size"`
-	WorkerCount    int           `yaml:"worker_count" json:"worker_count"`
-	Timeout        time.Duration `yaml:"timeout" json:"timeout"`
-	EnableMetrics  bool          `yaml:"enable_metrics" json:"enable_metrics"`
-	RetryAttempts  int           `yaml:"retry_attempts" json:"retry_attempts"`
-	RetryDelay     time.Duration `yaml:"retry_delay" json:"retry_delay"`
+	BufferSize    int           `yaml:"buffer_size" json:"buffer_size"`
+	WorkerCount   int           `yaml:"worker_count" json:"worker_count"`
+	Timeout       time.Duration `yaml:"timeout" json:"timeout"`
+	EnableMetrics bool          `yaml:"enable_metrics" json:"enable_metrics"`
+	RetryAttempts int           `yaml:"retry_attempts" json:"retry_attempts"`
+	RetryDelay    time.Duration `yaml:"retry_delay" json:"retry_delay"`
 }
 
 // PipelineMetrics tracks pipeline performance
 type PipelineMetrics struct {
-	ProcessedCount   int64         `json:"processed_count"`
-	SuccessCount     int64         `json:"success_count"`
-	ErrorCount       int64         `json:"error_count"`
-	AverageTime      time.Duration `json:"average_time"`
-	TotalTime        time.Duration `json:"total_time"`
-	LastProcessedAt  time.Time     `json:"last_processed_at"`
+	ProcessedCount  int64         `json:"processed_count"`
+	SuccessCount    int64         `json:"success_count"`
+	ErrorCount      int64         `json:"error_count"`
+	AverageTime     time.Duration `json:"average_time"`
+	TotalTime       time.Duration `json:"total_time"`
+	LastProcessedAt time.Time     `json:"last_processed_at"`
 }
 
 // ProcessedData represents data that has been processed through the pipeline
@@ -54,8 +54,8 @@ type ProcessedData struct {
 	Validated   map[string]interface{} `json:"validated"`
 	Enriched    map[string]interface{} `json:"enriched"`
 
-	Metadata    ProcessingMetadata     `json:"metadata"`
-	Errors      []ProcessingError      `json:"errors,omitempty"`
+	Metadata ProcessingMetadata `json:"metadata"`
+	Errors   []ProcessingError  `json:"errors,omitempty"`
 }
 
 // ProcessingMetadata contains metadata about the processing

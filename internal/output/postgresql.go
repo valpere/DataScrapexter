@@ -428,4 +428,3 @@ func (w *PostgreSQLWriter) GetStats() map[string]interface{} {
 
 	return stats
 }
-

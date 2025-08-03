@@ -9,13 +9,13 @@ import (
 
 func TestNewProxyManager(t *testing.T) {
 	tests := []struct {
-		name   string
-		config *ProxyConfig
+		name    string
+		config  *ProxyConfig
 		wantErr bool
 	}{
 		{
-			name:   "nil config creates default",
-			config: nil,
+			name:    "nil config creates default",
+			config:  nil,
 			wantErr: false,
 		},
 		{

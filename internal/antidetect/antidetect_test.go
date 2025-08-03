@@ -2,28 +2,28 @@
 package antidetect
 
 import (
-    "testing"
+	"testing"
 )
 
 func TestUserAgentRotatorIntegration(t *testing.T) {
-    userAgents := []string{
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-    }
+	userAgents := []string{
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+	}
 
-    rotator := NewUserAgentRotator(userAgents)
+	rotator := NewUserAgentRotator(userAgents)
 
-    if rotator == nil {
-        t.Error("rotator should not be nil")
-    }
+	if rotator == nil {
+		t.Error("rotator should not be nil")
+	}
 }
 
-func TestAntiDetectionClientIntegration(t *testing.T) {
-    config := &AntiDetectionConfig{}
+func TestAntiDetectionClientCreation(t *testing.T) {
+	config := &AntiDetectionConfig{}
 
-    client := NewAntiDetectionClient(config)
+	client := NewAntiDetectionClient(config)
 
-    if client == nil {
-        t.Error("anti-detection client should not be nil")
-    }
+	if client == nil {
+		t.Error("anti-detection client should not be nil")
+	}
 }

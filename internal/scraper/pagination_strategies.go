@@ -25,12 +25,12 @@ type PaginationStrategy interface {
 
 // OffsetStrategy implements offset-based pagination (e.g., ?offset=20&limit=10)
 type OffsetStrategy struct {
-	BaseURL    string `yaml:"base_url" json:"base_url"`
+	BaseURL     string `yaml:"base_url" json:"base_url"`
 	OffsetParam string `yaml:"offset_param" json:"offset_param"` // Default: "offset"
 	LimitParam  string `yaml:"limit_param" json:"limit_param"`   // Default: "limit"
-	Limit      int    `yaml:"limit" json:"limit"`               // Items per page
-	MaxOffset  int    `yaml:"max_offset" json:"max_offset"`     // Maximum offset to prevent infinite loops
-	StartOffset int   `yaml:"start_offset" json:"start_offset"` // Starting offset (default: 0)
+	Limit       int    `yaml:"limit" json:"limit"`               // Items per page
+	MaxOffset   int    `yaml:"max_offset" json:"max_offset"`     // Maximum offset to prevent infinite loops
+	StartOffset int    `yaml:"start_offset" json:"start_offset"` // Starting offset (default: 0)
 }
 
 // GetNextURL generates the next URL using offset pagination
@@ -100,9 +100,9 @@ type CursorStrategy struct {
 	MaxPages    int    `yaml:"max_pages" json:"max_pages"`       // Maximum pages to prevent infinite loops
 
 	// Cursor extraction configuration
-	CursorSelector string `yaml:"cursor_selector" json:"cursor_selector"`     // CSS selector to find next cursor
-	CursorAttr     string `yaml:"cursor_attr" json:"cursor_attr"`             // Attribute containing cursor value
-	CursorPattern  string `yaml:"cursor_pattern" json:"cursor_pattern"`       // Regex pattern to extract cursor
+	CursorSelector string `yaml:"cursor_selector" json:"cursor_selector"` // CSS selector to find next cursor
+	CursorAttr     string `yaml:"cursor_attr" json:"cursor_attr"`         // Attribute containing cursor value
+	CursorPattern  string `yaml:"cursor_pattern" json:"cursor_pattern"`   // Regex pattern to extract cursor
 
 	lastCursor string // Internal state to track the last cursor
 }
@@ -206,9 +206,9 @@ func (cs *CursorStrategy) GetName() string {
 
 // NextButtonStrategy implements next button-based pagination
 type NextButtonStrategy struct {
-	Selector     string `yaml:"selector" json:"selector"`         // CSS selector for next button
-	MaxPages     int    `yaml:"max_pages" json:"max_pages"`       // Maximum pages
-	DisabledAttr string `yaml:"disabled_attr" json:"disabled_attr"` // Attribute that indicates disabled state
+	Selector      string `yaml:"selector" json:"selector"`             // CSS selector for next button
+	MaxPages      int    `yaml:"max_pages" json:"max_pages"`           // Maximum pages
+	DisabledAttr  string `yaml:"disabled_attr" json:"disabled_attr"`   // Attribute that indicates disabled state
 	DisabledClass string `yaml:"disabled_class" json:"disabled_class"` // Class that indicates disabled state
 }
 

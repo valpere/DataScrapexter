@@ -9,9 +9,9 @@ import (
 
 func TestAdaptiveRateLimiter_FixedStrategy(t *testing.T) {
 	config := &RateLimiterConfig{
-		BaseInterval:    100 * time.Millisecond,
-		BurstSize:       3,
-		Strategy:        StrategyFixed,
+		BaseInterval: 100 * time.Millisecond,
+		BurstSize:    3,
+		Strategy:     StrategyFixed,
 	}
 
 	rl := NewAdaptiveRateLimiter(config)
@@ -43,7 +43,7 @@ func TestAdaptiveRateLimiter_FixedStrategy(t *testing.T) {
 
 func TestAdaptiveRateLimiter_AdaptiveStrategy(t *testing.T) {
 	config := &RateLimiterConfig{
-		BaseInterval:         50 * time.Millisecond,
+		BaseInterval:        50 * time.Millisecond,
 		BurstSize:           2,
 		Strategy:            StrategyAdaptive,
 		MaxInterval:         500 * time.Millisecond,
@@ -166,7 +166,7 @@ func TestAdaptiveRateLimiter_HybridStrategy(t *testing.T) {
 
 func TestAdaptiveRateLimiter_ConsecutiveErrors(t *testing.T) {
 	config := &RateLimiterConfig{
-		BaseInterval:         50 * time.Millisecond,
+		BaseInterval:        50 * time.Millisecond,
 		BurstSize:           2,
 		Strategy:            StrategyAdaptive,
 		MaxInterval:         500 * time.Millisecond,
@@ -283,7 +283,7 @@ func TestAdaptiveRateLimiter_Stats(t *testing.T) {
 
 func TestAdaptiveRateLimiter_Reset(t *testing.T) {
 	config := &RateLimiterConfig{
-		BaseInterval:         100 * time.Millisecond,
+		BaseInterval:        100 * time.Millisecond,
 		BurstSize:           3,
 		Strategy:            StrategyAdaptive,
 		AdaptationThreshold: 10 * time.Millisecond, // Fast adaptation for testing
@@ -517,7 +517,7 @@ func TestAdaptiveRateLimiter_PeriodicCleanup(t *testing.T) {
 
 func TestAdaptiveRateLimiter_ConsecutiveErrorMultiplier(t *testing.T) {
 	config := &RateLimiterConfig{
-		BaseInterval:         100 * time.Millisecond,
+		BaseInterval:        100 * time.Millisecond,
 		BurstSize:           2,
 		Strategy:            StrategyAdaptive,
 		MaxInterval:         10 * time.Second,
