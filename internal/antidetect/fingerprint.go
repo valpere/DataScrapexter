@@ -483,5 +483,14 @@ func logEntropyFailure(context string, err error) {
 	// alertManager.TriggerAlert("entropy_failure", securityEvent)
 
 	// Temporary stderr logging for visibility
-	fmt.Fprintf(os.Stderr, "[SECURITY] %s\n", logMessage)
+	slog.Error("CRITICAL SECURITY EVENT: Entropy failure",
+		slog.String("event_type", "entropy_failure"),
+		slog.String("component", "fingerprint"),
+		slog.String("context", context),
+		slog.String("error", err.Error()),
+		slog.String("severity", "critical"),
+		slog.Time("timestamp", time.Now().UTC()),
+		slog.String("impact", "fallback_to_static_values"),
+		slog.String("action_taken", "continued_operation_with_static_fallback"),
+	)
 }
