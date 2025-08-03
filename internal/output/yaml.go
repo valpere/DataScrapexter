@@ -41,7 +41,11 @@ type YAMLConfig struct {
 	GeneratorName    string `json:"generator_name"`
 	GeneratorVersion string `json:"generator_version"`
 	IncludeMetadata  bool   `json:"include_metadata"`
-	MetadataExplicit bool   `json:"-"` // Internal flag to track if metadata inclusion was explicitly set
+	// MetadataExplicit is an internal-only flag used to track whether metadata inclusion
+	// was explicitly configured by the user or should use default behavior.
+	// This prevents automatic metadata inclusion when not explicitly requested.
+	// Not exposed in JSON serialization to maintain clean configuration files.
+	MetadataExplicit bool `json:"-"`
 }
 
 // NewYAMLWriterWithExplicitMetadata creates a new YAML writer with explicit metadata configuration

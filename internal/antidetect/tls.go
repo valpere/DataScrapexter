@@ -311,7 +311,19 @@ func getDefaultCipherSuites() []uint16 {
 	}
 }
 
-// isHTTPSAddrWithConfig determines HTTPS usage with configurable fallback behavior
+// isHTTPSAddrWithConfig determines HTTPS usage with configurable fallback behavior.
+//
+// This function handles three address formats:
+// 1. Full URLs (https://example.com) - scheme determines HTTPS usage
+// 2. Host:port addresses (example.com:443) - port number determines HTTPS usage
+// 3. Ambiguous addresses (example.com) - fallback behavior is configurable
+//
+// For ambiguous addresses without port specification:
+// - If config.DefaultToHTTPS is true: assumes HTTPS
+// - If config.DefaultToHTTPS is false or config is nil: assumes HTTP (conservative default)
+//
+// The conservative default prevents TLS handshake failures when the protocol
+// is uncertain. Applications should use explicit schemes (https://) for HTTPS.
 func isHTTPSAddrWithConfig(addr string, config *TLSConfig) bool {
 	// First try to parse as URL to handle full URLs
 	if u, err := url.Parse(addr); err == nil && u.Scheme != "" {

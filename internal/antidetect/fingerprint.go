@@ -350,8 +350,10 @@ func generateRandomCanvasData() string {
 	data := make([]byte, 32)
 	if _, err := rand.Read(data); err != nil {
 		// SECURITY: Fail fast when cryptographic randomness is unavailable
-		// Return deterministic error marker to avoid weak entropy
-		return "error_crypto_rand_unavailable_canvas_data"
+		// Log the entropy failure for security monitoring
+		logEntropyFailure("canvas_data_generation", err)
+		// Return generic fallback that doesn't expose system state
+		return "00000000000000000000000000000000"
 	}
 	return hex.EncodeToString(data)
 }
