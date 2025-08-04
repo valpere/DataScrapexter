@@ -458,13 +458,19 @@ func (sv *SecurityValidator) AddCustomRule(rule ValidationRule) {
 	sv.customRules = append(sv.customRules, rule)
 }
 
-// SecureString provides secure string operations
+// SecureString provides secure string operations.
+// WARNING: SecureString does NOT protect against memory dumps or swapping.
+// Sensitive data stored in this struct may be accessible via OS memory inspection.
+// For highly sensitive data, consider using OS-level memory protection and always
+// call Destroy() when done to zero out memory.
 type SecureString struct {
 	data []byte
 	hash string
 }
 
-// NewSecureString creates a new secure string
+// NewSecureString creates a new secure string.
+// WARNING: This does NOT protect against memory dumps or swapping.
+// Call Destroy() when done to zero out memory.
 func NewSecureString(data string) *SecureString {
 	dataBytes := []byte(data)
 	hash := sha256.Sum256(dataBytes)
