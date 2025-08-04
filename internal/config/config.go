@@ -875,18 +875,27 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 	// Execute callbacks with limited concurrency to prevent resource exhaustion
 	for _, callback := range callbacks {
 		go func(cb func(*ScraperConfig, error)) {
-			// Acquire worker semaphore (non-blocking to prevent deadlock)
-			// Acquire worker semaphore (blocking to ensure all callbacks are executed)
-			cw.callbackWorkers <- struct{}{}
-			// Worker slot acquired, execute callback
-			defer func() { <-cw.callbackWorkers }() // Release worker slot
-			
-			// Create context with timeout to prevent goroutine leaks
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel() // Ensure resources are cleaned up
-			
-			// Execute callback with proper cancellation support
-			cw.executeCallbackWithContext(ctx, cb, config, err)
+			// Try to acquire worker semaphore with non-blocking select to prevent goroutine leaks
+			select {
+			case cw.callbackWorkers <- struct{}{}:
+				// Worker slot acquired, execute callback
+				defer func() { <-cw.callbackWorkers }() // Release worker slot
+				
+				// Create context with timeout to prevent goroutine leaks
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel() // Ensure resources are cleaned up
+				
+				// Execute callback with proper cancellation support
+				cw.executeCallbackWithContext(ctx, cb, config, err)
+			case <-cw.stopWatching:
+				// Watcher is stopping, don't execute callback to prevent goroutine leak
+				return
+			default:
+				// No worker slots available and watcher not stopping
+				// Skip this callback to prevent blocking and potential goroutine leak
+				// This prevents resource exhaustion when too many callbacks are queued
+				return
+			}
 		}(callback)
 	}
 }

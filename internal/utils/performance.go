@@ -306,31 +306,18 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 	
 	// Refill tokens based on elapsed time
 	if elapsed >= trl.refillRate {
-		// Calculate how many refill intervals have passed
-		// Each interval adds one token, so this gives the number of intervals (and thus tokens) to add
-		tokensToAddFloat := float64(elapsed) / float64(trl.refillRate)
+		// Calculate tokens to add using safe arithmetic
+		// Use integer division to avoid floating point precision issues
+		tokensToAdd := int64(elapsed / trl.refillRate)
 		
-		// Convert to int64 safely, checking for overflow
-		var safeTokensToAdd int64
-		if tokensToAddFloat > float64(trl.maxTokens) {
-			// Cap at maxTokens to prevent excessive token accumulation
-			safeTokensToAdd = trl.maxTokens
-		} else {
-			// Safe conversion to int64
-			safeTokensToAdd = int64(tokensToAddFloat)
-		}
-		
-		// Safe addition with overflow prevention
-		if safeTokensToAdd > 0 {
-			// Check if addition would overflow or exceed maxTokens
-			if safeTokensToAdd > trl.maxTokens || trl.tokens > trl.maxTokens-safeTokensToAdd {
+		// Apply tokens using simple bounds checking
+		if tokensToAdd > 0 {
+			// Use math.Min equivalent for int64 to safely add tokens
+			newTokenCount := trl.tokens + tokensToAdd
+			if newTokenCount > trl.maxTokens || newTokenCount < trl.tokens { // Check for overflow
 				trl.tokens = trl.maxTokens
 			} else {
-				trl.tokens += safeTokensToAdd
-				// Double-check to ensure we don't exceed maxTokens
-				if trl.tokens > trl.maxTokens {
-					trl.tokens = trl.maxTokens
-				}
+				trl.tokens = newTokenCount
 			}
 		}
 		trl.lastRefill = now
@@ -499,14 +486,6 @@ func (mm *MemoryManager) IsMemoryPressureHigh() bool {
 }
 
 // Helper functions
-
-// min returns the minimum of two int64 values
-func min(a, b int64) int64 {
-	if a < b {
-		return a
-	}
-	return b
-}
 
 // MeasureOperation measures the performance of an operation
 func MeasureOperation(name string, operation func() error) (time.Duration, error) {

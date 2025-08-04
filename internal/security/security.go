@@ -458,7 +458,7 @@ func (sv *SecurityValidator) AddCustomRule(rule ValidationRule) {
 	sv.customRules = append(sv.customRules, rule)
 }
 
-// SecureString provides basic string operations with memory clearing capabilities.
+// ObfuscatedString provides basic string obfuscation with memory clearing capabilities.
 // 
 // IMPORTANT SECURITY NOTICE:
 // This implementation provides BASIC obfuscation only and does NOT offer true security:
@@ -467,6 +467,7 @@ func (sv *SecurityValidator) AddCustomRule(rule ValidationRule) {
 // - Does NOT use OS-level memory protection (mlock)
 // - Data may be visible in core dumps or swap files
 // - Uses simple XOR obfuscation which can be easily reversed
+// - The name "ObfuscatedString" reflects its limited security guarantees
 // 
 // Use Cases:
 // - Basic protection against casual memory inspection
@@ -478,24 +479,24 @@ func (sv *SecurityValidator) AddCustomRule(rule ValidationRule) {
 // - Implement OS-level memory protection with mlock() system calls
 // - Consider hardware security modules (HSMs) for critical secrets
 // - Use encrypted configuration files with proper key management
-type SecureString struct {
+type ObfuscatedString struct {
 	data []byte
 	key  []byte
 	hash string
 }
 
-// NewSecureString creates a new SecureString with basic XOR obfuscation.
+// NewObfuscatedString creates a new ObfuscatedString with basic XOR obfuscation.
 // Returns an error if secure key generation fails.
 // 
 // SECURITY WARNING: This provides basic XOR obfuscation only, not cryptographic security.
 // Always call Clear() when done to zero out memory.
-func NewSecureString(data string) (*SecureString, error) {
+func NewObfuscatedString(data string) (*ObfuscatedString, error) {
 	dataBytes := []byte(data)
 	hash := sha256.Sum256(dataBytes)
 	
 	// Handle empty data case
 	if len(dataBytes) == 0 {
-		return &SecureString{
+		return &ObfuscatedString{
 			data: dataBytes,
 			key:  nil,
 			hash: hex.EncodeToString(hash[:]),
@@ -515,7 +516,7 @@ func NewSecureString(data string) (*SecureString, error) {
 		obfuscated[i] = dataBytes[i] ^ key[i]
 	}
 	
-	return &SecureString{
+	return &ObfuscatedString{
 		data: obfuscated,
 		key:  key,
 		hash: hex.EncodeToString(hash[:]),
@@ -524,55 +525,55 @@ func NewSecureString(data string) (*SecureString, error) {
 
 // String returns the deobfuscated string data
 // SECURITY WARNING: This exposes the sensitive data. Use with caution.
-func (ss *SecureString) String() string {
-	if ss.key == nil || len(ss.data) == 0 {
-		return string(ss.data)
+func (os *ObfuscatedString) String() string {
+	if os.key == nil || len(os.data) == 0 {
+		return string(os.data)
 	}
 	
 	// Deobfuscate by applying XOR with the key
-	deobfuscated := make([]byte, len(ss.data))
-	for i := range ss.data {
-		deobfuscated[i] = ss.data[i] ^ ss.key[i]
+	deobfuscated := make([]byte, len(os.data))
+	for i := range os.data {
+		deobfuscated[i] = os.data[i] ^ os.key[i]
 	}
 	
 	return string(deobfuscated)
 }
 
 // Equals performs constant-time string comparison using SHA256 hash
-func (ss *SecureString) Equals(other *SecureString) bool {
+func (os *ObfuscatedString) Equals(other *ObfuscatedString) bool {
 	// Compare the SHA256 hashes in constant time to avoid exposing sensitive data
-	return subtle.ConstantTimeCompare([]byte(ss.hash), []byte(other.hash)) == 1
+	return subtle.ConstantTimeCompare([]byte(os.hash), []byte(other.hash)) == 1
 }
 
 // Hash returns the SHA256 hash of the string
-func (ss *SecureString) Hash() string {
-	return ss.hash
+func (os *ObfuscatedString) Hash() string {
+	return os.hash
 }
 
 // Clear securely clears the string data and key
-func (ss *SecureString) Clear() {
+func (os *ObfuscatedString) Clear() {
 	// Clear the obfuscated data
-	for i := range ss.data {
-		ss.data[i] = 0
+	for i := range os.data {
+		os.data[i] = 0
 	}
 	
 	// Clear the XOR key
-	if ss.key != nil {
-		for i := range ss.key {
-			ss.key[i] = 0
+	if os.key != nil {
+		for i := range os.key {
+			os.key[i] = 0
 		}
 	}
 }
 
 // SecretManager handles sensitive configuration data
 type SecretManager struct {
-	secrets map[string]*SecureString
+	secrets map[string]*ObfuscatedString
 }
 
 // NewSecretManager creates a new secret manager
 func NewSecretManager() *SecretManager {
 	return &SecretManager{
-		secrets: make(map[string]*SecureString),
+		secrets: make(map[string]*ObfuscatedString),
 	}
 }
 
@@ -582,12 +583,12 @@ func (sm *SecretManager) Store(key, value string) error {
 		existing.Clear() // Clear existing secret
 	}
 	
-	secureString, err := NewSecureString(value)
+	obfuscatedString, err := NewObfuscatedString(value)
 	if err != nil {
 		return fmt.Errorf("failed to store secret '%s': %w", key, err)
 	}
 	
-	sm.secrets[key] = secureString
+	sm.secrets[key] = obfuscatedString
 	return nil
 }
 
@@ -604,7 +605,7 @@ func (sm *SecretManager) Clear() {
 	for _, secret := range sm.secrets {
 		secret.Clear()
 	}
-	sm.secrets = make(map[string]*SecureString)
+	sm.secrets = make(map[string]*ObfuscatedString)
 }
 
 // SecurityAuditor performs security audits
