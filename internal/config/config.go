@@ -931,13 +931,16 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 }
 
 // executeCallbackWithContext executes a callback with context cancellation support
-// 
-// IMPORTANT: While this method enforces a timeout, if a callback blocks indefinitely,
-// the goroutine executing the callback may continue running even after the timeout.
-// The timeout prevents the caller from blocking, but the callback goroutine becomes
-// an "orphaned" goroutine that will eventually be garbage collected when the callback
-// completes or the process exits. This is a necessary trade-off to prevent deadlocks
-// in the configuration watcher.
+//
+// IMPORTANT: This function, together with notifyCallbacks, creates two layers of goroutines
+// for each callback: one in notifyCallbacks and one here. If a callback blocks indefinitely,
+// both goroutines may become "orphaned" and remain alive until the callback eventually returns
+// or the process exits. The timeout prevents the caller from blocking, but does not forcibly
+// terminate the callback goroutine. This design is a trade-off: it prevents deadlocks and
+// resource exhaustion in the configuration watcher, but may result in temporary goroutine leaks
+// if callbacks do not respect context cancellation or block forever. This is considered acceptable
+// because forcibly terminating goroutines is not possible in Go, and callbacks are expected to
+// be well-behaved. Maintainers should be aware of this risk when registering callbacks.
 func (cw *ConfigWatcher) executeCallbackWithContext(ctx context.Context, callback func(*ScraperConfig, error), config *ScraperConfig, err error) {
 	// Channel to signal callback completion
 	done := make(chan struct{})
