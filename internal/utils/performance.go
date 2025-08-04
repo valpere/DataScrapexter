@@ -57,9 +57,8 @@ func (pm *PerformanceMetrics) RecordOperation(duration time.Duration, success bo
 		pm.MaxLatency = duration
 	}
 	// Use regular field access for thread-safe access to TotalOperations (mutex is held)
-	totalOps := pm.TotalOperations
-	if totalOps > 0 {
-		pm.AverageLatency = pm.TotalLatency / time.Duration(totalOps)
+	if pm.TotalOperations > 0 {
+		pm.AverageLatency = pm.TotalLatency / time.Duration(pm.TotalOperations)
 	} else {
 		pm.AverageLatency = 0
 	}
