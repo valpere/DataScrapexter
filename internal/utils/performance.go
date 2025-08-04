@@ -56,8 +56,8 @@ func (pm *PerformanceMetrics) RecordOperation(duration time.Duration, success bo
 	if duration > pm.MaxLatency {
 		pm.MaxLatency = duration
 	}
-	// Use atomic read for thread-safe access to TotalOperations
-	totalOps := atomic.LoadInt64(&pm.TotalOperations)
+	// Use regular field access for thread-safe access to TotalOperations (mutex is held)
+	totalOps := pm.TotalOperations
 	if totalOps > 0 {
 		pm.AverageLatency = pm.TotalLatency / time.Duration(totalOps)
 	} else {
