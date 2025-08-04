@@ -12,6 +12,7 @@ import (
 	"github.com/valpere/DataScrapexter/internal/browser"
 	"github.com/valpere/DataScrapexter/internal/errors"
 	"github.com/valpere/DataScrapexter/internal/proxy"
+	"github.com/valpere/DataScrapexter/internal/utils"
 )
 
 // Enhanced Engine struct (existing fields preserved, error service added)
@@ -27,6 +28,13 @@ type Engine struct {
 	errorService   *errors.Service
 	browserManager *browser.BrowserManager
 	proxyManager   proxy.Manager
+	
+	// Performance optimizations
+	documentPool   *utils.Pool[*goquery.Document]
+	resultPool     *utils.Pool[*Result]
+	perfMetrics    *utils.PerformanceMetrics
+	memManager     *utils.MemoryManager
+	circuitBreaker *utils.CircuitBreaker
 }
 
 // Enhanced Result struct (existing fields preserved, error info added)
@@ -68,11 +76,42 @@ func NewEngine(config *Config) (*Engine, error) {
 		},
 	}
 
-	// Enhanced with error service and browser manager
+	// Enhanced with error service and performance optimizations
 	engine := &Engine{
 		httpClient:   client,
 		config:       config,
 		errorService: errors.NewService(),
+		
+		// Initialize performance optimizations
+		perfMetrics:    utils.NewPerformanceMetrics(),
+		memManager:     utils.NewMemoryManager(100*1024*1024, 30*time.Second), // 100MB, 30s GC interval
+		circuitBreaker: utils.NewCircuitBreaker(5, 60*time.Second), // 5 failures, 60s timeout
+		
+		// Initialize object pools for memory efficiency
+		documentPool: utils.NewPool[*goquery.Document](
+			func() *goquery.Document { return nil }, // Documents are created on demand
+			func(doc *goquery.Document) { /* no reset needed */ },
+		),
+		resultPool: utils.NewPool[*Result](
+			func() *Result {
+				return &Result{
+					Data:     make(map[string]interface{}),
+					Errors:   make([]string, 0),
+					Warnings: make([]string, 0),
+				}
+			},
+			func(result *Result) {
+				// Reset result for reuse
+				for k := range result.Data {
+					delete(result.Data, k)
+				}
+				result.Errors = result.Errors[:0]
+				result.Warnings = result.Warnings[:0]
+				result.Success = false
+				result.Error = nil
+				result.ErrorRate = 0
+			},
+		),
 	}
 
 	// Setup browser automation if configured
@@ -225,16 +264,59 @@ func NewEngine(config *Config) (*Engine, error) {
 	return engine, nil
 }
 
-// Enhanced Scrape method (existing signature preserved, error handling improved)
+// Enhanced Scrape method (existing signature preserved, optimized for performance)
 func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfig) (*Result, error) {
-	result := &Result{
-		Data:      make(map[string]interface{}),
-		Success:   false,
-		Timestamp: time.Now(),
-		Errors:    make([]string, 0),
-		Warnings:  make([]string, 0),
+	// Start performance tracking
+	timer := utils.NewTimer("scrape_operation")
+	defer func() {
+		duration := timer.Stop()
+		e.perfMetrics.RecordOperation(duration, true) // Will be updated if error occurs
+	}()
+	
+	// Check memory pressure and trigger GC if needed
+	e.memManager.CheckMemoryUsage()
+	
+	// Get result from pool for memory efficiency
+	result := e.resultPool.Get()
+	defer e.resultPool.Put(result) // This will reset the result
+	
+	result.Timestamp = time.Now()
+	
+	// Use circuit breaker to prevent cascading failures
+	circuitErr := e.circuitBreaker.Execute(func() error {
+		return e.performScrapeOperation(ctx, url, extractors, result)
+	})
+	
+	if circuitErr != nil {
+		result.Error = circuitErr
+		result.Errors = append(result.Errors, circuitErr.Error())
+		e.perfMetrics.RecordOperation(timer.Elapsed(), false)
+		return result, circuitErr
 	}
 
+	// Create a copy of the result to return (since we'll put the pooled one back)
+	resultCopy := &Result{
+		Data:      make(map[string]interface{}),
+		Success:   result.Success,
+		Error:     result.Error,
+		Timestamp: result.Timestamp,
+		Errors:    make([]string, len(result.Errors)),
+		Warnings:  make([]string, len(result.Warnings)),
+		ErrorRate: result.ErrorRate,
+	}
+	
+	// Copy data and slices
+	for k, v := range result.Data {
+		resultCopy.Data[k] = v
+	}
+	copy(resultCopy.Errors, result.Errors)
+	copy(resultCopy.Warnings, result.Warnings)
+	
+	return resultCopy, nil
+}
+
+// performScrapeOperation performs the actual scraping operation
+func (e *Engine) performScrapeOperation(ctx context.Context, url string, extractors []FieldConfig, result *Result) error {
 	// Execute with comprehensive error recovery
 	recoveryResult := e.errorService.ExecuteWithRecovery(ctx, "fetch_document", func() (interface{}, error) {
 		doc, err := e.fetchDocument(ctx, url)
@@ -247,7 +329,7 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 		if recoveryResult.UsedFallback {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("Used fallback strategy: %s", recoveryResult.FallbackType))
 		}
-		return result, fmt.Errorf("failed to fetch document after %d attempts: %w", recoveryResult.AttemptCount, recoveryResult.OriginalError)
+		return fmt.Errorf("failed to fetch document after %d attempts: %w", recoveryResult.AttemptCount, recoveryResult.OriginalError)
 	}
 
 	var doc *goquery.Document
@@ -256,7 +338,7 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 		err := fmt.Errorf("unexpected result type from document fetch")
 		result.Error = err
 		result.Errors = append(result.Errors, err.Error())
-		return result, err
+		return err
 	}
 
 	// Extract fields with error tracking
@@ -288,7 +370,7 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 		result.Success = successCount > 0 // Partial success if any field extracted
 	}
 
-	return result, nil
+	return nil
 }
 
 // Enhanced fetchDocument method (existing logic preserved, browser automation added)
@@ -691,4 +773,142 @@ func (e *Engine) ScrapeWithPagination(ctx context.Context, baseURL string, extra
 		StartTime:      startTime,
 		EndTime:        time.Now(),
 	}, nil
+}
+
+// Performance and monitoring methods
+
+// GetPerformanceMetrics returns current performance metrics
+func (e *Engine) GetPerformanceMetrics() utils.PerformanceMetrics {
+	return e.perfMetrics.GetSnapshot()
+}
+
+// GetMemoryStats returns current memory statistics
+func (e *Engine) GetMemoryStats() interface{} {
+	return e.memManager.GetMemoryStats()
+}
+
+// GetCircuitBreakerState returns the current circuit breaker state
+func (e *Engine) GetCircuitBreakerState() int32 {
+	return e.circuitBreaker.GetState()
+}
+
+// ScrapeMultipleOptimized performs optimized batch scraping
+func (e *Engine) ScrapeMultipleOptimized(ctx context.Context, urls []string, extractors []FieldConfig, concurrency int) ([]*Result, error) {
+	if concurrency <= 0 {
+		concurrency = 5 // Default concurrency
+	}
+	
+	// Use worker pool for efficient concurrent processing
+	workerPool := utils.NewWorkerPool[string](
+		concurrency, 
+		len(urls),
+		func(url string) (interface{}, error) {
+			return e.Scrape(ctx, url, extractors)
+		},
+	)
+	
+	// Start worker pool
+	workerPool.Start()
+	defer workerPool.Close()
+	
+	// Submit URLs to worker pool
+	for _, url := range urls {
+		if err := workerPool.Submit(url); err != nil {
+			return nil, fmt.Errorf("failed to submit URL %s: %w", url, err)
+		}
+	}
+	
+	// Collect results
+	results := make([]*Result, 0, len(urls))
+	errors := make([]error, 0)
+	
+	for i := 0; i < len(urls); i++ {
+		select {
+		case result := <-workerPool.Results():
+			if scrapingResult, ok := result.(*Result); ok {
+				results = append(results, scrapingResult)
+			}
+		case err := <-workerPool.Errors():
+			errors = append(errors, err)
+		case <-ctx.Done():
+			return results, ctx.Err()
+		}
+	}
+	
+	// Return error if there were any errors
+	if len(errors) > 0 {
+		return results, fmt.Errorf("encountered %d errors during batch scraping", len(errors))
+	}
+	
+	return results, nil
+}
+
+// ScrapeWithBatching processes URLs in batches for memory efficiency
+func (e *Engine) ScrapeWithBatching(ctx context.Context, urls []string, extractors []FieldConfig, batchSize int) ([]*Result, error) {
+	if batchSize <= 0 {
+		batchSize = 10 // Default batch size
+	}
+	
+	allResults := make([]*Result, 0, len(urls))
+	
+	// Process URLs in batches
+	for i := 0; i < len(urls); i += batchSize {
+		end := i + batchSize
+		if end > len(urls) {
+			end = len(urls)
+		}
+		
+		batch := urls[i:end]
+		batchResults, err := e.ScrapeMultipleOptimized(ctx, batch, extractors, min(len(batch), 5))
+		if err != nil {
+			return allResults, fmt.Errorf("batch %d-%d failed: %w", i, end-1, err)
+		}
+		
+		allResults = append(allResults, batchResults...)
+		
+		// Check memory pressure after each batch
+		e.memManager.CheckMemoryUsage()
+		
+		// Optional: Add delay between batches to be respectful
+		if len(urls) > batchSize && i+batchSize < len(urls) {
+			select {
+			case <-time.After(time.Second):
+			case <-ctx.Done():
+				return allResults, ctx.Err()
+			}
+		}
+	}
+	
+	return allResults, nil
+}
+
+// OptimizeForThroughput optimizes engine settings for maximum throughput
+func (e *Engine) OptimizeForThroughput() {
+	// Increase HTTP client connection limits
+	if transport, ok := e.httpClient.Transport.(*http.Transport); ok {
+		transport.MaxIdleConns = 200
+		transport.MaxIdleConnsPerHost = 50
+		transport.IdleConnTimeout = 120 * time.Second
+	}
+	
+	// Reset performance counters
+	e.perfMetrics.Reset()
+}
+
+// OptimizeForMemory optimizes engine settings for minimal memory usage
+func (e *Engine) OptimizeForMemory() {
+	// Reduce HTTP client connection limits
+	if transport, ok := e.httpClient.Transport.(*http.Transport); ok {
+		transport.MaxIdleConns = 50
+		transport.MaxIdleConnsPerHost = 5
+		transport.IdleConnTimeout = 30 * time.Second
+	}
+}
+
+// min utility function
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

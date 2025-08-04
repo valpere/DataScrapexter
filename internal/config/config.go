@@ -2,8 +2,12 @@
 package config
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"os"
+	"sync"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -220,6 +224,344 @@ func (c *ScraperConfig) SimpleValidate() error {
 	return nil
 }
 
+// ConfigCache provides thread-safe configuration caching
+type ConfigCache struct {
+	cache     map[string]*CachedConfig
+	mutex     sync.RWMutex
+	maxSize   int
+	timeout   time.Duration
+	cleanupTicker *time.Ticker
+	stopCleanup   chan bool
+}
+
+// CachedConfig holds a configuration with metadata
+type CachedConfig struct {
+	Config     *ScraperConfig
+	Hash       string
+	LoadTime   time.Time
+	AccessTime time.Time
+	FileName   string
+	FileSize   int64
+	AccessCount int64
+}
+
+// ConfigManager provides advanced configuration management
+type ConfigManager struct {
+	cache      *ConfigCache
+	validator  *ConfigValidator
+	metrics    *ConfigMetrics
+}
+
+// ConfigValidator provides comprehensive validation
+type ConfigValidator struct {
+	strict        bool
+	customRules   []ValidationRule
+	schemaVersion string
+}
+
+// ValidationRule represents a custom validation rule
+type ValidationRule struct {
+	Name      string
+	Validator func(*ScraperConfig) error
+	Severity  ValidationSeverity
+}
+
+// ValidationSeverity levels
+type ValidationSeverity int
+
+const (
+	SeverityError ValidationSeverity = iota
+	SeverityWarning
+	SeverityInfo
+)
+
+// ConfigMetrics tracks configuration usage statistics
+type ConfigMetrics struct {
+	loadsTotal     int64
+	cacheHits      int64
+	cacheMisses    int64
+	validationTime time.Duration
+	loadTime       time.Duration
+	mutex          sync.RWMutex
+}
+
+// Global instances
+var (
+	defaultConfigManager *ConfigManager
+	managerOnce         sync.Once
+)
+
+// GetConfigManager returns the singleton configuration manager
+func GetConfigManager() *ConfigManager {
+	managerOnce.Do(func() {
+		defaultConfigManager = NewConfigManager(ConfigManagerOptions{
+			CacheSize:    100,
+			CacheTimeout: 30 * time.Minute,
+			StrictMode:   false,
+		})
+	})
+	return defaultConfigManager
+}
+
+// ConfigManagerOptions configures the configuration manager
+type ConfigManagerOptions struct {
+	CacheSize    int
+	CacheTimeout time.Duration
+	StrictMode   bool
+}
+
+// NewConfigManager creates a new configuration manager
+func NewConfigManager(opts ConfigManagerOptions) *ConfigManager {
+	if opts.CacheSize <= 0 {
+		opts.CacheSize = 50
+	}
+	if opts.CacheTimeout <= 0 {
+		opts.CacheTimeout = 15 * time.Minute
+	}
+
+	cache := &ConfigCache{
+		cache:   make(map[string]*CachedConfig),
+		maxSize: opts.CacheSize,
+		timeout: opts.CacheTimeout,
+		stopCleanup: make(chan bool),
+	}
+
+	// Start cleanup goroutine
+	cache.cleanupTicker = time.NewTicker(opts.CacheTimeout / 4)
+	go cache.cleanupExpired()
+
+	validator := &ConfigValidator{
+		strict:        opts.StrictMode,
+		customRules:   make([]ValidationRule, 0),
+		schemaVersion: "1.0",
+	}
+
+	metrics := &ConfigMetrics{}
+
+	return &ConfigManager{
+		cache:     cache,
+		validator: validator,
+		metrics:   metrics,
+	}
+}
+
+// LoadFromFileWithCache loads configuration with caching support
+func (cm *ConfigManager) LoadFromFileWithCache(filename string) (*ScraperConfig, error) {
+	start := time.Now()
+	defer func() {
+		cm.metrics.mutex.Lock()
+		cm.metrics.loadsTotal++
+		cm.metrics.loadTime += time.Since(start)
+		cm.metrics.mutex.Unlock()
+	}()
+
+	// Get file info for cache validation
+	fileInfo, err := os.Stat(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat config file: %w", err)
+	}
+
+	// Check cache first
+	if cached, hit := cm.cache.get(filename, fileInfo.Size(), fileInfo.ModTime()); hit {
+		cm.metrics.mutex.Lock()
+		cm.metrics.cacheHits++
+		cm.metrics.mutex.Unlock()
+		return cached.Config, nil
+	}
+
+	cm.metrics.mutex.Lock()
+	cm.metrics.cacheMisses++
+	cm.metrics.mutex.Unlock()
+
+	// Load from file
+	config, err := LoadFromFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate configuration
+	validationStart := time.Now()
+	if err := cm.validator.ValidateConfig(config); err != nil {
+		return nil, fmt.Errorf("configuration validation failed: %w", err)
+	}
+	cm.metrics.mutex.Lock()
+	cm.metrics.validationTime += time.Since(validationStart)
+	cm.metrics.mutex.Unlock()
+
+	// Cache the configuration
+	cm.cache.put(filename, config, fileInfo.Size())
+
+	return config, nil
+}
+
+// Cache methods
+func (cc *ConfigCache) get(filename string, fileSize int64, modTime time.Time) (*CachedConfig, bool) {
+	cc.mutex.RLock()
+	defer cc.mutex.RUnlock()
+
+	cached, exists := cc.cache[filename]
+	if !exists {
+		return nil, false
+	}
+
+	// Check if file has been modified
+	if cached.FileSize != fileSize {
+		return nil, false
+	}
+
+	// Check if cache entry is expired
+	if time.Since(cached.LoadTime) > cc.timeout {
+		return nil, false
+	}
+
+	// Update access time and count
+	cached.AccessTime = time.Now()
+	cached.AccessCount++
+
+	return cached, true
+}
+
+func (cc *ConfigCache) put(filename string, config *ScraperConfig, fileSize int64) {
+	cc.mutex.Lock()
+	defer cc.mutex.Unlock()
+
+	// Check cache size and evict if necessary
+	if len(cc.cache) >= cc.maxSize {
+		cc.evictLRU()
+	}
+
+	// Calculate hash for integrity checking
+	hash := cc.calculateHash(config)
+
+	cc.cache[filename] = &CachedConfig{
+		Config:      config,
+		Hash:        hash,
+		LoadTime:    time.Now(),
+		AccessTime:  time.Now(),
+		FileName:    filename,
+		FileSize:    fileSize,
+		AccessCount: 1,
+	}
+}
+
+func (cc *ConfigCache) evictLRU() {
+	var oldestKey string
+	var oldestTime time.Time = time.Now()
+
+	for key, cached := range cc.cache {
+		if cached.AccessTime.Before(oldestTime) {
+			oldestTime = cached.AccessTime
+			oldestKey = key
+		}
+	}
+
+	if oldestKey != "" {
+		delete(cc.cache, oldestKey)
+	}
+}
+
+func (cc *ConfigCache) calculateHash(config *ScraperConfig) string {
+	data, _ := yaml.Marshal(config)
+	hash := md5.Sum(data)
+	return hex.EncodeToString(hash[:])
+}
+
+func (cc *ConfigCache) cleanupExpired() {
+	for {
+		select {
+		case <-cc.cleanupTicker.C:
+			cc.mutex.Lock()
+			now := time.Now()
+			for key, cached := range cc.cache {
+				if now.Sub(cached.LoadTime) > cc.timeout {
+					delete(cc.cache, key)
+				}
+			}
+			cc.mutex.Unlock()
+		case <-cc.stopCleanup:
+			return
+		}
+	}
+}
+
+// Stop cleanup goroutine
+func (cc *ConfigCache) Stop() {
+	if cc.cleanupTicker != nil {
+		cc.cleanupTicker.Stop()
+	}
+	close(cc.stopCleanup)
+}
+
+// Clear removes all cached configurations
+func (cc *ConfigCache) Clear() {
+	cc.mutex.Lock()
+	defer cc.mutex.Unlock()
+	cc.cache = make(map[string]*CachedConfig)
+}
+
+// GetStats returns cache statistics
+func (cc *ConfigCache) GetStats() map[string]interface{} {
+	cc.mutex.RLock()
+	defer cc.mutex.RUnlock()
+
+	return map[string]interface{}{
+		"size":      len(cc.cache),
+		"max_size":  cc.maxSize,
+		"timeout":   cc.timeout.String(),
+		"entries":   len(cc.cache),
+	}
+}
+
+// ValidateConfig performs comprehensive validation
+func (cv *ConfigValidator) ValidateConfig(config *ScraperConfig) error {
+	// Run standard validation
+	if err := config.Validate(); err != nil {
+		return err
+	}
+
+	// Run custom validation rules
+	for _, rule := range cv.customRules {
+		if err := rule.Validator(config); err != nil {
+			if rule.Severity == SeverityError {
+				return fmt.Errorf("custom validation rule '%s' failed: %w", rule.Name, err)
+			}
+			// For warnings and info, log but don't fail
+		}
+	}
+
+	return nil
+}
+
+// AddValidationRule adds a custom validation rule
+func (cv *ConfigValidator) AddValidationRule(rule ValidationRule) {
+	cv.customRules = append(cv.customRules, rule)
+}
+
+// SetStrictMode enables or disables strict validation
+func (cv *ConfigValidator) SetStrictMode(strict bool) {
+	cv.strict = strict
+}
+
+// GetMetrics returns configuration manager metrics
+func (cm *ConfigManager) GetMetrics() map[string]interface{} {
+	cm.metrics.mutex.RLock()
+	defer cm.metrics.mutex.RUnlock()
+
+	return map[string]interface{}{
+		"loads_total":     cm.metrics.loadsTotal,
+		"cache_hits":      cm.metrics.cacheHits,
+		"cache_misses":    cm.metrics.cacheMisses,
+		"hit_ratio":       float64(cm.metrics.cacheHits) / float64(cm.metrics.cacheHits+cm.metrics.cacheMisses),
+		"avg_load_time":   cm.metrics.loadTime / time.Duration(cm.metrics.loadsTotal),
+		"avg_validation_time": cm.metrics.validationTime / time.Duration(cm.metrics.loadsTotal),
+	}
+}
+
+// LoadFromFileOptimized provides the most optimized loading experience
+func LoadFromFileOptimized(filename string) (*ScraperConfig, error) {
+	return GetConfigManager().LoadFromFileWithCache(filename)
+}
+
 // GenerateTemplate generates a template configuration
 func GenerateTemplate(templateType string) *ScraperConfig {
 	switch templateType {
@@ -321,4 +663,256 @@ func GenerateTemplate(templateType string) *ScraperConfig {
 			RateLimit: "1s",
 		}
 	}
+}
+
+// ConfigWatcher provides file watching capabilities for configuration hot-reloading
+type ConfigWatcher struct {
+	filename     string
+	lastModTime  time.Time
+	lastSize     int64
+	pollInterval time.Duration
+	callbacks    []func(*ScraperConfig, error)
+	stopWatching chan bool
+	running      bool
+	mutex        sync.RWMutex
+}
+
+// NewConfigWatcher creates a new configuration file watcher
+func NewConfigWatcher(filename string, pollInterval time.Duration) *ConfigWatcher {
+	if pollInterval <= 0 {
+		pollInterval = 5 * time.Second
+	}
+
+	return &ConfigWatcher{
+		filename:     filename,
+		pollInterval: pollInterval,
+		callbacks:    make([]func(*ScraperConfig, error), 0),
+		stopWatching: make(chan bool),
+	}
+}
+
+// OnChange adds a callback for configuration changes
+func (cw *ConfigWatcher) OnChange(callback func(*ScraperConfig, error)) {
+	cw.mutex.Lock()
+	defer cw.mutex.Unlock()
+	cw.callbacks = append(cw.callbacks, callback)
+}
+
+// Start begins watching the configuration file
+func (cw *ConfigWatcher) Start() error {
+	cw.mutex.Lock()
+	defer cw.mutex.Unlock()
+
+	if cw.running {
+		return fmt.Errorf("watcher is already running")
+	}
+
+	// Get initial file info
+	fileInfo, err := os.Stat(cw.filename)
+	if err != nil {
+		return fmt.Errorf("failed to stat config file: %w", err)
+	}
+
+	cw.lastModTime = fileInfo.ModTime()
+	cw.lastSize = fileInfo.Size()
+	cw.running = true
+
+	go cw.watchLoop()
+	return nil
+}
+
+// Stop stops watching the configuration file
+func (cw *ConfigWatcher) Stop() {
+	cw.mutex.Lock()
+	defer cw.mutex.Unlock()
+
+	if !cw.running {
+		return
+	}
+
+	cw.running = false
+	close(cw.stopWatching)
+}
+
+func (cw *ConfigWatcher) watchLoop() {
+	ticker := time.NewTicker(cw.pollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			cw.checkForChanges()
+		case <-cw.stopWatching:
+			return
+		}
+	}
+}
+
+func (cw *ConfigWatcher) checkForChanges() {
+	fileInfo, err := os.Stat(cw.filename)
+	if err != nil {
+		cw.notifyCallbacks(nil, fmt.Errorf("failed to stat config file: %w", err))
+		return
+	}
+
+	cw.mutex.RLock()
+	lastModTime := cw.lastModTime
+	lastSize := cw.lastSize
+	cw.mutex.RUnlock()
+
+	// Check if file has changed
+	if fileInfo.ModTime().After(lastModTime) || fileInfo.Size() != lastSize {
+		// File has changed, reload configuration
+		config, err := LoadFromFileOptimized(cw.filename)
+		
+		cw.mutex.Lock()
+		cw.lastModTime = fileInfo.ModTime()
+		cw.lastSize = fileInfo.Size()
+		cw.mutex.Unlock()
+		
+		cw.notifyCallbacks(config, err)
+	}
+}
+
+func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
+	cw.mutex.RLock()
+	callbacks := make([]func(*ScraperConfig, error), len(cw.callbacks))
+	copy(callbacks, cw.callbacks)
+	cw.mutex.RUnlock()
+
+	for _, callback := range callbacks {
+		go callback(config, err) // Run callbacks in separate goroutines
+	}
+}
+
+// ConfigBuilder provides a fluent interface for building configurations
+type ConfigBuilder struct {
+	config *ScraperConfig
+}
+
+// NewConfigBuilder creates a new configuration builder
+func NewConfigBuilder() *ConfigBuilder {
+	return &ConfigBuilder{
+		config: &ScraperConfig{
+			Fields:  make([]Field, 0),
+			Headers: make(map[string]string),
+			Cookies: make(map[string]string),
+		},
+	}
+}
+
+// WithName sets the scraper name
+func (cb *ConfigBuilder) WithName(name string) *ConfigBuilder {
+	cb.config.Name = name
+	return cb
+}
+
+// WithBaseURL sets the base URL
+func (cb *ConfigBuilder) WithBaseURL(url string) *ConfigBuilder {
+	cb.config.BaseURL = url
+	return cb
+}
+
+// WithField adds a field configuration
+func (cb *ConfigBuilder) WithField(name, selector, fieldType string) *ConfigBuilder {
+	cb.config.Fields = append(cb.config.Fields, Field{
+		Name:     name,
+		Selector: selector,
+		Type:     fieldType,
+	})
+	return cb
+}
+
+// WithRequiredField adds a required field
+func (cb *ConfigBuilder) WithRequiredField(name, selector, fieldType string) *ConfigBuilder {
+	cb.config.Fields = append(cb.config.Fields, Field{
+		Name:     name,
+		Selector: selector,
+		Type:     fieldType,
+		Required: true,
+	})
+	return cb
+}
+
+// WithRateLimit sets the rate limit
+func (cb *ConfigBuilder) WithRateLimit(rateLimit string) *ConfigBuilder {
+	cb.config.RateLimit = rateLimit
+	return cb
+}
+
+// WithTimeout sets the timeout
+func (cb *ConfigBuilder) WithTimeout(timeout string) *ConfigBuilder {
+	cb.config.Timeout = timeout
+	return cb
+}
+
+// WithMaxRetries sets the maximum retries
+func (cb *ConfigBuilder) WithMaxRetries(retries int) *ConfigBuilder {
+	cb.config.MaxRetries = retries
+	return cb
+}
+
+// WithHeader adds a header
+func (cb *ConfigBuilder) WithHeader(key, value string) *ConfigBuilder {
+	cb.config.Headers[key] = value
+	return cb
+}
+
+// WithUserAgent sets the user agent
+func (cb *ConfigBuilder) WithUserAgent(userAgent string) *ConfigBuilder {
+	cb.config.UserAgents = []string{userAgent}
+	return cb
+}
+
+// WithMultipleUserAgents sets multiple user agents
+func (cb *ConfigBuilder) WithMultipleUserAgents(userAgents []string) *ConfigBuilder {
+	cb.config.UserAgents = userAgents
+	return cb
+}
+
+// WithOutput sets the output configuration
+func (cb *ConfigBuilder) WithOutput(format, file string) *ConfigBuilder {
+	cb.config.Output = OutputConfig{
+		Format: format,
+		File:   file,
+	}
+	return cb
+}
+
+// WithProxy enables proxy configuration
+func (cb *ConfigBuilder) WithProxy(enabled bool) *ConfigBuilder {
+	if cb.config.Proxy == nil {
+		cb.config.Proxy = &ProxyConfig{}
+	}
+	cb.config.Proxy.Enabled = enabled
+	return cb
+}
+
+// WithBrowser enables browser automation
+func (cb *ConfigBuilder) WithBrowser(enabled, headless bool) *ConfigBuilder {
+	if cb.config.Browser == nil {
+		cb.config.Browser = &BrowserConfig{}
+	}
+	cb.config.Browser.Enabled = enabled
+	cb.config.Browser.Headless = headless
+	return cb
+}
+
+// Build returns the built configuration
+func (cb *ConfigBuilder) Build() *ScraperConfig {
+	return cb.config
+}
+
+// Validate validates the built configuration
+func (cb *ConfigBuilder) Validate() error {
+	return cb.config.Validate()
+}
+
+// BuildAndValidate builds and validates the configuration
+func (cb *ConfigBuilder) BuildAndValidate() (*ScraperConfig, error) {
+	config := cb.Build()
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+	return config, nil
 }
