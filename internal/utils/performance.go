@@ -313,42 +313,33 @@ func NewTokenBucketRateLimiter(maxTokens int64, refillRate time.Duration) *Token
 func (trl *TokenBucketRateLimiter) Allow() bool {
 	trl.mutex.Lock()
 	defer trl.mutex.Unlock()
-	
+
 	now := time.Now().UnixNano()
 	elapsed := time.Duration(now - trl.lastRefill)
-	
+
+	// Clamp tokens to valid range before refill
+	if trl.tokens < 0 {
+		trl.tokens = 0
+	} else if trl.tokens > trl.maxTokens {
+		trl.tokens = trl.maxTokens
+	}
+
 	// Refill tokens based on elapsed time
 	if elapsed >= trl.refillRate {
-		// Calculate tokens to add using Duration arithmetic to avoid float64 precision issues
 		tokensToAdd := int64(elapsed / trl.refillRate)
-		
-		// Apply tokens using proper overflow checking
 		if tokensToAdd > 0 {
-			// Clamp tokens to zero if negative to avoid overflow
-			if trl.tokens < 0 {
-				trl.tokens = 0
-			}
-			// Check for overflow before addition using safe arithmetic
-			if tokensToAdd > trl.maxTokens - trl.tokens {
-				// Overflow would occur, cap at maximum
+			trl.tokens += tokensToAdd
+			if trl.tokens > trl.maxTokens {
 				trl.tokens = trl.maxTokens
-			} else {
-				newTokenCount := trl.tokens + tokensToAdd
-				if newTokenCount > trl.maxTokens {
-					trl.tokens = trl.maxTokens
-				} else {
-					trl.tokens = newTokenCount
-				}
 			}
 		}
 		trl.lastRefill = now
 	}
-	
+
 	if trl.tokens > 0 {
 		trl.tokens--
 		return true
 	}
-	
 	return false
 }
 
