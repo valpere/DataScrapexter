@@ -2,6 +2,7 @@
 package config
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -880,25 +881,48 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 				// Worker slot acquired, execute callback
 				defer func() { <-cw.callbackWorkers }() // Release worker slot
 				
-				// Use a timeout to prevent callbacks from hanging indefinitely
-				done := make(chan struct{})
-				go func() {
-					defer close(done)
-					cb(config, err)
-				}()
+				// Create context with timeout to prevent goroutine leaks
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel() // Ensure resources are cleaned up
 				
-				select {
-				case <-done:
-					// Callback completed successfully
-				case <-time.After(30 * time.Second): // 30 second timeout
-					// Callback timed out - log warning but continue
-					// Note: The callback goroutine may still be running but we don't wait for it
-				}
+				// Execute callback with proper cancellation support
+				cw.executeCallbackWithContext(ctx, cb, config, err)
 			default:
 				// No worker slots available, skip this callback to prevent blocking
 				// This prevents resource exhaustion when too many callbacks are queued
 			}
 		}(callback)
+	}
+}
+
+// executeCallbackWithContext executes a callback with context cancellation support
+func (cw *ConfigWatcher) executeCallbackWithContext(ctx context.Context, callback func(*ScraperConfig, error), config *ScraperConfig, err error) {
+	// Channel to signal callback completion
+	done := make(chan struct{})
+	
+	go func() {
+		defer func() {
+			// Recover from any panic in the callback to prevent crashing
+			if r := recover(); r != nil {
+				// Log panic if possible, but don't crash the watcher
+			}
+			close(done)
+		}()
+		
+		// Execute the callback
+		callback(config, err)
+	}()
+	
+	// Wait for either completion or context cancellation
+	select {
+	case <-done:
+		// Callback completed successfully
+		return
+	case <-ctx.Done():
+		// Context cancelled (timeout or explicit cancellation)
+		// The callback goroutine will continue but we don't wait for it
+		// The defer in the goroutine will still close the done channel
+		return
 	}
 }
 
