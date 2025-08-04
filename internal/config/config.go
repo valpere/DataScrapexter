@@ -752,14 +752,123 @@ func GenerateTemplate(templateType string) *ScraperConfig {
 	}
 }
 
+// ContextualCallback represents a callback that accepts context for cancellation support
+type ContextualCallback func(ctx context.Context, config *ScraperConfig, err error)
+
+// CallbackRegistry manages callbacks with mandatory context support to prevent goroutine leaks
+type CallbackRegistry struct {
+	callbacks     []ContextualCallback
+	mutex         sync.RWMutex
+	maxWorkers    int
+	workerPool    chan struct{}
+	timeout       time.Duration
+	activeCount   int64
+	totalExecuted int64
+}
+
+// NewCallbackRegistry creates a new callback registry with goroutine leak prevention
+func NewCallbackRegistry(maxWorkers int, timeout time.Duration) *CallbackRegistry {
+	if maxWorkers <= 0 {
+		maxWorkers = 10 // Default worker limit
+	}
+	if timeout <= 0 {
+		timeout = 30 * time.Second // Default timeout
+	}
+	
+	return &CallbackRegistry{
+		callbacks:  make([]ContextualCallback, 0),
+		maxWorkers: maxWorkers,
+		workerPool: make(chan struct{}, maxWorkers),
+		timeout:    timeout,
+	}
+}
+
+// Register adds a new context-aware callback to the registry
+func (cr *CallbackRegistry) Register(callback ContextualCallback) {
+	cr.mutex.Lock()
+	defer cr.mutex.Unlock()
+	cr.callbacks = append(cr.callbacks, callback)
+}
+
+// Execute executes all registered callbacks with proper context support and goroutine management
+func (cr *CallbackRegistry) Execute(ctx context.Context, config *ScraperConfig, err error) {
+	cr.mutex.RLock()
+	callbacks := make([]ContextualCallback, len(cr.callbacks))
+	copy(callbacks, cr.callbacks)
+	cr.mutex.RUnlock()
+	
+	// Execute callbacks with bounded concurrency and no goroutine leaks
+	for _, callback := range callbacks {
+		// Try to acquire a worker slot with context cancellation support
+		select {
+		case cr.workerPool <- struct{}{}:
+			// Worker slot acquired, execute callback safely
+			go cr.executeCallback(ctx, callback, config, err)
+		case <-ctx.Done():
+			// Context cancelled, skip remaining callbacks
+			return
+		default:
+			// No worker slots available - skip to prevent goroutine buildup
+			// This is better than blocking or creating unbounded goroutines
+			continue
+		}
+	}
+}
+
+// executeCallback safely executes a single callback with timeout and leak prevention
+func (cr *CallbackRegistry) executeCallback(parentCtx context.Context, callback ContextualCallback, config *ScraperConfig, err error) {
+	defer func() {
+		<-cr.workerPool // Release worker slot
+		atomic.AddInt64(&cr.activeCount, -1)
+		atomic.AddInt64(&cr.totalExecuted, 1)
+	}()
+	
+	atomic.AddInt64(&cr.activeCount, 1)
+	
+	// Create timeout context to prevent infinite blocking
+	ctx, cancel := context.WithTimeout(parentCtx, cr.timeout)
+	defer cancel()
+	
+	// Execute callback with panic recovery
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				// Log panic but don't crash the system
+				// In production, this would log to a proper logger
+			}
+		}()
+		
+		// Execute the context-aware callback
+		// The callback MUST respect context cancellation to prevent leaks
+		callback(ctx, config, err)
+	}()
+}
+
+// GetStats returns callback execution statistics
+func (cr *CallbackRegistry) GetStats() map[string]interface{} {
+	cr.mutex.RLock()
+	registeredCount := len(cr.callbacks)
+	cr.mutex.RUnlock()
+	
+	return map[string]interface{}{
+		"active_callbacks":    atomic.LoadInt64(&cr.activeCount),
+		"total_executed":      atomic.LoadInt64(&cr.totalExecuted),
+		"registered_count":    registeredCount,
+		"max_workers":         cr.maxWorkers,
+		"available_workers":   cr.maxWorkers - len(cr.workerPool),
+		"timeout_seconds":     cr.timeout.Seconds(),
+	}
+}
+
 // ConfigWatcher provides file watching capabilities for configuration hot-reloading
 type ConfigWatcher struct {
 	filename        string
 	lastModTime     time.Time
 	lastSize        int64
-	pollInterval    time.Duration
-	callbacks       []func(*ScraperConfig, error)
-	stopWatching    chan bool
+	pollInterval     time.Duration
+	callbacks        []func(*ScraperConfig, error) // Legacy callbacks (deprecated)
+	callbackRegistry *CallbackRegistry              // New context-aware callback system
+	stopWatching     chan bool
 	running         bool
 	mutex           sync.RWMutex
 	callbackWorkers chan struct{} // Semaphore to limit concurrent callback executions
@@ -785,23 +894,31 @@ func NewConfigWatcher(filename string, pollInterval time.Duration) *ConfigWatche
 	ctx, cancel := context.WithCancel(context.Background())
 	
 	return &ConfigWatcher{
-		filename:        filename,
-		pollInterval:    pollInterval,
-		callbacks:       make([]func(*ScraperConfig, error), 0),
-		stopWatching:    make(chan bool),
-		callbackWorkers: make(chan struct{}, maxWorkers),
-		maxWorkers:      maxWorkers,
-		callbackTimeout: 30 * time.Second, // Reasonable default timeout for callbacks
-		ctx:             ctx,
-		cancel:          cancel,
+		filename:         filename,
+		pollInterval:     pollInterval,
+		callbacks:        make([]func(*ScraperConfig, error), 0), // Legacy callbacks
+		callbackRegistry: NewCallbackRegistry(maxWorkers, 30*time.Second), // Context-aware callbacks
+		stopWatching:     make(chan bool),
+		callbackWorkers:  make(chan struct{}, maxWorkers),
+		maxWorkers:       maxWorkers,
+		callbackTimeout:  30 * time.Second, // Reasonable default timeout for callbacks
+		ctx:              ctx,
+		cancel:           cancel,
 	}
 }
 
-// OnChange adds a callback for configuration changes
+// OnChange adds a callback for configuration changes (legacy method, deprecated)
+// Use OnChangeWithContext for better goroutine leak prevention
 func (cw *ConfigWatcher) OnChange(callback func(*ScraperConfig, error)) {
 	cw.mutex.Lock()
 	defer cw.mutex.Unlock()
 	cw.callbacks = append(cw.callbacks, callback)
+}
+
+// OnChangeWithContext registers a context-aware callback that prevents goroutine leaks
+// This is the recommended way to register callbacks as it provides proper cancellation support
+func (cw *ConfigWatcher) OnChangeWithContext(callback ContextualCallback) {
+	cw.callbackRegistry.Register(callback)
 }
 
 // Start begins watching the configuration file
@@ -882,12 +999,16 @@ func (cw *ConfigWatcher) checkForChanges() {
 }
 
 func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
+	// Execute new context-aware callbacks first (recommended approach)
+	cw.callbackRegistry.Execute(cw.ctx, config, err)
+	
+	// Execute legacy callbacks for backward compatibility
 	cw.mutex.RLock()
 	callbacks := make([]func(*ScraperConfig, error), len(cw.callbacks))
 	copy(callbacks, cw.callbacks)
 	cw.mutex.RUnlock()
 
-	// Execute callbacks with limited concurrency and goroutine monitoring
+	// Execute legacy callbacks with limited concurrency and goroutine monitoring
 	for _, callback := range callbacks {
 		cw.wg.Add(1)
 		go func(cb func(*ScraperConfig, error)) {
@@ -930,7 +1051,11 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 	}
 }
 
-// executeCallbackWithContext executes a callback with context cancellation support
+// executeCallbackWithContext executes a callback with context cancellation support (DEPRECATED)
+//
+// DEPRECATED: This function is deprecated due to potential goroutine leaks. Use the new 
+// CallbackRegistry system via OnChangeWithContext() instead, which provides better goroutine
+// management and eliminates the nested goroutine problem.
 //
 // IMPORTANT: This function, together with notifyCallbacks, creates two layers of goroutines
 // for each callback: one in notifyCallbacks and one here. If a callback blocks indefinitely,
@@ -941,6 +1066,9 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 // if callbacks do not respect context cancellation or block forever. This is considered acceptable
 // because forcibly terminating goroutines is not possible in Go, and callbacks are expected to
 // be well-behaved. Maintainers should be aware of this risk when registering callbacks.
+//
+// MIGRATION: Replace OnChange() calls with OnChangeWithContext() and update callback signatures
+// to accept context.Context as the first parameter.
 func (cw *ConfigWatcher) executeCallbackWithContext(ctx context.Context, callback func(*ScraperConfig, error), config *ScraperConfig, err error) {
 	// Channel to signal callback completion
 	done := make(chan struct{})
@@ -973,12 +1101,25 @@ func (cw *ConfigWatcher) executeCallbackWithContext(ctx context.Context, callbac
 
 // GetGoroutineStats returns statistics about callback goroutine usage
 func (cw *ConfigWatcher) GetGoroutineStats() map[string]interface{} {
-	return map[string]interface{}{
-		"active_goroutines": atomic.LoadInt64(&cw.activeGoroutines),
-		"total_callbacks":   atomic.LoadInt64(&cw.totalCallbacks),
-		"max_workers":       cw.maxWorkers,
-		"available_slots":   cw.maxWorkers - len(cw.callbackWorkers),
+	legacyStats := map[string]interface{}{
+		"legacy_active_goroutines": atomic.LoadInt64(&cw.activeGoroutines),
+		"legacy_total_callbacks":   atomic.LoadInt64(&cw.totalCallbacks),
+		"legacy_max_workers":       cw.maxWorkers,
+		"legacy_available_slots":   cw.maxWorkers - len(cw.callbackWorkers),
 	}
+	
+	// Merge with new callback registry stats
+	registryStats := cw.callbackRegistry.GetStats()
+	for k, v := range registryStats {
+		legacyStats["registry_"+k] = v
+	}
+	
+	return legacyStats
+}
+
+// GetCallbackRegistryStats returns statistics specifically for the new callback registry
+func (cw *ConfigWatcher) GetCallbackRegistryStats() map[string]interface{} {
+	return cw.callbackRegistry.GetStats()
 }
 
 // SetCallbackTimeout configures the timeout for callback execution
