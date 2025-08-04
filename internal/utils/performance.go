@@ -307,7 +307,7 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 	// Refill tokens based on elapsed time
 	if elapsed >= trl.refillRate {
 		// Calculate how many refill intervals have passed
-		// This gives us the number of tokens to add (not duration)
+		// Each interval adds one token, so this gives the number of intervals (and thus tokens) to add
 		tokensToAddFloat := float64(elapsed) / float64(trl.refillRate)
 		
 		// Convert to int64 safely, checking for overflow
