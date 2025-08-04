@@ -30,7 +30,6 @@ type Engine struct {
 	proxyManager   proxy.Manager
 	
 	// Performance optimizations
-	documentPool   *utils.Pool[*goquery.Document]
 	resultPool     *utils.Pool[*Result]
 	perfMetrics    *utils.PerformanceMetrics
 	memManager     *utils.MemoryManager
@@ -89,29 +88,6 @@ func NewEngine(config *Config) (*Engine, error) {
 		memManager:     utils.NewMemoryManager(100*1024*1024, 30*time.Second), // 100MB, 30s GC interval
 		circuitBreaker: utils.NewCircuitBreaker(5, 60*time.Second), // 5 failures, 60s timeout
 		
-		// Initialize object pools for memory efficiency
-		documentPool: utils.NewPool[*goquery.Document](
-			func() *goquery.Document {
-				doc, err := goquery.NewDocumentFromReader(strings.NewReader(""))
-				if err != nil {
-					// If document creation fails, return nil to indicate failure
-					// The pool will handle nil values appropriately
-					return nil
-				}
-				return doc
-			}, // Return a valid empty document or nil on error
-			func(doc *goquery.Document) {
-				// Reset document by creating a new empty document to prevent stale data
-				if doc != nil {
-					// Replace the document with a fresh empty one
-					newDoc, err := goquery.NewDocumentFromReader(strings.NewReader(""))
-					if err == nil && newDoc != nil {
-						*doc = *newDoc
-					}
-					// If reset fails, leave the document as-is rather than nil pointer
-				}
-			},
-		),
 		resultPool: utils.NewPool[*Result](
 			func() *Result {
 				return &Result{

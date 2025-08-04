@@ -485,43 +485,41 @@ type SecureString struct {
 }
 
 // NewSecureString creates a new SecureString with basic XOR obfuscation.
+// Returns an error if secure key generation fails.
 // 
 // SECURITY WARNING: This provides basic XOR obfuscation only, not cryptographic security.
 // Always call Clear() when done to zero out memory.
-func NewSecureString(data string) *SecureString {
+func NewSecureString(data string) (*SecureString, error) {
 	dataBytes := []byte(data)
 	hash := sha256.Sum256(dataBytes)
 	
+	// Handle empty data case
+	if len(dataBytes) == 0 {
+		return &SecureString{
+			data: dataBytes,
+			key:  nil,
+			hash: hex.EncodeToString(hash[:]),
+		}, nil
+	}
+	
 	// Generate a random key for XOR obfuscation
 	key := make([]byte, len(dataBytes))
-	if len(dataBytes) > 0 {
-		if _, err := rand.Read(key); err != nil {
-			// If random key generation fails, fall back to non-obfuscated SecureString
-			return &SecureString{
-				data: dataBytes,
-				key:  nil,
-				hash: hex.EncodeToString(hash[:]),
-			}
-		}
-		
-		// Apply XOR obfuscation
-		obfuscated := make([]byte, len(dataBytes))
-		for i := range dataBytes {
-			obfuscated[i] = dataBytes[i] ^ key[i]
-		}
-		
-		return &SecureString{
-			data: obfuscated,
-			key:  key,
-			hash: hex.EncodeToString(hash[:]),
-		}
+	if _, err := rand.Read(key); err != nil {
+		// SECURITY: Fail securely rather than silently degrading security
+		return nil, fmt.Errorf("failed to generate secure random key for obfuscation: %w", err)
+	}
+	
+	// Apply XOR obfuscation
+	obfuscated := make([]byte, len(dataBytes))
+	for i := range dataBytes {
+		obfuscated[i] = dataBytes[i] ^ key[i]
 	}
 	
 	return &SecureString{
-		data: dataBytes,
-		key:  nil,
+		data: obfuscated,
+		key:  key,
 		hash: hex.EncodeToString(hash[:]),
-	}
+	}, nil
 }
 
 // String returns the deobfuscated string data
@@ -579,11 +577,18 @@ func NewSecretManager() *SecretManager {
 }
 
 // Store stores a secret securely
-func (sm *SecretManager) Store(key, value string) {
+func (sm *SecretManager) Store(key, value string) error {
 	if existing, exists := sm.secrets[key]; exists {
 		existing.Clear() // Clear existing secret
 	}
-	sm.secrets[key] = NewSecureString(value)
+	
+	secureString, err := NewSecureString(value)
+	if err != nil {
+		return fmt.Errorf("failed to store secret '%s': %w", key, err)
+	}
+	
+	sm.secrets[key] = secureString
+	return nil
 }
 
 // Retrieve retrieves a secret
