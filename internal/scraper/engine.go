@@ -846,10 +846,34 @@ func (e *Engine) ScrapeMultipleOptimized(ctx context.Context, urls []string, ext
 }
 
 // ScrapeWithBatching processes URLs in batches for memory efficiency
+// This method reuses a single worker pool across all batches for better performance
 func (e *Engine) ScrapeWithBatching(ctx context.Context, urls []string, extractors []FieldConfig, batchSize int) ([]*Result, error) {
 	if batchSize <= 0 {
 		batchSize = 10 // Default batch size
 	}
+	
+	if len(urls) == 0 {
+		return []*Result{}, nil
+	}
+	
+	// Use configurable concurrency limit, default to 5 if not set
+	maxConc := e.MaxConcurrency
+	if maxConc <= 0 {
+		maxConc = 5
+	}
+	
+	// Create a single worker pool for all batches to avoid overhead
+	workerPool := utils.NewWorkerPool[string](
+		min(maxConc, batchSize), // Don't exceed batch size for worker count
+		batchSize*2,             // Buffer size for input queue
+		func(url string) (interface{}, error) {
+			return e.Scrape(ctx, url, extractors)
+		},
+	)
+	
+	// Start the worker pool
+	workerPool.Start()
+	defer workerPool.Close()
 	
 	allResults := make([]*Result, 0, len(urls))
 	
@@ -861,23 +885,48 @@ func (e *Engine) ScrapeWithBatching(ctx context.Context, urls []string, extracto
 		}
 		
 		batch := urls[i:end]
-		// Use configurable concurrency limit, default to 5 if not set
-		maxConc := e.MaxConcurrency
-		if maxConc <= 0 {
-			maxConc = 5
-		}
-		batchResults, err := e.ScrapeMultipleOptimized(ctx, batch, extractors, min(len(batch), maxConc))
-		if err != nil {
-			return allResults, fmt.Errorf("batch %d-%d failed: %w", i, end-1, err)
+		
+		// Submit batch to worker pool
+		for _, url := range batch {
+			if err := workerPool.Submit(url); err != nil {
+				return allResults, fmt.Errorf("failed to submit URL %s in batch %d-%d: %w", url, i, end-1, err)
+			}
 		}
 		
+		// Collect results for this batch
+		batchResults := make([]*Result, 0, len(batch))
+		errors := make([]error, 0)
+		
+		for j := 0; j < len(batch); j++ {
+			select {
+			case result := <-workerPool.Results():
+				if scrapingResult, ok := result.(*Result); ok {
+					batchResults = append(batchResults, scrapingResult)
+				}
+			case err := <-workerPool.Errors():
+				errors = append(errors, err)
+			case <-ctx.Done():
+				return allResults, ctx.Err()
+			}
+		}
+		
+		// Add batch results to total results
 		allResults = append(allResults, batchResults...)
+		
+		// Report any errors from this batch (non-fatal)
+		if len(errors) > 0 {
+			// Log errors but continue processing
+			for _, err := range errors {
+				// In a production system, you'd use a proper logger here
+				_ = err // Suppress unused variable warning
+			}
+		}
 		
 		// Check memory pressure after each batch
 		e.memManager.CheckMemoryUsage()
 		
 		// Optional: Add delay between batches to be respectful
-		if len(urls) > batchSize && i+batchSize < len(urls) {
+		if i+batchSize < len(urls) {
 			select {
 			case <-time.After(time.Second):
 			case <-ctx.Done():

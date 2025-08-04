@@ -5,7 +5,6 @@ package utils
 import (
 	"context"
 	"errors"
-	"fmt"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -363,7 +362,7 @@ func NewCircuitBreaker(maxFailures int64, resetTimeout time.Duration) *CircuitBr
 // Execute executes a function with circuit breaker protection
 func (cb *CircuitBreaker) Execute(fn func() error) error {
 	if !cb.allowRequest() {
-		return errors.New(fmt.Sprintf("%v: circuit breaker is open", ErrCodeResourceExhausted))
+		return errors.New("circuit breaker is open")
 	}
 	
 	err := fn()

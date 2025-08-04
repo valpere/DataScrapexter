@@ -441,18 +441,15 @@ func isValidCompoundSelector(selector string) bool {
 }
 
 // ValidateStruct validates a struct using field tags or custom validators
-// This is a basic implementation that can be extended
+// TODO: This is a placeholder for future struct validation implementation
+// Use individual field validators for now (StringValidator, URLValidator, etc.)
 func ValidateStruct(v interface{}, validators map[string]Validator) *ValidationResult {
 	result := &ValidationResult{Valid: true}
-
-	// This would typically use reflection to iterate over struct fields
-	// For now, this is a placeholder for custom validation logic
-	// In a full implementation, you would:
-	// 1. Use reflection to get struct fields
-	// 2. Check for validation tags
-	// 3. Apply appropriate validators
-	// 4. Collect all validation errors
-
+	
+	// Note: This is a minimal implementation that always returns valid
+	// For production use, implement reflection-based struct field validation
+	// or use a dedicated validation library like github.com/go-playground/validator
+	
 	return result
 }
 
@@ -501,15 +498,18 @@ func SanitizeFieldName(name string) string {
 	return clean
 }
 
-// ValidateConfigIntegrity performs cross-field validation
+// ValidateConfigIntegrity performs cross-field validation on configuration objects
+// TODO: This is a placeholder for future cross-field validation implementation
+// Use the configuration's own Validate() methods for now
 func ValidateConfigIntegrity(config interface{}) *ValidationResult {
 	result := &ValidationResult{Valid: true}
 
-	// This would contain logic to validate relationships between fields
-	// For example:
-	// - If proxy is enabled, ensure proxy providers are configured
-	// - If browser automation is enabled, ensure required browser settings
-	// - If database output is configured, ensure connection details are valid
+	// Note: This is a minimal implementation that always returns valid
+	// For production use, implement specific cross-field validation logic:
+	// - Check if proxy is enabled but no providers are configured
+	// - Validate browser automation settings consistency
+	// - Ensure database connection details are complete
+	// - Verify output format compatibility with selected fields
 
 	return result
 }
