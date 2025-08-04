@@ -535,10 +535,21 @@ func shortenFuncName(funcName string) string {
 	return funcName
 }
 
+// debugMode controls whether expensive debug operations are enabled.
+var debugMode bool = false
+
+// EnableDebugMode sets debugMode to true, allowing expensive debug operations.
+func EnableDebugMode() {
+	debugMode = true
+}
+
 // getGoroutineID returns the current goroutine ID.
 // WARNING: This is an expensive operation (uses runtime.Stack and string parsing).
 // Only use for debugging purposes.
 func getGoroutineID() uint64 {
+	if !debugMode {
+		return 0
+	}
 	var buf [64]byte
 	n := runtime.Stack(buf[:], false)
 	idField := strings.Fields(strings.TrimPrefix(string(buf[:n]), "goroutine "))[0]
