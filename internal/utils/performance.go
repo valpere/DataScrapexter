@@ -312,10 +312,7 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 		
 		// Convert to int64 safely, checking for overflow
 		var safeTokensToAdd int64
-		if tokensToAddFloat < 0 {
-			// Negative shouldn't happen but be safe
-			safeTokensToAdd = 0
-		} else if tokensToAddFloat > float64(trl.maxTokens) {
+		if tokensToAddFloat > float64(trl.maxTokens) {
 			// Cap at maxTokens to prevent excessive token accumulation
 			safeTokensToAdd = trl.maxTokens
 		} else {
