@@ -91,7 +91,10 @@ func NewEngine(config *Config) (*Engine, error) {
 		
 		// Initialize object pools for memory efficiency
 		documentPool: utils.NewPool[*goquery.Document](
-			func() *goquery.Document { return nil }, // Documents are created on demand
+			func() *goquery.Document {
+				doc, _ := goquery.NewDocumentFromReader(strings.NewReader(""))
+				return doc
+			}, // Return a valid empty document
 			func(doc *goquery.Document) { /* no reset needed */ },
 		),
 		resultPool: utils.NewPool[*Result](
