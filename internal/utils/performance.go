@@ -41,11 +41,11 @@ func (pm *PerformanceMetrics) RecordOperation(duration time.Duration, success bo
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
 
-	atomic.AddInt64(&pm.TotalOperations, 1)
+	pm.TotalOperations++
 	if success {
-		atomic.AddInt64(&pm.SuccessfulOps, 1)
+		pm.SuccessfulOps++
 	} else {
-		atomic.AddInt64(&pm.FailedOps, 1)
+		pm.FailedOps++
 	}
 
 	// Update latency statistics
