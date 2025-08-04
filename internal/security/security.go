@@ -482,10 +482,19 @@ type ObfuscatedString struct {
 
 // NewObfuscatedString creates a new ObfuscatedString with basic XOR obfuscation.
 // Returns an error if secure key generation fails.
-// 
+//
 // SECURITY WARNING: This provides basic XOR obfuscation only, not cryptographic security.
 // Always call Clear() when done to zero out memory.
+// 
+// MIGRATION PATH: For production use, migrate to a proper secret management solution such as:
+//   - HashiCorp Vault: https://www.vaultproject.io/
+//   - AWS Secrets Manager: https://aws.amazon.com/secrets-manager/
+//   - GCP Secret Manager: https://cloud.google.com/secret-manager
+//   - Azure Key Vault: https://azure.microsoft.com/en-us/products/key-vault/
+// Replace usage of ObfuscatedString with integration to one of these services for secure secret storage and retrieval.
 func NewObfuscatedString(dataBytes []byte) (*ObfuscatedString, error) {
+	// RUNTIME WARNING: ObfuscatedString is NOT secure for secrets. Use a proper secret manager for production.
+	fmt.Println("[SECURITY WARNING] ObfuscatedString uses only XOR obfuscation and is NOT suitable for secrets. Migrate to a proper secret management solution for production use.")
 	// Create a copy to avoid modifying the original slice
 	dataCopy := make([]byte, len(dataBytes))
 	copy(dataCopy, dataBytes)
