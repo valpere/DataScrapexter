@@ -57,7 +57,11 @@ func (pm *PerformanceMetrics) RecordOperation(duration time.Duration, success bo
 	if duration > pm.MaxLatency {
 		pm.MaxLatency = duration
 	}
-	pm.AverageLatency = pm.TotalLatency / time.Duration(pm.TotalOperations)
+	if pm.TotalOperations > 0 {
+		pm.AverageLatency = pm.TotalLatency / time.Duration(pm.TotalOperations)
+	} else {
+		pm.AverageLatency = 0
+	}
 	pm.LastOperationTime = time.Now()
 
 	// Calculate operations per second
