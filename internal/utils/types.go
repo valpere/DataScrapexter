@@ -99,7 +99,17 @@ func (tc *TypeConverter) ToInt(value interface{}) ConversionResult {
 		}
 		return ConversionResult{Value: int(v), Success: true}
 	case uint, uint8, uint16, uint32:
-		return ConversionResult{Value: int(reflect.ValueOf(v).Uint()), Success: true}
+		{
+			uval := reflect.ValueOf(v).Uint()
+			if tc.strict && uval > uint64(maxInt) {
+				return ConversionResult{
+					Value:   0,
+					Success: false,
+					Error:   fmt.Errorf("%T value %d would overflow int", v, uval),
+				}
+			}
+			return ConversionResult{Value: int(uval), Success: true}
+		}
 	case uint64:
 		if tc.strict && v > uint64(int(^uint(0)>>1)) {
 			return ConversionResult{
