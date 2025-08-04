@@ -553,9 +553,9 @@ func EnableDebugMode() {
 //
 // Performance Impact: ~10-50μs per call depending on stack depth
 // Consider using atomic counters or other alternatives for performance-critical paths.
-// getDebugGoroutineID returns the current goroutine ID using expensive runtime operations.
+// getGoroutineIDForDebug returns the current goroutine ID using expensive runtime operations.
 // This should ONLY be used for debugging purposes when absolutely necessary.
-func getDebugGoroutineID() uint64 {
+func getGoroutineIDForDebug() uint64 {
 	if !debugMode {
 		return 0
 	}
