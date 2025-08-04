@@ -97,9 +97,9 @@ func (pm *PerformanceMetrics) Reset() {
 	defer pm.mutex.Unlock()
 	
 	now := time.Now()
-	atomic.StoreInt64(&pm.TotalOperations, 0)
-	atomic.StoreInt64(&pm.SuccessfulOps, 0)
-	atomic.StoreInt64(&pm.FailedOps, 0)
+	pm.TotalOperations = 0
+	pm.SuccessfulOps = 0
+	pm.FailedOps = 0
 	pm.AverageLatency = 0
 	pm.MinLatency = time.Duration(1<<63 - 1)
 	pm.MaxLatency = 0
