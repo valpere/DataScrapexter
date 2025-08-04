@@ -312,8 +312,12 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 		
 		// Apply tokens using proper overflow checking
 		if tokensToAdd > 0 {
+			// Clamp tokens to zero if negative to avoid overflow
+			if trl.tokens < 0 {
+				trl.tokens = 0
+			}
 			// Check for overflow before addition using safe arithmetic
-			if tokensToAdd > math.MaxInt64 - trl.tokens {
+			if tokensToAdd > trl.maxTokens - trl.tokens {
 				// Overflow would occur, cap at maximum
 				trl.tokens = trl.maxTokens
 			} else {
