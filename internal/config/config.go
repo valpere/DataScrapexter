@@ -551,7 +551,13 @@ func (cm *ConfigManager) GetMetrics() map[string]interface{} {
 		"loads_total":     cm.metrics.loadsTotal,
 		"cache_hits":      cm.metrics.cacheHits,
 		"cache_misses":    cm.metrics.cacheMisses,
-		"hit_ratio":       float64(cm.metrics.cacheHits) / float64(cm.metrics.cacheHits+cm.metrics.cacheMisses),
+		"hit_ratio":       func() float64 {
+			denom := cm.metrics.cacheHits + cm.metrics.cacheMisses
+			if denom == 0 {
+				return 0.0
+			}
+			return float64(cm.metrics.cacheHits) / float64(denom)
+		}(),
 		"avg_load_time":   cm.metrics.loadTime / time.Duration(cm.metrics.loadsTotal),
 		"avg_validation_time": cm.metrics.validationTime / time.Duration(cm.metrics.loadsTotal),
 	}
