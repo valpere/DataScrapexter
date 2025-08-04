@@ -886,7 +886,9 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 
 	// Execute callbacks with limited concurrency and goroutine monitoring
 	for _, callback := range callbacks {
+		cw.wg.Add(1)
 		go func(cb func(*ScraperConfig, error)) {
+			defer cw.wg.Done()
 			// Increment active goroutine counter for monitoring
 			atomic.AddInt64(&cw.activeGoroutines, 1)
 			defer func() {
