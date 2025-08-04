@@ -95,7 +95,16 @@ func NewEngine(config *Config) (*Engine, error) {
 				doc, _ := goquery.NewDocumentFromReader(strings.NewReader(""))
 				return doc
 			}, // Return a valid empty document
-			func(doc *goquery.Document) { /* no reset needed */ },
+			func(doc *goquery.Document) {
+				// Reset document by creating a new empty document to prevent stale data
+				if doc != nil {
+					// Replace the document with a fresh empty one
+					newDoc, _ := goquery.NewDocumentFromReader(strings.NewReader(""))
+					if newDoc != nil {
+						*doc = *newDoc
+					}
+				}
+			},
 		),
 		resultPool: utils.NewPool[*Result](
 			func() *Result {

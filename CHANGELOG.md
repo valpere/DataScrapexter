@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - Comprehensive database output handlers for PostgreSQL and SQLite
 - Advanced anti-detection mechanisms
 - Configuration-driven pipeline processing
@@ -18,12 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI with comprehensive command structure
 
 ### Changed
+
 - Improved logging architecture with unified implementation
 - Enhanced rate limiting with adaptive strategies
 - Optimized proxy management and rotation
 - Refactored pipeline components for better maintainability
 
 ### Fixed
+
 - Database-specific validation issues
 - String concatenation performance issues
 - Function naming inconsistencies
@@ -31,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reserved SQL keywords validation
 
 ### Security
+
 - Enhanced SQL injection prevention
 - Improved identifier validation
 - Secure proxy configuration handling
@@ -38,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - Initial Development
 
 ### Added
+
 - Basic web scraping engine
 - HTML parsing capabilities
 - Configuration system foundation
@@ -47,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Basic documentation structure
 
 ### Technical Debt Resolved
+
 - Code duplication in database handlers
 - Incomplete TODO implementations
 - Inconsistent error handling patterns
@@ -57,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Release Notes
 
 ### Database Output Enhancement
+
 This release introduces comprehensive database output capabilities with support for both PostgreSQL and SQLite. The implementation includes:
 
 - Database-specific validation for identifiers and column types
@@ -66,6 +73,7 @@ This release introduces comprehensive database output capabilities with support 
 - Comprehensive error handling and recovery
 
 ### Pipeline Processing Improvements
+
 Enhanced data processing pipeline with:
 
 - Configurable transformation rules
@@ -75,6 +83,7 @@ Enhanced data processing pipeline with:
 - Metrics and monitoring integration
 
 ### Anti-Detection Capabilities
+
 Advanced anti-detection mechanisms including:
 
 - User-Agent rotation
@@ -84,6 +93,7 @@ Advanced anti-detection mechanisms including:
 - CAPTCHA solving integration (planned)
 
 ### Performance Optimizations
+
 - Concurrent processing with configurable worker pools
 - Efficient memory management
 - Database connection optimization
@@ -101,6 +111,7 @@ No breaking changes in this initial release.
 ### Configuration Changes
 
 New configuration options added for database outputs:
+
 ```yaml
 output:
   database:

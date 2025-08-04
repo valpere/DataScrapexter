@@ -547,9 +547,11 @@ func EnableDebugMode() {
 // WARNING: This is an expensive operation (uses runtime.Stack and string parsing).
 // Only use for debugging purposes.
 func getGoroutineID() uint64 {
+	// Early return if debug mode is disabled to avoid expensive operations
 	if !debugMode {
 		return 0
 	}
+	
 	var buf [64]byte
 	n := runtime.Stack(buf[:], false)
 	idField := strings.Fields(strings.TrimPrefix(string(buf[:n]), "goroutine "))[0]

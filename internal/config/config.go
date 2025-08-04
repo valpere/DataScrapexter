@@ -752,14 +752,16 @@ func GenerateTemplate(templateType string) *ScraperConfig {
 
 // ConfigWatcher provides file watching capabilities for configuration hot-reloading
 type ConfigWatcher struct {
-	filename     string
-	lastModTime  time.Time
-	lastSize     int64
-	pollInterval time.Duration
-	callbacks    []func(*ScraperConfig, error)
-	stopWatching chan bool
-	running      bool
-	mutex        sync.RWMutex
+	filename        string
+	lastModTime     time.Time
+	lastSize        int64
+	pollInterval    time.Duration
+	callbacks       []func(*ScraperConfig, error)
+	stopWatching    chan bool
+	running         bool
+	mutex           sync.RWMutex
+	callbackWorkers chan struct{} // Semaphore to limit concurrent callback executions
+	maxWorkers      int           // Maximum number of concurrent callback workers
 }
 
 // NewConfigWatcher creates a new configuration file watcher
@@ -768,11 +770,15 @@ func NewConfigWatcher(filename string, pollInterval time.Duration) *ConfigWatche
 		pollInterval = 5 * time.Second
 	}
 
+	// Limit concurrent callback executions to prevent resource exhaustion
+	maxWorkers := 10
 	return &ConfigWatcher{
-		filename:     filename,
-		pollInterval: pollInterval,
-		callbacks:    make([]func(*ScraperConfig, error), 0),
-		stopWatching: make(chan bool),
+		filename:        filename,
+		pollInterval:    pollInterval,
+		callbacks:       make([]func(*ScraperConfig, error), 0),
+		stopWatching:    make(chan bool),
+		callbackWorkers: make(chan struct{}, maxWorkers),
+		maxWorkers:      maxWorkers,
 	}
 }
 
@@ -865,8 +871,34 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 	copy(callbacks, cw.callbacks)
 	cw.mutex.RUnlock()
 
+	// Execute callbacks with limited concurrency to prevent resource exhaustion
 	for _, callback := range callbacks {
-		go callback(config, err) // Run callbacks in separate goroutines
+		go func(cb func(*ScraperConfig, error)) {
+			// Acquire worker semaphore (non-blocking to prevent deadlock)
+			select {
+			case cw.callbackWorkers <- struct{}{}:
+				// Worker slot acquired, execute callback
+				defer func() { <-cw.callbackWorkers }() // Release worker slot
+				
+				// Use a timeout to prevent callbacks from hanging indefinitely
+				done := make(chan struct{})
+				go func() {
+					defer close(done)
+					cb(config, err)
+				}()
+				
+				select {
+				case <-done:
+					// Callback completed successfully
+				case <-time.After(30 * time.Second): // 30 second timeout
+					// Callback timed out - log warning but continue
+					// Note: The callback goroutine may still be running but we don't wait for it
+				}
+			default:
+				// No worker slots available, skip this callback to prevent blocking
+				// This prevents resource exhaustion when too many callbacks are queued
+			}
+		}(callback)
 	}
 }
 

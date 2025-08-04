@@ -466,6 +466,7 @@ func (sv *SecurityValidator) AddCustomRule(rule ValidationRule) {
 // - Does NOT prevent memory swapping to disk
 // - Does NOT use OS-level memory protection (mlock)
 // - Data may be visible in core dumps or swap files
+// - Uses simple XOR obfuscation which can be easily reversed
 // 
 // Use Cases:
 // - Basic protection against casual memory inspection
@@ -479,26 +480,65 @@ func (sv *SecurityValidator) AddCustomRule(rule ValidationRule) {
 // - Use encrypted configuration files with proper key management
 type SecureString struct {
 	data []byte
+	key  []byte
 	hash string
 }
 
-// NewSecureString creates a new SecureString with basic obfuscation.
+// NewSecureString creates a new SecureString with basic XOR obfuscation.
 // 
-// SECURITY WARNING: This provides basic obfuscation only, not cryptographic security.
+// SECURITY WARNING: This provides basic XOR obfuscation only, not cryptographic security.
 // Always call Clear() when done to zero out memory.
 func NewSecureString(data string) *SecureString {
 	dataBytes := []byte(data)
 	hash := sha256.Sum256(dataBytes)
 	
+	// Generate a random key for XOR obfuscation
+	key := make([]byte, len(dataBytes))
+	if len(dataBytes) > 0 {
+		rand.Read(key)
+		
+		// Apply XOR obfuscation
+		obfuscated := make([]byte, len(dataBytes))
+		for i := range dataBytes {
+			obfuscated[i] = dataBytes[i] ^ key[i]
+		}
+		
+		return &SecureString{
+			data: obfuscated,
+			key:  key,
+			hash: hex.EncodeToString(hash[:]),
+		}
+	}
+	
 	return &SecureString{
 		data: dataBytes,
+		key:  nil,
 		hash: hex.EncodeToString(hash[:]),
 	}
 }
 
+// String returns the deobfuscated string data
+// SECURITY WARNING: This exposes the sensitive data. Use with caution.
+func (ss *SecureString) String() string {
+	if ss.key == nil || len(ss.data) == 0 {
+		return string(ss.data)
+	}
+	
+	// Deobfuscate by applying XOR with the key
+	deobfuscated := make([]byte, len(ss.data))
+	for i := range ss.data {
+		deobfuscated[i] = ss.data[i] ^ ss.key[i]
+	}
+	
+	return string(deobfuscated)
+}
+
 // Equals performs constant-time string comparison
 func (ss *SecureString) Equals(other *SecureString) bool {
-	return subtle.ConstantTimeCompare(ss.data, other.data) == 1
+	// Compare the deobfuscated data for accurate comparison
+	thisData := ss.String()
+	otherData := other.String()
+	return subtle.ConstantTimeCompare([]byte(thisData), []byte(otherData)) == 1
 }
 
 // Hash returns the SHA256 hash of the string
@@ -506,10 +546,18 @@ func (ss *SecureString) Hash() string {
 	return ss.hash
 }
 
-// Clear securely clears the string data
+// Clear securely clears the string data and key
 func (ss *SecureString) Clear() {
+	// Clear the obfuscated data
 	for i := range ss.data {
 		ss.data[i] = 0
+	}
+	
+	// Clear the XOR key
+	if ss.key != nil {
+		for i := range ss.key {
+			ss.key[i] = 0
+		}
 	}
 }
 
@@ -536,7 +584,7 @@ func (sm *SecretManager) Store(key, value string) {
 // Retrieve retrieves a secret
 func (sm *SecretManager) Retrieve(key string) (string, bool) {
 	if secret, exists := sm.secrets[key]; exists {
-		return string(secret.data), true
+		return secret.String(), true
 	}
 	return "", false
 }
