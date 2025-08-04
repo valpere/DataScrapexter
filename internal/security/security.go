@@ -470,24 +470,10 @@ func (sv *SecurityValidator) AddCustomRule(rule ValidationRule) {
 // - Uses simple XOR obfuscation which can be easily reversed
 // - The name "ObfuscatedString" reflects its limited security guarantees
 // 
-// Use Cases:
-// - Basic protection against casual memory inspection
-// - Ensuring sensitive data is explicitly cleared after use
-// - Development and testing environments
+// ObfuscatedString provides basic XOR obfuscation for in-memory data.
 //
-// For Production Security:
-// - Use dedicated secret management systems (HashiCorp Vault, AWS Secrets Manager)
-// - Implement OS-level memory protection with mlock() system calls
-// - Consider hardware security modules (HSMs) for critical secrets
-// - Use encrypted configuration files with proper key management
-
-// ObfuscatedString provides only basic XOR obfuscation for in-memory data.
-//
-// SECURITY WARNING:
-// This type does NOT provide cryptographic security and is NOT suitable for protecting secrets in production.
-// XOR obfuscation is trivial to reverse and does not protect against memory dumps, OS-level inspection, or other attacks.
+// SECURITY WARNING: This type is NOT cryptographically secure and is NOT suitable for protecting secrets in production.
 // For production, use dedicated secret management solutions (e.g., HashiCorp Vault, AWS Secrets Manager).
-// See package comments for more details.
 type ObfuscatedString struct {
 	data []byte
 	key  []byte
