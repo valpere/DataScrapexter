@@ -305,7 +305,24 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 	// Refill tokens based on elapsed time
 	if elapsed >= trl.refillRate {
 		tokensToAdd := elapsed / trl.refillRate
-		trl.tokens = min(trl.maxTokens, trl.tokens+int64(tokensToAdd))
+		// Prevent integer overflow when casting to int64
+		var safeTokensToAdd int64
+		if tokensToAdd > time.Duration(math.MaxInt64) {
+			safeTokensToAdd = math.MaxInt64
+		} else if tokensToAdd < 0 {
+			safeTokensToAdd = 0
+		} else {
+			safeTokensToAdd = int64(tokensToAdd)
+		}
+		// Prevent overflow when adding to trl.tokens
+		if trl.tokens > trl.maxTokens-safeTokensToAdd {
+			trl.tokens = trl.maxTokens
+		} else {
+			trl.tokens += safeTokensToAdd
+			if trl.tokens > trl.maxTokens {
+				trl.tokens = trl.maxTokens
+			}
+		}
 		trl.lastRefill = now
 	}
 	
