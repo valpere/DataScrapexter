@@ -767,9 +767,10 @@ type ConfigWatcher struct {
 	ctx             context.Context
 	cancel          context.CancelFunc
 	
-	// Goroutine monitoring
-	activeGoroutines int64 // Atomic counter for active callback goroutines
-	totalCallbacks   int64 // Total callbacks executed (for metrics)
+	// Goroutine monitoring and control
+	activeGoroutines int64         // Atomic counter for active callback goroutines
+	totalCallbacks   int64         // Total callbacks executed (for metrics)
+	callbackTimeout  time.Duration // Timeout for individual callback execution
 	wg               sync.WaitGroup // WaitGroup for graceful shutdown
 }
 
@@ -790,6 +791,7 @@ func NewConfigWatcher(filename string, pollInterval time.Duration) *ConfigWatche
 		stopWatching:    make(chan bool),
 		callbackWorkers: make(chan struct{}, maxWorkers),
 		maxWorkers:      maxWorkers,
+		callbackTimeout: 30 * time.Second, // Reasonable default timeout for callbacks
 		ctx:             ctx,
 		cancel:          cancel,
 	}
@@ -903,8 +905,8 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 				// Worker slot acquired, execute callback
 				defer func() { <-cw.callbackWorkers }() // Release worker slot
 				
-				// Use the watcher's context with additional timeout
-				ctx, cancel := context.WithTimeout(cw.ctx, 30*time.Second)
+				// Use the watcher's context with configurable timeout to prevent indefinite blocking
+				ctx, cancel := context.WithTimeout(cw.ctx, cw.callbackTimeout)
 				defer cancel() // Ensure resources are cleaned up
 				
 				// Execute callback with proper cancellation support
@@ -929,6 +931,13 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 }
 
 // executeCallbackWithContext executes a callback with context cancellation support
+// 
+// IMPORTANT: While this method enforces a timeout, if a callback blocks indefinitely,
+// the goroutine executing the callback may continue running even after the timeout.
+// The timeout prevents the caller from blocking, but the callback goroutine becomes
+// an "orphaned" goroutine that will eventually be garbage collected when the callback
+// completes or the process exits. This is a necessary trade-off to prevent deadlocks
+// in the configuration watcher.
 func (cw *ConfigWatcher) executeCallbackWithContext(ctx context.Context, callback func(*ScraperConfig, error), config *ScraperConfig, err error) {
 	// Channel to signal callback completion
 	done := make(chan struct{})
@@ -966,6 +975,14 @@ func (cw *ConfigWatcher) GetGoroutineStats() map[string]interface{} {
 		"total_callbacks":   atomic.LoadInt64(&cw.totalCallbacks),
 		"max_workers":       cw.maxWorkers,
 		"available_slots":   cw.maxWorkers - len(cw.callbackWorkers),
+	}
+}
+
+// SetCallbackTimeout configures the timeout for callback execution
+// This helps prevent goroutine leaks from blocking callbacks
+func (cw *ConfigWatcher) SetCallbackTimeout(timeout time.Duration) {
+	if timeout > 0 {
+		cw.callbackTimeout = timeout
 	}
 }
 

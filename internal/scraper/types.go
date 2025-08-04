@@ -142,6 +142,34 @@ type Config struct {
 	Pagination      *PaginationConfig    `yaml:"pagination" json:"pagination"`
 	RateLimiter     *RateLimiterConfig   `yaml:"rate_limiter" json:"rate_limiter"`
 	ErrorRecovery   *ErrorRecoveryConfig `yaml:"error_recovery" json:"error_recovery"`
+	MaxConcurrency  int                  `yaml:"max_concurrency" json:"max_concurrency"` // Maximum concurrent operations
+}
+
+// Validate validates the scraper configuration
+func (c *Config) Validate() error {
+	// Validate MaxConcurrency
+	if c.MaxConcurrency < 0 {
+		return fmt.Errorf("max_concurrency must be non-negative, got %d", c.MaxConcurrency)
+	}
+	if c.MaxConcurrency > 1000 {
+		return fmt.Errorf("max_concurrency exceeds reasonable limit of 1000, got %d", c.MaxConcurrency)
+	}
+	
+	// Validate other fields
+	if c.MaxRetries < 0 {
+		return fmt.Errorf("max_retries must be non-negative, got %d", c.MaxRetries)
+	}
+	if c.Timeout < 0 {
+		return fmt.Errorf("timeout must be non-negative, got %v", c.Timeout)
+	}
+	if c.RateLimit < 0 {
+		return fmt.Errorf("rate_limit must be non-negative, got %v", c.RateLimit)
+	}
+	if c.BurstSize < 0 {
+		return fmt.Errorf("burst_size must be non-negative, got %d", c.BurstSize)
+	}
+	
+	return nil
 }
 
 // ProxyConfig represents proxy configuration for the scraper

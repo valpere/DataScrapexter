@@ -69,7 +69,18 @@ func NewEngine(config *Config) (*Engine, error) {
 			MaxRedirects:    10,
 			RateLimit:       1 * time.Second,
 			BurstSize:       5,
+			MaxConcurrency:  DefaultMaxConcurrency,
 		}
+	}
+	
+	// Set default MaxConcurrency if not specified
+	if config.MaxConcurrency == 0 {
+		config.MaxConcurrency = DefaultMaxConcurrency
+	}
+	
+	// Validate configuration
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	// Existing HTTP client setup preserved
@@ -87,7 +98,7 @@ func NewEngine(config *Config) (*Engine, error) {
 		httpClient:     client,
 		config:         config,
 		errorService:   errors.NewService(),
-		MaxConcurrency: DefaultMaxConcurrency, // Default max concurrency
+		MaxConcurrency: config.MaxConcurrency, // Use configured max concurrency
 		
 		// Initialize performance optimizations
 		perfMetrics:    utils.NewPerformanceMetrics(),
