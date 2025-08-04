@@ -533,12 +533,10 @@ func (ss *SecureString) String() string {
 	return string(deobfuscated)
 }
 
-// Equals performs constant-time string comparison
+// Equals performs constant-time string comparison using SHA256 hash
 func (ss *SecureString) Equals(other *SecureString) bool {
-	// Compare the deobfuscated data for accurate comparison
-	thisData := ss.String()
-	otherData := other.String()
-	return subtle.ConstantTimeCompare([]byte(thisData), []byte(otherData)) == 1
+	// Compare the SHA256 hashes in constant time to avoid exposing sensitive data
+	return subtle.ConstantTimeCompare([]byte(ss.hash), []byte(other.hash)) == 1
 }
 
 // Hash returns the SHA256 hash of the string
