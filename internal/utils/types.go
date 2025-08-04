@@ -111,7 +111,7 @@ func (tc *TypeConverter) ToInt(value interface{}) ConversionResult {
 			return ConversionResult{Value: int(uval), Success: true}
 		}
 	case uint64:
-		if tc.strict && v > uint64(int(^uint(0)>>1)) {
+		if tc.strict && v > uint64(maxInt) {
 			return ConversionResult{
 				Value:   0,
 				Success: false,

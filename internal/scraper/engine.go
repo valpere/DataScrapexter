@@ -15,6 +15,12 @@ import (
 	"github.com/valpere/DataScrapexter/internal/utils"
 )
 
+// Default configuration constants
+const (
+	// DefaultMaxConcurrency defines the default maximum number of concurrent operations
+	DefaultMaxConcurrency = 10
+)
+
 // Enhanced Engine struct (existing fields preserved, error service added)
 type Engine struct {
 	// Existing fields preserved
@@ -81,7 +87,7 @@ func NewEngine(config *Config) (*Engine, error) {
 		httpClient:     client,
 		config:         config,
 		errorService:   errors.NewService(),
-		MaxConcurrency: 10, // Default max concurrency
+		MaxConcurrency: DefaultMaxConcurrency, // Default max concurrency
 		
 		// Initialize performance optimizations
 		perfMetrics:    utils.NewPerformanceMetrics(),

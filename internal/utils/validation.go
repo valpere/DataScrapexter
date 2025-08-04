@@ -38,6 +38,15 @@ var (
 	fieldNameSanitizePattern = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 )
 
+// Validation constants for configurable limits
+const (
+	// MaxSelectorLength defines the maximum allowed length for CSS selectors
+	MaxSelectorLength = 1000
+	
+	// MaxNestingDepth defines the maximum allowed nesting depth for CSS selectors
+	MaxNestingDepth = 20
+)
+
 // ValidationError represents a structured validation error
 type ValidationError struct {
 	Field   string `json:"field"`
@@ -345,18 +354,18 @@ func (sv *SelectorValidator) validateSelectorSafety(selector string) *Validation
 	}
 
 	// Check selector length (reasonable limit)
-	if len(selector) > 1000 {
+	if len(selector) > MaxSelectorLength {
 		return &ValidationError{
-			Message: "selector is too long (max 1000 characters)",
+			Message: fmt.Sprintf("selector is too long (max %d characters)", MaxSelectorLength),
 			Code:    "SELECTOR_TOO_LONG",
 		}
 	}
 
 	// Check nesting depth (prevent deeply nested selectors)
 	nestingDepth := strings.Count(selector, " ") + strings.Count(selector, ">") + strings.Count(selector, "+") + strings.Count(selector, "~")
-	if nestingDepth > 20 {
+	if nestingDepth > MaxNestingDepth {
 		return &ValidationError{
-			Message: "selector has too many nested levels (max 20)",
+			Message: fmt.Sprintf("selector has too many nested levels (max %d)", MaxNestingDepth),
 			Code:    "EXCESSIVE_NESTING",
 		}
 	}

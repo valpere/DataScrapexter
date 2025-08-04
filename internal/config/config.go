@@ -763,6 +763,8 @@ type ConfigWatcher struct {
 	mutex           sync.RWMutex
 	callbackWorkers chan struct{} // Semaphore to limit concurrent callback executions
 	maxWorkers      int           // Maximum number of concurrent callback workers
+	ctx             context.Context
+	cancel          context.CancelFunc
 }
 
 // NewConfigWatcher creates a new configuration file watcher
@@ -773,6 +775,8 @@ func NewConfigWatcher(filename string, pollInterval time.Duration) *ConfigWatche
 
 	// Limit concurrent callback executions to prevent resource exhaustion
 	maxWorkers := 10
+	ctx, cancel := context.WithCancel(context.Background())
+	
 	return &ConfigWatcher{
 		filename:        filename,
 		pollInterval:    pollInterval,
@@ -780,6 +784,8 @@ func NewConfigWatcher(filename string, pollInterval time.Duration) *ConfigWatche
 		stopWatching:    make(chan bool),
 		callbackWorkers: make(chan struct{}, maxWorkers),
 		maxWorkers:      maxWorkers,
+		ctx:             ctx,
+		cancel:          cancel,
 	}
 }
 
@@ -823,6 +829,7 @@ func (cw *ConfigWatcher) Stop() {
 	}
 
 	cw.running = false
+	cw.cancel() // Cancel the context to coordinate with goroutines
 	close(cw.stopWatching)
 }
 
@@ -875,26 +882,32 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 	// Execute callbacks with limited concurrency to prevent resource exhaustion
 	for _, callback := range callbacks {
 		go func(cb func(*ScraperConfig, error)) {
-			// Try to acquire worker semaphore with non-blocking select to prevent goroutine leaks
+			// Try to acquire worker semaphore with context coordination
 			select {
 			case cw.callbackWorkers <- struct{}{}:
 				// Worker slot acquired, execute callback
 				defer func() { <-cw.callbackWorkers }() // Release worker slot
 				
-				// Create context with timeout to prevent goroutine leaks
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				// Use the watcher's context with additional timeout
+				ctx, cancel := context.WithTimeout(cw.ctx, 30*time.Second)
 				defer cancel() // Ensure resources are cleaned up
 				
 				// Execute callback with proper cancellation support
 				cw.executeCallbackWithContext(ctx, cb, config, err)
-			case <-cw.stopWatching:
-				// Watcher is stopping, don't execute callback to prevent goroutine leak
+			case <-cw.ctx.Done():
+				// Watcher context is cancelled, don't execute callback
 				return
 			default:
-				// No worker slots available and watcher not stopping
-				// Skip this callback to prevent blocking and potential goroutine leak
-				// This prevents resource exhaustion when too many callbacks are queued
-				return
+				// No worker slots available, check if we should still try to execute
+				select {
+				case <-cw.ctx.Done():
+					// Watcher is stopping, don't execute callback
+					return
+				default:
+					// Skip this callback to prevent blocking and potential goroutine leak
+					// This prevents resource exhaustion when too many callbacks are queued
+					return
+				}
 			}
 		}(callback)
 	}

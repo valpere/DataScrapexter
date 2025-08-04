@@ -490,30 +490,33 @@ type ObfuscatedString struct {
 // 
 // SECURITY WARNING: This provides basic XOR obfuscation only, not cryptographic security.
 // Always call Clear() when done to zero out memory.
-func NewObfuscatedString(data string) (*ObfuscatedString, error) {
-	dataBytes := []byte(data)
-	hash := sha256.Sum256(dataBytes)
+func NewObfuscatedString(dataBytes []byte) (*ObfuscatedString, error) {
+	// Create a copy to avoid modifying the original slice
+	dataCopy := make([]byte, len(dataBytes))
+	copy(dataCopy, dataBytes)
+	
+	hash := sha256.Sum256(dataCopy)
 	
 	// Handle empty data case
-	if len(dataBytes) == 0 {
+	if len(dataCopy) == 0 {
 		return &ObfuscatedString{
-			data: dataBytes,
+			data: dataCopy,
 			key:  nil,
 			hash: hex.EncodeToString(hash[:]),
 		}, nil
 	}
 	
 	// Generate a random key for XOR obfuscation
-	key := make([]byte, len(dataBytes))
+	key := make([]byte, len(dataCopy))
 	if _, err := rand.Read(key); err != nil {
 		// SECURITY: Fail securely rather than silently degrading security
 		return nil, fmt.Errorf("failed to generate secure random key for obfuscation: %w", err)
 	}
 	
 	// Apply XOR obfuscation
-	obfuscated := make([]byte, len(dataBytes))
-	for i := range dataBytes {
-		obfuscated[i] = dataBytes[i] ^ key[i]
+	obfuscated := make([]byte, len(dataCopy))
+	for i := range dataCopy {
+		obfuscated[i] = dataCopy[i] ^ key[i]
 	}
 	
 	return &ObfuscatedString{
@@ -521,6 +524,13 @@ func NewObfuscatedString(data string) (*ObfuscatedString, error) {
 		key:  key,
 		hash: hex.EncodeToString(hash[:]),
 	}, nil
+}
+
+// NewObfuscatedStringFromString creates a new ObfuscatedString from a string.
+// This is a convenience wrapper that converts string to []byte.
+// For better security, prefer using NewObfuscatedString with []byte directly.
+func NewObfuscatedStringFromString(data string) (*ObfuscatedString, error) {
+	return NewObfuscatedString([]byte(data))
 }
 
 // String returns the deobfuscated string data
@@ -583,7 +593,7 @@ func (sm *SecretManager) Store(key, value string) error {
 		existing.Clear() // Clear existing secret
 	}
 	
-	obfuscatedString, err := NewObfuscatedString(value)
+	obfuscatedString, err := NewObfuscatedStringFromString(value)
 	if err != nil {
 		return fmt.Errorf("failed to store secret '%s': %w", key, err)
 	}
