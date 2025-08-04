@@ -495,7 +495,14 @@ func NewSecureString(data string) *SecureString {
 	// Generate a random key for XOR obfuscation
 	key := make([]byte, len(dataBytes))
 	if len(dataBytes) > 0 {
-		rand.Read(key)
+		if _, err := rand.Read(key); err != nil {
+			// If random key generation fails, fall back to non-obfuscated SecureString
+			return &SecureString{
+				data: dataBytes,
+				key:  nil,
+				hash: hex.EncodeToString(hash[:]),
+			}
+		}
 		
 		// Apply XOR obfuscation
 		obfuscated := make([]byte, len(dataBytes))
