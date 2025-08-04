@@ -536,7 +536,7 @@ func shortenFuncName(funcName string) string {
 }
 
 // debugMode controls whether expensive debug operations are enabled.
-var debugMode bool = false
+var debugMode bool
 
 // EnableDebugMode sets debugMode to true, allowing expensive debug operations.
 func EnableDebugMode() {
