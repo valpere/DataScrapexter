@@ -308,7 +308,7 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 	if elapsed >= trl.refillRate {
 		// Calculate tokens to add using safe arithmetic
 		// Use integer division to avoid floating point precision issues
-		tokensToAdd := int64(elapsed / trl.refillRate)
+		tokensToAdd := int64(float64(elapsed) / float64(trl.refillRate))
 		
 		// Apply tokens using simple bounds checking
 		if tokensToAdd > 0 {
