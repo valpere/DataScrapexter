@@ -84,7 +84,7 @@ func (tc *TypeConverter) ToInt(value interface{}) ConversionResult {
 	case int32:
 		return ConversionResult{Value: int(v), Success: true}
 	case int64:
-		if tc.strict && (v > int64(int(^uint(0)>>1)) || v < int64(^int(^uint(0)>>1))) {
+		if tc.strict && (v > int64(maxInt) || v < int64(minInt)) {
 			return ConversionResult{
 				Value:   0,
 				Success: false,
