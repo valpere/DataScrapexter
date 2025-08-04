@@ -535,7 +535,9 @@ func shortenFuncName(funcName string) string {
 	return funcName
 }
 
-// getGoroutineID returns the current goroutine ID (expensive operation)
+// getGoroutineID returns the current goroutine ID.
+// WARNING: This is an expensive operation (uses runtime.Stack and string parsing).
+// Only use for debugging purposes.
 func getGoroutineID() uint64 {
 	var buf [64]byte
 	n := runtime.Stack(buf[:], false)
