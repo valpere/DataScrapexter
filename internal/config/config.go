@@ -462,7 +462,7 @@ func (cc *ConfigCache) evictLRU() {
 
 func (cc *ConfigCache) calculateHash(config *ScraperConfig) string {
 	data, _ := yaml.Marshal(config)
-	hash := md5.Sum(data)
+	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
 }
 
