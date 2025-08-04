@@ -876,21 +876,17 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 	for _, callback := range callbacks {
 		go func(cb func(*ScraperConfig, error)) {
 			// Acquire worker semaphore (non-blocking to prevent deadlock)
-			select {
-			case cw.callbackWorkers <- struct{}{}:
-				// Worker slot acquired, execute callback
-				defer func() { <-cw.callbackWorkers }() // Release worker slot
-				
-				// Create context with timeout to prevent goroutine leaks
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cancel() // Ensure resources are cleaned up
-				
-				// Execute callback with proper cancellation support
-				cw.executeCallbackWithContext(ctx, cb, config, err)
-			default:
-				// No worker slots available, skip this callback to prevent blocking
-				// This prevents resource exhaustion when too many callbacks are queued
-			}
+			// Acquire worker semaphore (blocking to ensure all callbacks are executed)
+			cw.callbackWorkers <- struct{}{}
+			// Worker slot acquired, execute callback
+			defer func() { <-cw.callbackWorkers }() // Release worker slot
+			
+			// Create context with timeout to prevent goroutine leaks
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel() // Ensure resources are cleaned up
+			
+			// Execute callback with proper cancellation support
+			cw.executeCallbackWithContext(ctx, cb, config, err)
 		}(callback)
 	}
 }
