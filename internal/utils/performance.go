@@ -5,7 +5,6 @@ package utils
 import (
 	"context"
 	"errors"
-	"math"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -159,9 +158,22 @@ func NewPool[T any](newFunc func() T, resetFunc func(T)) *Pool[T] {
 	}
 }
 
-// Get retrieves an object from the pool
+// Get retrieves an object from the pool with type safety
 func (p *Pool[T]) Get() T {
-	return p.pool.Get().(T)
+	obj := p.pool.Get()
+	if typedObj, ok := obj.(T); ok {
+		return typedObj
+	}
+	
+	// This should never happen with proper pool usage, but provides safety
+	// Create a new object using the newFunc function as fallback
+	if p.newFunc != nil {
+		return p.newFunc()
+	}
+	
+	// Last resort: return zero value of T
+	var zero T
+	return zero
 }
 
 // Put returns an object to the pool after resetting it

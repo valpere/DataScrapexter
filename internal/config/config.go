@@ -770,6 +770,7 @@ type ConfigWatcher struct {
 	// Goroutine monitoring
 	activeGoroutines int64 // Atomic counter for active callback goroutines
 	totalCallbacks   int64 // Total callbacks executed (for metrics)
+	wg               sync.WaitGroup // WaitGroup for graceful shutdown
 }
 
 // NewConfigWatcher creates a new configuration file watcher

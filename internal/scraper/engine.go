@@ -280,7 +280,7 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 	
 	// Get result from pool for memory efficiency
 	result := e.resultPool.Get()
-	defer e.resultPool.Put(result) // This resets the pooled result after a copy is returned; safe timing
+	// Note: Put will be called after creating the copy to avoid race conditions
 	
 	result.Timestamp = time.Now()
 	
@@ -293,7 +293,28 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 		result.Error = circuitErr
 		result.Errors = append(result.Errors, circuitErr.Error())
 		e.perfMetrics.RecordOperation(timer.Elapsed(), false)
-		return result, circuitErr
+		
+		// Create a copy before returning and putting back to pool
+		resultCopy := &Result{
+			Data:      make(map[string]interface{}),
+			Success:   result.Success,
+			Error:     result.Error,
+			Timestamp: result.Timestamp,
+			Errors:    make([]string, len(result.Errors)),
+			Warnings:  make([]string, len(result.Warnings)),
+			ErrorRate: result.ErrorRate,
+		}
+		
+		// Copy data and slices
+		for k, v := range result.Data {
+			resultCopy.Data[k] = v
+		}
+		copy(resultCopy.Errors, result.Errors)
+		copy(resultCopy.Warnings, result.Warnings)
+		
+		// Now safe to put the result back to pool
+		e.resultPool.Put(result)
+		return resultCopy, circuitErr
 	}
 
 	// Create a copy of the result to return (since we'll put the pooled one back)
@@ -313,6 +334,9 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 	}
 	copy(resultCopy.Errors, result.Errors)
 	copy(resultCopy.Warnings, result.Warnings)
+	
+	// Now safe to put the result back to pool after creating the copy
+	e.resultPool.Put(result)
 	
 	return resultCopy, nil
 }
