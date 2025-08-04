@@ -5,7 +5,6 @@ package utils
 import (
 	"context"
 	"errors"
-	"math"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -308,22 +307,31 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 	// Refill tokens based on elapsed time
 	if elapsed >= trl.refillRate {
 		tokensToAdd := elapsed / trl.refillRate
-		// Prevent integer overflow when casting to int64
+		
+		// Convert to int64 safely, checking for overflow
 		var safeTokensToAdd int64
-		if tokensToAdd > time.Duration(math.MaxInt64) {
-			safeTokensToAdd = math.MaxInt64
-		} else if tokensToAdd < 0 {
+		if tokensToAdd < 0 {
+			// Negative duration (shouldn't happen but be safe)
 			safeTokensToAdd = 0
+		} else if tokensToAdd > time.Duration(trl.maxTokens) {
+			// Cap at maxTokens to prevent excessive token accumulation
+			safeTokensToAdd = trl.maxTokens
 		} else {
+			// Safe conversion since we know it's within valid range
 			safeTokensToAdd = int64(tokensToAdd)
 		}
-		// Prevent overflow when adding to trl.tokens
-		if trl.tokens > trl.maxTokens-safeTokensToAdd {
-			trl.tokens = trl.maxTokens
-		} else {
-			trl.tokens += safeTokensToAdd
-			if trl.tokens > trl.maxTokens {
+		
+		// Safe addition with overflow prevention
+		if safeTokensToAdd > 0 {
+			// Check if addition would overflow or exceed maxTokens
+			if safeTokensToAdd > trl.maxTokens || trl.tokens > trl.maxTokens-safeTokensToAdd {
 				trl.tokens = trl.maxTokens
+			} else {
+				trl.tokens += safeTokensToAdd
+				// Double-check to ensure we don't exceed maxTokens
+				if trl.tokens > trl.maxTokens {
+					trl.tokens = trl.maxTokens
+				}
 			}
 		}
 		trl.lastRefill = now

@@ -224,25 +224,35 @@ func (c *ScraperConfig) SimpleValidate() error {
 	return nil
 }
 
-// ConfigCache provides thread-safe configuration caching
+// ConfigCache provides thread-safe configuration caching with efficient LRU eviction
 type ConfigCache struct {
-	cache     map[string]*CachedConfig
-	mutex     sync.RWMutex
-	maxSize   int
-	timeout   time.Duration
+	cache         map[string]*CachedConfig
+	lruList       *lruNode // Doubly-linked list for O(1) LRU operations
+	lruTail       *lruNode // Tail of the LRU list
+	mutex         sync.RWMutex
+	maxSize       int
+	timeout       time.Duration
 	cleanupTicker *time.Ticker
 	stopCleanup   chan bool
 }
 
+// lruNode represents a node in the doubly-linked LRU list
+type lruNode struct {
+	key  string
+	prev *lruNode
+	next *lruNode
+}
+
 // CachedConfig holds a configuration with metadata
 type CachedConfig struct {
-	Config     *ScraperConfig
-	Hash       string
-	LoadTime   time.Time
-	AccessTime time.Time
-	FileName   string
-	FileSize   int64
+	Config      *ScraperConfig
+	Hash        string
+	LoadTime    time.Time
+	AccessTime  time.Time
+	FileName    string
+	FileSize    int64
 	AccessCount int64
+	lruNode     *lruNode // Reference to LRU list node for O(1) operations
 }
 
 // ConfigManager provides advanced configuration management
@@ -320,11 +330,17 @@ func NewConfigManager(opts ConfigManagerOptions) *ConfigManager {
 	}
 
 	cache := &ConfigCache{
-		cache:   make(map[string]*CachedConfig),
-		maxSize: opts.CacheSize,
-		timeout: opts.CacheTimeout,
+		cache:       make(map[string]*CachedConfig),
+		maxSize:     opts.CacheSize,
+		timeout:     opts.CacheTimeout,
 		stopCleanup: make(chan bool),
 	}
+	
+	// Initialize LRU list with sentinel nodes to simplify operations
+	cache.lruList = &lruNode{}
+	cache.lruTail = &lruNode{}
+	cache.lruList.next = cache.lruTail
+	cache.lruTail.prev = cache.lruList
 
 	// Start cleanup goroutine
 	cache.cleanupTicker = time.NewTicker(opts.CacheTimeout / 4)
@@ -396,8 +412,8 @@ func (cm *ConfigManager) LoadFromFileWithCache(filename string) (*ScraperConfig,
 
 // Cache methods
 func (cc *ConfigCache) get(filename string, fileSize int64, modTime time.Time) (*CachedConfig, bool) {
-	cc.mutex.RLock()
-	defer cc.mutex.RUnlock()
+	cc.mutex.Lock() // Use write lock since we modify LRU order
+	defer cc.mutex.Unlock()
 
 	cached, exists := cc.cache[filename]
 	if !exists {
@@ -406,17 +422,26 @@ func (cc *ConfigCache) get(filename string, fileSize int64, modTime time.Time) (
 
 	// Check if file has been modified
 	if cached.FileSize != fileSize {
+		// Remove invalid entry
+		cc.removeFromLRU(cached.lruNode)
+		delete(cc.cache, filename)
 		return nil, false
 	}
 
 	// Check if cache entry is expired
 	if time.Since(cached.LoadTime) > cc.timeout {
+		// Remove expired entry
+		cc.removeFromLRU(cached.lruNode)
+		delete(cc.cache, filename)
 		return nil, false
 	}
 
 	// Update access time and count
 	cached.AccessTime = time.Now()
 	cached.AccessCount++
+	
+	// Move to front of LRU list (most recently used)
+	cc.moveToFront(cached.lruNode)
 
 	return cached, true
 }
@@ -425,15 +450,32 @@ func (cc *ConfigCache) put(filename string, config *ScraperConfig, fileSize int6
 	cc.mutex.Lock()
 	defer cc.mutex.Unlock()
 
+	// Check if entry already exists
+	if existing, exists := cc.cache[filename]; exists {
+		// Update existing entry and move to front
+		existing.Config = config
+		existing.Hash = cc.calculateHash(config)
+		existing.LoadTime = time.Now()
+		existing.AccessTime = time.Now()
+		existing.FileSize = fileSize
+		existing.AccessCount++
+		cc.moveToFront(existing.lruNode)
+		return
+	}
+
 	// Check cache size and evict if necessary
 	if len(cc.cache) >= cc.maxSize {
 		cc.evictLRU()
 	}
 
+	// Create new LRU node
+	node := &lruNode{key: filename}
+	
 	// Calculate hash for integrity checking
 	hash := cc.calculateHash(config)
 
-	cc.cache[filename] = &CachedConfig{
+	// Create cached config with LRU node reference
+	cached := &CachedConfig{
 		Config:      config,
 		Hash:        hash,
 		LoadTime:    time.Now(),
@@ -441,23 +483,46 @@ func (cc *ConfigCache) put(filename string, config *ScraperConfig, fileSize int6
 		FileName:    filename,
 		FileSize:    fileSize,
 		AccessCount: 1,
+		lruNode:     node,
 	}
+	
+	// Add to cache and LRU list
+	cc.cache[filename] = cached
+	cc.addToFront(node)
 }
 
+// evictLRU removes the least recently used item in O(1) time
 func (cc *ConfigCache) evictLRU() {
-	var oldestKey string
-	var oldestTime time.Time = time.Now()
-
-	for key, cached := range cc.cache {
-		if cached.AccessTime.Before(oldestTime) {
-			oldestTime = cached.AccessTime
-			oldestKey = key
-		}
+	// Get the least recently used node (tail's previous)
+	lru := cc.lruTail.prev
+	if lru == cc.lruList {
+		// List is empty, nothing to evict
+		return
 	}
+	
+	// Remove from cache and LRU list
+	delete(cc.cache, lru.key)
+	cc.removeFromLRU(lru)
+}
 
-	if oldestKey != "" {
-		delete(cc.cache, oldestKey)
-	}
+// addToFront adds a node to the front of the LRU list (most recently used)
+func (cc *ConfigCache) addToFront(node *lruNode) {
+	node.prev = cc.lruList
+	node.next = cc.lruList.next
+	cc.lruList.next.prev = node
+	cc.lruList.next = node
+}
+
+// removeFromLRU removes a node from the LRU list
+func (cc *ConfigCache) removeFromLRU(node *lruNode) {
+	node.prev.next = node.next
+	node.next.prev = node.prev
+}
+
+// moveToFront moves an existing node to the front of the LRU list
+func (cc *ConfigCache) moveToFront(node *lruNode) {
+	cc.removeFromLRU(node)
+	cc.addToFront(node)
 }
 
 func (cc *ConfigCache) calculateHash(config *ScraperConfig) string {
@@ -497,6 +562,10 @@ func (cc *ConfigCache) Clear() {
 	cc.mutex.Lock()
 	defer cc.mutex.Unlock()
 	cc.cache = make(map[string]*CachedConfig)
+	
+	// Reset LRU list
+	cc.lruList.next = cc.lruTail
+	cc.lruTail.prev = cc.lruList
 }
 
 // GetStats returns cache statistics
