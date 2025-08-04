@@ -316,7 +316,11 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 	now := time.Now().UnixNano()
 	elapsed := time.Duration(now - trl.lastRefill)
 
-	// Clamp tokens to valid range before refill
+	// Clamp tokens to valid range before refill.
+	// Defensive programming: tokens may become negative or exceed maxTokens due to
+	// timing discrepancies, concurrent access, or integer overflows in edge cases.
+	// This ensures the rate limiter remains robust even if token calculation logic
+	// encounters unexpected states.
 	if trl.tokens < 0 {
 		trl.tokens = 0
 	} else if trl.tokens > trl.maxTokens {
