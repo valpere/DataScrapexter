@@ -10,6 +10,34 @@ import (
 	"unicode/utf8"
 )
 
+// Pre-compiled regex patterns for better performance
+var (
+	// CSS selector validation patterns
+	elementSelectorPattern    = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]*$`)
+	classSelectorPattern      = regexp.MustCompile(`^\.[a-zA-Z_-][a-zA-Z0-9_-]*$`)
+	idSelectorPattern         = regexp.MustCompile(`^#[a-zA-Z_-][a-zA-Z0-9_-]*$`)
+	universalSelectorPattern  = regexp.MustCompile(`^\*$`)
+	attributeSelectorPattern  = regexp.MustCompile(`^\[[a-zA-Z][a-zA-Z0-9-]*(?:[~|^$*]?=["']?[^"'\]]*["']?)?\]$`)
+	pseudoClassPattern        = regexp.MustCompile(`^:[a-zA-Z-]+(?:\([^)]*\))?$`)
+	pseudoElementPattern      = regexp.MustCompile(`^::[a-zA-Z-]+$`)
+	complexSelectorPattern    = regexp.MustCompile(`^[a-zA-Z0-9\s\[\].:_#>+~()"'=-]+$`)
+	combinatorPattern         = regexp.MustCompile(`\s*[>+~]\s*`)
+	compoundSelectorPattern   = regexp.MustCompile(`^(?:[a-zA-Z][a-zA-Z0-9-]*|\*)?(?:\.[a-zA-Z_-][a-zA-Z0-9_-]*)*(?:#[a-zA-Z_-][a-zA-Z0-9_-]*)?(?:\[[^\]]+\])*(?::[a-zA-Z-]+(?:\([^)]*\))?)*(?:::[a-zA-Z-]+)*$`)
+	normalizeSpacePattern     = regexp.MustCompile(`\s+`)
+	
+	// Security validation patterns
+	javascriptProtocolPattern = regexp.MustCompile(`javascript:`)
+	cssExpressionPattern      = regexp.MustCompile(`expression\s*\(`)
+	javascriptURLPattern      = regexp.MustCompile(`\burl\s*\(\s*["']?javascript:`)
+	importStatementPattern    = regexp.MustCompile(`\bimport\b`)
+	
+	// CSS combinator pattern
+	cssCombinatorPattern = regexp.MustCompile(`[>+~]\s*[a-zA-Z0-9\[\].:_#-]`)
+	
+	// Field name sanitization pattern
+	fieldNameSanitizePattern = regexp.MustCompile(`[^a-zA-Z0-9_]`)
+)
+
 // ValidationError represents a structured validation error
 type ValidationError struct {
 	Field   string `json:"field"`
@@ -279,29 +307,29 @@ func (sv *SelectorValidator) Validate(value interface{}) *ValidationError {
 
 // validateSelectorSafety performs additional safety checks for strict mode
 func (sv *SelectorValidator) validateSelectorSafety(selector string) *ValidationError {
-	// Check for potentially dangerous patterns
+	// Check for potentially dangerous patterns using pre-compiled regex
 	dangerousPatterns := []struct {
 		pattern *regexp.Regexp
 		message string
 		code    string
 	}{
 		{
-			regexp.MustCompile(`javascript:`),
+			javascriptProtocolPattern,
 			"selector contains javascript: protocol",
 			"DANGEROUS_PROTOCOL",
 		},
 		{
-			regexp.MustCompile(`expression\s*\(`),
+			cssExpressionPattern,
 			"selector contains CSS expression",
 			"CSS_EXPRESSION",
 		},
 		{
-			regexp.MustCompile(`\burl\s*\(\s*["']?javascript:`),
+			javascriptURLPattern,
 			"selector contains javascript URL",
 			"JAVASCRIPT_URL",
 		},
 		{
-			regexp.MustCompile(`\bimport\b`),
+			importStatementPattern,
 			"selector contains import statement",
 			"IMPORT_STATEMENT",
 		},
@@ -339,8 +367,7 @@ func (sv *SelectorValidator) validateSelectorSafety(selector string) *Validation
 // isValidCSSCombinator checks if the string contains valid CSS combinators
 func isValidCSSCombinator(selector string) bool {
 	// Check for valid CSS combinators: >, +, ~, space
-	combinatorPattern := regexp.MustCompile(`[>+~]\s*[a-zA-Z0-9\[\].:_#-]`)
-	return combinatorPattern.MatchString(selector)
+	return cssCombinatorPattern.MatchString(selector)
 }
 
 // isValidSelectorPattern performs comprehensive CSS selector pattern validation
@@ -373,24 +400,16 @@ func isValidSingleSelector(selector string) bool {
 		return false
 	}
 
-	// Advanced CSS selector validation patterns
+	// Use pre-compiled patterns for better performance
 	patterns := []*regexp.Regexp{
-		// Element selectors: div, span, etc.
-		regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]*$`),
-		// Class selectors: .class-name
-		regexp.MustCompile(`^\.[a-zA-Z_-][a-zA-Z0-9_-]*$`),
-		// ID selectors: #id-name
-		regexp.MustCompile(`^#[a-zA-Z_-][a-zA-Z0-9_-]*$`),
-		// Universal selector
-		regexp.MustCompile(`^\*$`),
-		// Attribute selectors: [attr], [attr="value"], [attr~="value"], etc.
-		regexp.MustCompile(`^\[[a-zA-Z][a-zA-Z0-9-]*(?:[~|^$*]?=["']?[^"'\]]*["']?)?\]$`),
-		// Pseudo-class selectors: :hover, :nth-child(n), etc.
-		regexp.MustCompile(`^:[a-zA-Z-]+(?:\([^)]*\))?$`),
-		// Pseudo-element selectors: ::before, ::after
-		regexp.MustCompile(`^::[a-zA-Z-]+$`),
-		// Complex selectors with combinators and multiple parts
-		regexp.MustCompile(`^[a-zA-Z0-9\s\[\].:_#>+~()"'=-]+$`),
+		elementSelectorPattern,    // Element selectors: div, span, etc.
+		classSelectorPattern,      // Class selectors: .class-name
+		idSelectorPattern,         // ID selectors: #id-name
+		universalSelectorPattern,  // Universal selector: *
+		attributeSelectorPattern,  // Attribute selectors: [attr], [attr="value"], etc.
+		pseudoClassPattern,        // Pseudo-class selectors: :hover, :nth-child(n), etc.
+		pseudoElementPattern,      // Pseudo-element selectors: ::before, ::after
+		complexSelectorPattern,    // Complex selectors with combinators and multiple parts
 	}
 
 	// Check if selector matches any valid pattern
@@ -405,11 +424,10 @@ func isValidSingleSelector(selector string) bool {
 
 // isValidComplexSelector validates complex selectors with combinators
 func isValidComplexSelector(selector string) bool {
-	// Remove extra spaces and normalize
-	normalized := regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(selector), " ")
+	// Remove extra spaces and normalize using pre-compiled pattern
+	normalized := normalizeSpacePattern.ReplaceAllString(strings.TrimSpace(selector), " ")
 	
-	// Check for valid combinator patterns
-	combinatorPattern := regexp.MustCompile(`\s*[>+~]\s*`)
+	// Check for valid combinator patterns using pre-compiled pattern
 	parts := combinatorPattern.Split(normalized, -1)
 	
 	// Validate each part of the complex selector
@@ -434,10 +452,8 @@ func isValidCompoundSelector(selector string) bool {
 		return true
 	}
 	
-	// Pattern for compound selectors: element.class#id[attr]:pseudo::pseudo-element
-	compoundPattern := regexp.MustCompile(`^(?:[a-zA-Z][a-zA-Z0-9-]*|\*)?(?:\.[a-zA-Z_-][a-zA-Z0-9_-]*)*(?:#[a-zA-Z_-][a-zA-Z0-9_-]*)?(?:\[[^\]]+\])*(?::[a-zA-Z-]+(?:\([^)]*\))?)*(?:::[a-zA-Z-]+)*$`)
-	
-	return compoundPattern.MatchString(selector)
+	// Use pre-compiled pattern for compound selectors
+	return compoundSelectorPattern.MatchString(selector)
 }
 
 // ValidateStruct validates a struct using field tags or custom validators
@@ -482,8 +498,8 @@ func IsValidOutputFormat(format string) bool {
 
 // SanitizeFieldName ensures field names are safe for use in outputs
 func SanitizeFieldName(name string) string {
-	// Remove or replace problematic characters
-	clean := regexp.MustCompile(`[^a-zA-Z0-9_]`).ReplaceAllString(name, "_")
+	// Remove or replace problematic characters using pre-compiled pattern
+	clean := fieldNameSanitizePattern.ReplaceAllString(name, "_")
 	
 	// Ensure it doesn't start with a number
 	if len(clean) > 0 && clean[0] >= '0' && clean[0] <= '9' {

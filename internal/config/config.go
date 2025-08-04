@@ -558,8 +558,18 @@ func (cm *ConfigManager) GetMetrics() map[string]interface{} {
 			}
 			return float64(cm.metrics.cacheHits) / float64(denom)
 		}(),
-		"avg_load_time":   cm.metrics.loadTime / time.Duration(cm.metrics.loadsTotal),
-		"avg_validation_time": cm.metrics.validationTime / time.Duration(cm.metrics.loadsTotal),
+		"avg_load_time":   func() time.Duration {
+			if cm.metrics.loadsTotal == 0 {
+				return 0
+			}
+			return cm.metrics.loadTime / time.Duration(cm.metrics.loadsTotal)
+		}(),
+		"avg_validation_time": func() time.Duration {
+			if cm.metrics.loadsTotal == 0 {
+				return 0
+			}
+			return cm.metrics.validationTime / time.Duration(cm.metrics.loadsTotal)
+		}(),
 	}
 }
 

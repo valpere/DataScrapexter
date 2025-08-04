@@ -5,6 +5,7 @@ package utils
 import (
 	"context"
 	"errors"
+	"math"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -56,8 +57,10 @@ func (pm *PerformanceMetrics) RecordOperation(duration time.Duration, success bo
 	if duration > pm.MaxLatency {
 		pm.MaxLatency = duration
 	}
-	if pm.TotalOperations > 0 {
-		pm.AverageLatency = pm.TotalLatency / time.Duration(pm.TotalOperations)
+	// Use atomic read for thread-safe access to TotalOperations
+	totalOps := atomic.LoadInt64(&pm.TotalOperations)
+	if totalOps > 0 {
+		pm.AverageLatency = pm.TotalLatency / time.Duration(totalOps)
 	} else {
 		pm.AverageLatency = 0
 	}
@@ -66,7 +69,7 @@ func (pm *PerformanceMetrics) RecordOperation(duration time.Duration, success bo
 	// Calculate operations per second
 	elapsed := pm.LastOperationTime.Sub(pm.StartTime)
 	if elapsed > 0 {
-		pm.OperationsPerSec = float64(pm.TotalOperations) / elapsed.Seconds()
+		pm.OperationsPerSec = float64(totalOps) / elapsed.Seconds()
 	}
 }
 

@@ -458,19 +458,34 @@ func (sv *SecurityValidator) AddCustomRule(rule ValidationRule) {
 	sv.customRules = append(sv.customRules, rule)
 }
 
-// SecureString provides secure string operations.
-// WARNING: SecureString does NOT protect against memory dumps or swapping.
-// Sensitive data stored in this struct may be accessible via OS memory inspection.
-// For highly sensitive data, consider using OS-level memory protection and always
-// call Destroy() when done to zero out memory.
+// SecureString provides basic string operations with memory clearing capabilities.
+// 
+// IMPORTANT SECURITY NOTICE:
+// This implementation provides BASIC obfuscation only and does NOT offer true security:
+// - Does NOT protect against memory dumps or OS-level memory inspection
+// - Does NOT prevent memory swapping to disk
+// - Does NOT use OS-level memory protection (mlock)
+// - Data may be visible in core dumps or swap files
+// 
+// Use Cases:
+// - Basic protection against casual memory inspection
+// - Ensuring sensitive data is explicitly cleared after use
+// - Development and testing environments
+//
+// For Production Security:
+// - Use dedicated secret management systems (HashiCorp Vault, AWS Secrets Manager)
+// - Implement OS-level memory protection with mlock() system calls
+// - Consider hardware security modules (HSMs) for critical secrets
+// - Use encrypted configuration files with proper key management
 type SecureString struct {
 	data []byte
 	hash string
 }
 
-// NewSecureString creates a new secure string.
-// WARNING: This does NOT protect against memory dumps or swapping.
-// Call Destroy() when done to zero out memory.
+// NewSecureString creates a new SecureString with basic obfuscation.
+// 
+// SECURITY WARNING: This provides basic obfuscation only, not cryptographic security.
+// Always call Clear() when done to zero out memory.
 func NewSecureString(data string) *SecureString {
 	dataBytes := []byte(data)
 	hash := sha256.Sum256(dataBytes)
