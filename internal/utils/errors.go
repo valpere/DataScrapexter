@@ -553,23 +553,20 @@ func EnableDebugMode() {
 //
 // Performance Impact: ~10-50μs per call depending on stack depth
 // Consider using atomic counters or other alternatives for performance-critical paths.
-func getExpensiveGoroutineID() uint64 {
-	// Critical guard: Return immediately if debug mode is disabled
-	// This prevents any expensive operations from occurring in production
+// getDebugGoroutineID returns the current goroutine ID using expensive runtime operations.
+// This should ONLY be used for debugging purposes when absolutely necessary.
+func getDebugGoroutineID() uint64 {
 	if !debugMode {
 		return 0
 	}
-	
-	// EXPENSIVE: runtime.Stack captures the entire goroutine stack
+
 	var buf [64]byte
 	n := runtime.Stack(buf[:], false)
-	
-	// EXPENSIVE: String parsing and field extraction
+
 	stackStr := string(buf[:n])
 	if !strings.HasPrefix(stackStr, "goroutine ") {
 		return 0 // Invalid format, return safely
 	}
-	
 	idField := strings.Fields(strings.TrimPrefix(stackStr, "goroutine "))[0]
 	if id, err := strconv.ParseUint(idField, 10, 64); err == nil {
 		return id
