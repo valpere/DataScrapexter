@@ -859,7 +859,12 @@ func (e *Engine) ScrapeWithBatching(ctx context.Context, urls []string, extracto
 		}
 		
 		batch := urls[i:end]
-		batchResults, err := e.ScrapeMultipleOptimized(ctx, batch, extractors, min(len(batch), 5))
+		// Use configurable concurrency limit, default to 5 if not set
+		maxConc := e.MaxConcurrency
+		if maxConc <= 0 {
+			maxConc = 5
+		}
+		batchResults, err := e.ScrapeMultipleOptimized(ctx, batch, extractors, min(len(batch), maxConc))
 		if err != nil {
 			return allResults, fmt.Errorf("batch %d-%d failed: %w", i, end-1, err)
 		}
