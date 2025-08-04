@@ -357,7 +357,7 @@ func NewCircuitBreaker(maxFailures int64, resetTimeout time.Duration) *CircuitBr
 // Execute executes a function with circuit breaker protection
 func (cb *CircuitBreaker) Execute(fn func() error) error {
 	if !cb.allowRequest() {
-		return NewError(ErrCodeResourceExhausted, "circuit breaker is open").Build()
+		return errors.New(fmt.Sprintf("%v: circuit breaker is open", ErrCodeResourceExhausted))
 	}
 	
 	err := fn()
