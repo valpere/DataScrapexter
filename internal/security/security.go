@@ -480,6 +480,14 @@ func (sv *SecurityValidator) AddCustomRule(rule ValidationRule) {
 // - Implement OS-level memory protection with mlock() system calls
 // - Consider hardware security modules (HSMs) for critical secrets
 // - Use encrypted configuration files with proper key management
+
+// ObfuscatedString provides only basic XOR obfuscation for in-memory data.
+//
+// SECURITY WARNING:
+// This type does NOT provide cryptographic security and is NOT suitable for protecting secrets in production.
+// XOR obfuscation is trivial to reverse and does not protect against memory dumps, OS-level inspection, or other attacks.
+// For production, use dedicated secret management solutions (e.g., HashiCorp Vault, AWS Secrets Manager).
+// See package comments for more details.
 type ObfuscatedString struct {
 	data []byte
 	key  []byte
