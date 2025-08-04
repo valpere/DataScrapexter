@@ -213,9 +213,10 @@ func (uv *URLValidator) Validate(value interface{}) *ValidationError {
 	return nil
 }
 
-// SelectorValidator validates CSS selector strings
+// SelectorValidator validates CSS selector strings with comprehensive validation
 type SelectorValidator struct {
 	Required bool
+	Strict   bool // Enable strict validation mode
 }
 
 // Validate implements the Validator interface for CSS selectors
@@ -241,20 +242,94 @@ func (sv *SelectorValidator) Validate(value interface{}) *ValidationError {
 		return nil
 	}
 
-	// Basic CSS selector validation
-	// This is a simplified check - in production, you might want more sophisticated validation
-	if (strings.Contains(str, "<") || strings.Contains(str, ">")) && !isValidCSSCombinator(str) {
+	// Comprehensive CSS selector validation
+	// Check for obviously invalid characters first
+	if strings.ContainsAny(str, "@{};\\`") {
 		return &ValidationError{
-			Message: "selector contains invalid characters",
-			Code:    "INVALID_SELECTOR",
+			Message: "selector contains invalid characters (@, {, }, ;, \\, `)",
+			Code:    "INVALID_CHARACTERS",
 		}
 	}
 
-	// Check for common selector patterns
+	// Check for HTML tags (potential XSS attempt)
+	if strings.Contains(str, "<") && !isValidCSSCombinator(str) {
+		return &ValidationError{
+			Message: "selector contains HTML-like content",
+			Code:    "INVALID_HTML_CONTENT",
+		}
+	}
+
+	// Comprehensive pattern validation
 	if !isValidSelectorPattern(str) {
 		return &ValidationError{
-			Message: "selector does not match valid CSS selector patterns",
-			Code:    "INVALID_PATTERN",
+			Message: "selector does not match valid CSS selector syntax",
+			Code:    "INVALID_SYNTAX",
+		}
+	}
+
+	// Additional strict validation if enabled
+	if sv.Strict {
+		if err := sv.validateSelectorSafety(str); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validateSelectorSafety performs additional safety checks for strict mode
+func (sv *SelectorValidator) validateSelectorSafety(selector string) *ValidationError {
+	// Check for potentially dangerous patterns
+	dangerousPatterns := []struct {
+		pattern *regexp.Regexp
+		message string
+		code    string
+	}{
+		{
+			regexp.MustCompile(`javascript:`),
+			"selector contains javascript: protocol",
+			"DANGEROUS_PROTOCOL",
+		},
+		{
+			regexp.MustCompile(`expression\s*\(`),
+			"selector contains CSS expression",
+			"CSS_EXPRESSION",
+		},
+		{
+			regexp.MustCompile(`\burl\s*\(\s*["']?javascript:`),
+			"selector contains javascript URL",
+			"JAVASCRIPT_URL",
+		},
+		{
+			regexp.MustCompile(`\bimport\b`),
+			"selector contains import statement",
+			"IMPORT_STATEMENT",
+		},
+	}
+
+	for _, dangerous := range dangerousPatterns {
+		if dangerous.pattern.MatchString(selector) {
+			return &ValidationError{
+				Message: dangerous.message,
+				Code:    dangerous.code,
+			}
+		}
+	}
+
+	// Check selector length (reasonable limit)
+	if len(selector) > 1000 {
+		return &ValidationError{
+			Message: "selector is too long (max 1000 characters)",
+			Code:    "SELECTOR_TOO_LONG",
+		}
+	}
+
+	// Check nesting depth (prevent deeply nested selectors)
+	nestingDepth := strings.Count(selector, " ") + strings.Count(selector, ">") + strings.Count(selector, "+") + strings.Count(selector, "~")
+	if nestingDepth > 20 {
+		return &ValidationError{
+			Message: "selector has too many nested levels (max 20)",
+			Code:    "EXCESSIVE_NESTING",
 		}
 	}
 
@@ -268,12 +343,101 @@ func isValidCSSCombinator(selector string) bool {
 	return combinatorPattern.MatchString(selector)
 }
 
-// isValidSelectorPattern performs basic CSS selector pattern validation
+// isValidSelectorPattern performs comprehensive CSS selector pattern validation
 func isValidSelectorPattern(selector string) bool {
-	// This is a simplified CSS selector validation
-	// Matches: element, .class, #id, [attribute], :pseudo, element.class, etc.
-	pattern := regexp.MustCompile(`^[a-zA-Z0-9\s\[\].:_#>+~()"'=-]+$`)
-	return pattern.MatchString(selector)
+	// Trim whitespace and check for empty selector
+	trimmed := strings.TrimSpace(selector)
+	if trimmed == "" {
+		return false
+	}
+
+	// Split by comma to handle multiple selectors
+	selectors := strings.Split(trimmed, ",")
+	for _, sel := range selectors {
+		sel = strings.TrimSpace(sel)
+		if !isValidSingleSelector(sel) {
+			return false
+		}
+	}
+	return true
+}
+
+// isValidSingleSelector validates a single CSS selector
+func isValidSingleSelector(selector string) bool {
+	if selector == "" {
+		return false
+	}
+
+	// Check for invalid characters that shouldn't appear in CSS selectors
+	if strings.ContainsAny(selector, "@{};\\`") {
+		return false
+	}
+
+	// Advanced CSS selector validation patterns
+	patterns := []*regexp.Regexp{
+		// Element selectors: div, span, etc.
+		regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]*$`),
+		// Class selectors: .class-name
+		regexp.MustCompile(`^\.[a-zA-Z_-][a-zA-Z0-9_-]*$`),
+		// ID selectors: #id-name
+		regexp.MustCompile(`^#[a-zA-Z_-][a-zA-Z0-9_-]*$`),
+		// Universal selector
+		regexp.MustCompile(`^\*$`),
+		// Attribute selectors: [attr], [attr="value"], [attr~="value"], etc.
+		regexp.MustCompile(`^\[[a-zA-Z][a-zA-Z0-9-]*(?:[~|^$*]?=["']?[^"'\]]*["']?)?\]$`),
+		// Pseudo-class selectors: :hover, :nth-child(n), etc.
+		regexp.MustCompile(`^:[a-zA-Z-]+(?:\([^)]*\))?$`),
+		// Pseudo-element selectors: ::before, ::after
+		regexp.MustCompile(`^::[a-zA-Z-]+$`),
+		// Complex selectors with combinators and multiple parts
+		regexp.MustCompile(`^[a-zA-Z0-9\s\[\].:_#>+~()"'=-]+$`),
+	}
+
+	// Check if selector matches any valid pattern
+	for _, pattern := range patterns {
+		if pattern.MatchString(selector) {
+			return isValidComplexSelector(selector)
+		}
+	}
+
+	return false
+}
+
+// isValidComplexSelector validates complex selectors with combinators
+func isValidComplexSelector(selector string) bool {
+	// Remove extra spaces and normalize
+	normalized := regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(selector), " ")
+	
+	// Check for valid combinator patterns
+	combinatorPattern := regexp.MustCompile(`\s*[>+~]\s*`)
+	parts := combinatorPattern.Split(normalized, -1)
+	
+	// Validate each part of the complex selector
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			return false
+		}
+		
+		// Each part should be a valid simple selector or compound selector
+		if !isValidCompoundSelector(part) {
+			return false
+		}
+	}
+	
+	return true
+}
+
+// isValidCompoundSelector validates compound selectors (element.class#id:pseudo)
+func isValidCompoundSelector(selector string) bool {
+	if selector == "" || selector == "*" {
+		return true
+	}
+	
+	// Pattern for compound selectors: element.class#id[attr]:pseudo::pseudo-element
+	compoundPattern := regexp.MustCompile(`^(?:[a-zA-Z][a-zA-Z0-9-]*|\*)?(?:\.[a-zA-Z_-][a-zA-Z0-9_-]*)*(?:#[a-zA-Z_-][a-zA-Z0-9_-]*)?(?:\[[^\]]+\])*(?::[a-zA-Z-]+(?:\([^)]*\))?)*(?:::[a-zA-Z-]+)*$`)
+	
+	return compoundPattern.MatchString(selector)
 }
 
 // ValidateStruct validates a struct using field tags or custom validators

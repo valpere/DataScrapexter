@@ -35,6 +35,7 @@ type Engine struct {
 	perfMetrics    *utils.PerformanceMetrics
 	memManager     *utils.MemoryManager
 	circuitBreaker *utils.CircuitBreaker
+	MaxConcurrency int // Maximum number of concurrent operations
 }
 
 // Enhanced Result struct (existing fields preserved, error info added)
@@ -78,9 +79,10 @@ func NewEngine(config *Config) (*Engine, error) {
 
 	// Enhanced with error service and performance optimizations
 	engine := &Engine{
-		httpClient:   client,
-		config:       config,
-		errorService: errors.NewService(),
+		httpClient:     client,
+		config:         config,
+		errorService:   errors.NewService(),
+		MaxConcurrency: 10, // Default max concurrency
 		
 		// Initialize performance optimizations
 		perfMetrics:    utils.NewPerformanceMetrics(),

@@ -12,6 +12,12 @@ import (
 	"time"
 )
 
+// Platform-specific integer limits
+const (
+	maxInt = int(^uint(0) >> 1)
+	minInt = -maxInt - 1
+)
+
 // TypeConverter provides safe type conversion utilities
 type TypeConverter struct {
 	strict bool // If true, conversions that lose precision will fail

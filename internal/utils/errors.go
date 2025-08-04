@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -137,21 +138,69 @@ func (e *StructuredError) WithUserMessage(message string) *StructuredError {
 
 // ErrorBuilder provides a fluent interface for creating structured errors
 type ErrorBuilder struct {
-	error *StructuredError
+	error           *StructuredError
+	stackTraceDepth int // Configurable stack trace depth
 }
 
-// NewError creates a new error builder
-func NewError(code ErrorCode, message string) *ErrorBuilder {
-	return &ErrorBuilder{
-		error: &StructuredError{
-			Code:       code,
-			Message:    message,
-			Severity:   SeverityError,
-			Timestamp:  time.Now(),
-			Retryable:  false,
-			StackTrace: captureStackTrace(),
-		},
+// ErrorConfig holds configuration for error handling
+type ErrorConfig struct {
+	StackTraceDepth     int  // Number of stack frames to capture (default: 15)
+	EnableStackTrace    bool // Whether to capture stack traces (default: true)
+	IncludeGoroutineID  bool // Whether to include goroutine ID in stack traces (default: false)
+}
+
+// DefaultErrorConfig returns the default error configuration
+func DefaultErrorConfig() *ErrorConfig {
+	return &ErrorConfig{
+		StackTraceDepth:    15,
+		EnableStackTrace:   true,
+		IncludeGoroutineID: false,
 	}
+}
+
+// Global error configuration
+var globalErrorConfig = DefaultErrorConfig()
+
+// SetGlobalErrorConfig sets the global error configuration
+func SetGlobalErrorConfig(config *ErrorConfig) {
+	if config != nil {
+		globalErrorConfig = config
+	}
+}
+
+// GetGlobalErrorConfig returns the current global error configuration
+func GetGlobalErrorConfig() *ErrorConfig {
+	return globalErrorConfig
+}
+
+// NewError creates a new error builder with default configuration
+func NewError(code ErrorCode, message string) *ErrorBuilder {
+	return NewErrorWithConfig(code, message, globalErrorConfig)
+}
+
+// NewErrorWithConfig creates a new error builder with custom configuration
+func NewErrorWithConfig(code ErrorCode, message string, config *ErrorConfig) *ErrorBuilder {
+	if config == nil {
+		config = DefaultErrorConfig()
+	}
+
+	builder := &ErrorBuilder{
+		error: &StructuredError{
+			Code:      code,
+			Message:   message,
+			Severity:  SeverityError,
+			Timestamp: time.Now(),
+			Retryable: false,
+		},
+		stackTraceDepth: config.StackTraceDepth,
+	}
+
+	// Capture stack trace if enabled
+	if config.EnableStackTrace {
+		builder.error.StackTrace = captureStackTraceWithDepth(config.StackTraceDepth, config.IncludeGoroutineID)
+	}
+
+	return builder
 }
 
 // WithSeverity sets the error severity
@@ -184,6 +233,22 @@ func (eb *ErrorBuilder) WithRetryable(retryable bool) *ErrorBuilder {
 // WithUserMessage sets a user-friendly message
 func (eb *ErrorBuilder) WithUserMessage(message string) *ErrorBuilder {
 	eb.error.UserMessage = message
+	return eb
+}
+
+// WithStackTraceDepth sets the stack trace depth for this error
+func (eb *ErrorBuilder) WithStackTraceDepth(depth int) *ErrorBuilder {
+	if depth > 0 {
+		eb.stackTraceDepth = depth
+		// Recapture stack trace with new depth
+		eb.error.StackTrace = captureStackTraceWithDepth(depth, globalErrorConfig.IncludeGoroutineID)
+	}
+	return eb
+}
+
+// WithoutStackTrace disables stack trace capture for this error
+func (eb *ErrorBuilder) WithoutStackTrace() *ErrorBuilder {
+	eb.error.StackTrace = nil
 	return eb
 }
 
@@ -398,17 +463,87 @@ func (eh *ErrorHandler) calculateNextDelay(currentDelay time.Duration, backoffTy
 
 // Helper functions
 
-// captureStackTrace captures the current stack trace
+// captureStackTrace captures the current stack trace with default depth
 func captureStackTrace() []string {
+	return captureStackTraceWithDepth(globalErrorConfig.StackTraceDepth, globalErrorConfig.IncludeGoroutineID)
+}
+
+// captureStackTraceWithDepth captures the current stack trace with specified depth
+func captureStackTraceWithDepth(depth int, includeGoroutineID bool) []string {
+	if depth <= 0 {
+		return nil
+	}
+
 	var stack []string
-	for i := 2; i < 10; i++ { // Skip first 2 frames (this function and caller)
-		_, file, line, ok := runtime.Caller(i)
+	
+	// Add goroutine ID if requested
+	if includeGoroutineID {
+		stack = append(stack, fmt.Sprintf("[goroutine %d]", getGoroutineID()))
+	}
+
+	// Skip first 2 frames (this function and caller) by default
+	// For functions called from NewError*, we need to skip more frames
+	skipFrames := 2
+	if depth > 50 { // Assume this is for deep debugging
+		skipFrames = 1
+	}
+
+	frameCount := 0
+	for i := skipFrames; frameCount < depth; i++ {
+		pc, file, line, ok := runtime.Caller(i)
 		if !ok {
 			break
 		}
-		stack = append(stack, fmt.Sprintf("%s:%d", file, line))
+
+		// Get function name
+		funcName := "unknown"
+		if fn := runtime.FuncForPC(pc); fn != nil {
+			funcName = fn.Name()
+		}
+
+		// Format stack frame with more detail
+		stackFrame := fmt.Sprintf("%s:%d (%s)", shortenFilePath(file), line, shortenFuncName(funcName))
+		stack = append(stack, stackFrame)
+		frameCount++
 	}
+
 	return stack
+}
+
+// shortenFilePath shortens file paths for better readability
+func shortenFilePath(filePath string) string {
+	// Keep only the last two path components for readability
+	parts := strings.Split(filePath, "/")
+	if len(parts) > 2 {
+		return strings.Join(parts[len(parts)-2:], "/")
+	}
+	return filePath
+}
+
+// shortenFuncName shortens function names for better readability
+func shortenFuncName(funcName string) string {
+	// Remove package path, keep only the last component
+	parts := strings.Split(funcName, "/")
+	if len(parts) > 0 {
+		lastPart := parts[len(parts)-1]
+		// Further shorten if it contains dots
+		if dotIndex := strings.LastIndex(lastPart, "."); dotIndex != -1 && dotIndex < len(lastPart)-1 {
+			return lastPart[dotIndex+1:]
+		}
+		return lastPart
+	}
+	return funcName
+}
+
+// getGoroutineID returns the current goroutine ID (expensive operation)
+func getGoroutineID() uint64 {
+	var buf [64]byte
+	n := runtime.Stack(buf[:], false)
+	idField := strings.Fields(strings.TrimPrefix(string(buf[:n]), "goroutine "))[0]
+	if id, err := strconv.ParseUint(idField, 10, 64); err == nil {
+		return id
+	}
+	return 0
 }
 
 // IsRetryableError checks if an error should be retried
