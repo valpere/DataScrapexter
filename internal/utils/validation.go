@@ -243,7 +243,7 @@ func (sv *SelectorValidator) Validate(value interface{}) *ValidationError {
 
 	// Basic CSS selector validation
 	// This is a simplified check - in production, you might want more sophisticated validation
-	if strings.Contains(str, "<") || strings.Contains(str, ">") && !isValidCSSCombinator(str) {
+	if (strings.Contains(str, "<") || strings.Contains(str, ">")) && !isValidCSSCombinator(str) {
 		return &ValidationError{
 			Message: "selector contains invalid characters",
 			Code:    "INVALID_SELECTOR",
