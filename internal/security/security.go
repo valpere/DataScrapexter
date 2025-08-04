@@ -459,6 +459,7 @@ func (sv *SecurityValidator) AddCustomRule(rule ValidationRule) {
 }
 
 // ObfuscatedString provides basic string obfuscation with memory clearing capabilities.
+// ⚠️  WARNING: Basic XOR obfuscation only - NOT cryptographically secure!
 // 
 // IMPORTANT SECURITY NOTICE:
 // This implementation provides BASIC obfuscation only and does NOT offer true security:

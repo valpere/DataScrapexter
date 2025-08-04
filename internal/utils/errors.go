@@ -476,9 +476,9 @@ func captureStackTraceWithDepth(depth int, includeGoroutineID bool) []string {
 
 	var stack []string
 	
-	// Add goroutine ID if requested
+	// Add goroutine ID if requested (expensive operation)
 	if includeGoroutineID {
-		stack = append(stack, fmt.Sprintf("[goroutine %d]", getGoroutineID()))
+		stack = append(stack, fmt.Sprintf("[goroutine %d]", getExpensiveGoroutineID()))
 	}
 
 	// Skip first 2 frames (this function and caller) by default
@@ -543,18 +543,34 @@ func EnableDebugMode() {
 	debugMode = true
 }
 
-// getGoroutineID returns the current goroutine ID.
-// WARNING: This is an expensive operation (uses runtime.Stack and string parsing).
-// Only use for debugging purposes.
-func getGoroutineID() uint64 {
-	// Early return if debug mode is disabled to avoid expensive operations
+// getExpensiveGoroutineID returns the current goroutine ID using expensive runtime operations.
+// 
+// WARNING: EXPENSIVE OPERATION - This function:
+// - Calls runtime.Stack() which captures the entire call stack
+// - Performs string parsing and memory allocation
+// - Should ONLY be used for debugging when absolutely necessary
+// - Is automatically disabled when debugMode is false
+//
+// Performance Impact: ~10-50μs per call depending on stack depth
+// Consider using atomic counters or other alternatives for performance-critical paths.
+func getExpensiveGoroutineID() uint64 {
+	// Critical guard: Return immediately if debug mode is disabled
+	// This prevents any expensive operations from occurring in production
 	if !debugMode {
 		return 0
 	}
 	
+	// EXPENSIVE: runtime.Stack captures the entire goroutine stack
 	var buf [64]byte
 	n := runtime.Stack(buf[:], false)
-	idField := strings.Fields(strings.TrimPrefix(string(buf[:n]), "goroutine "))[0]
+	
+	// EXPENSIVE: String parsing and field extraction
+	stackStr := string(buf[:n])
+	if !strings.HasPrefix(stackStr, "goroutine ") {
+		return 0 // Invalid format, return safely
+	}
+	
+	idField := strings.Fields(strings.TrimPrefix(stackStr, "goroutine "))[0]
 	if id, err := strconv.ParseUint(idField, 10, 64); err == nil {
 		return id
 	}

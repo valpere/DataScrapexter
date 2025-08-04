@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -765,6 +766,10 @@ type ConfigWatcher struct {
 	maxWorkers      int           // Maximum number of concurrent callback workers
 	ctx             context.Context
 	cancel          context.CancelFunc
+	
+	// Goroutine monitoring
+	activeGoroutines int64 // Atomic counter for active callback goroutines
+	totalCallbacks   int64 // Total callbacks executed (for metrics)
 }
 
 // NewConfigWatcher creates a new configuration file watcher
@@ -879,9 +884,16 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 	copy(callbacks, cw.callbacks)
 	cw.mutex.RUnlock()
 
-	// Execute callbacks with limited concurrency to prevent resource exhaustion
+	// Execute callbacks with limited concurrency and goroutine monitoring
 	for _, callback := range callbacks {
 		go func(cb func(*ScraperConfig, error)) {
+			// Increment active goroutine counter for monitoring
+			atomic.AddInt64(&cw.activeGoroutines, 1)
+			defer func() {
+				atomic.AddInt64(&cw.activeGoroutines, -1)
+				atomic.AddInt64(&cw.totalCallbacks, 1)
+			}()
+			
 			// Try to acquire worker semaphore with context coordination
 			select {
 			case cw.callbackWorkers <- struct{}{}:
@@ -941,6 +953,16 @@ func (cw *ConfigWatcher) executeCallbackWithContext(ctx context.Context, callbac
 		// The callback goroutine will continue but we don't wait for it
 		// The defer in the goroutine will still close the done channel
 		return
+	}
+}
+
+// GetGoroutineStats returns statistics about callback goroutine usage
+func (cw *ConfigWatcher) GetGoroutineStats() map[string]interface{} {
+	return map[string]interface{}{
+		"active_goroutines": atomic.LoadInt64(&cw.activeGoroutines),
+		"total_callbacks":   atomic.LoadInt64(&cw.totalCallbacks),
+		"max_workers":       cw.maxWorkers,
+		"available_slots":   cw.maxWorkers - len(cw.callbackWorkers),
 	}
 }
 
