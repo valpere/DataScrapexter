@@ -280,7 +280,7 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 	
 	// Get result from pool for memory efficiency
 	result := e.resultPool.Get()
-	defer e.resultPool.Put(result) // This will reset the result
+	defer e.resultPool.Put(result) // This resets the pooled result after a copy is returned; safe timing
 	
 	result.Timestamp = time.Now()
 	
