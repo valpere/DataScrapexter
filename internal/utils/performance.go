@@ -67,7 +67,7 @@ func (pm *PerformanceMetrics) RecordOperation(duration time.Duration, success bo
 	// Calculate operations per second
 	elapsed := pm.LastOperationTime.Sub(pm.StartTime)
 	if elapsed > 0 {
-		pm.OperationsPerSec = float64(totalOps) / elapsed.Seconds()
+		pm.OperationsPerSec = float64(pm.TotalOperations) / elapsed.Seconds()
 	}
 }
 

@@ -891,10 +891,10 @@ func (e *Engine) ScrapeWithBatching(ctx context.Context, urls []string, extracto
 		return []*Result{}, nil
 	}
 	
-	// Use configurable concurrency limit, default to 5 if not set
+	// Use configurable concurrency limit, default to DefaultMaxConcurrency if not set
 	maxConc := e.MaxConcurrency
 	if maxConc <= 0 {
-		maxConc = 5
+		maxConc = DefaultMaxConcurrency
 	}
 	
 	// Create a single worker pool for all batches to avoid overhead

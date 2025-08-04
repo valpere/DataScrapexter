@@ -478,7 +478,7 @@ func captureStackTraceWithDepth(depth int, includeGoroutineID bool) []string {
 	
 	// Add goroutine ID if requested (expensive operation)
 	if includeGoroutineID {
-		stack = append(stack, fmt.Sprintf("[goroutine %d]", getDebugGoroutineID()))
+		stack = append(stack, fmt.Sprintf("[goroutine %d]", getGoroutineIDForDebug()))
 	}
 
 	// Skip first 2 frames (this function and caller) by default
