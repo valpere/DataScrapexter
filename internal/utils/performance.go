@@ -320,7 +320,7 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 	if elapsed < 0 {
 		// System time went backwards, reset timing reference to avoid negative calculations
 		logger := GetLogger("performance")
-		logger.Warnf("TokenBucketRateLimiter: system time went backwards by %v, resetting timing reference", -elapsed)
+		logger.Warnf("TokenBucketRateLimiter: system time went backwards by %v (possible causes: NTP correction, VM migration, manual clock change). Timing reference reset to avoid negative calculations. Impact: rate limiting may be temporarily inaccurate, but will self-correct. If this occurs frequently, investigate system clock stability.", -elapsed)
 		trl.lastRefill = now
 		elapsed = 0
 	}
