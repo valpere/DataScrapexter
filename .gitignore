@@ -177,3 +177,5 @@ debug/
 # Custom ignore patterns
 ignore/
 .ignore/
+
+CLAUDE.local.md

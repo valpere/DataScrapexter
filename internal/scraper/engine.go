@@ -38,6 +38,7 @@ type Engine struct {
 	
 	// Performance optimizations
 	resultPool     *utils.Pool[*Result]
+	copyPool       *utils.Pool[*Result]      // Pool for result copies to reduce allocations
 	perfMetrics    *utils.PerformanceMetrics
 	memManager     *utils.MemoryManager
 	circuitBreaker *utils.CircuitBreaker
@@ -124,6 +125,29 @@ func NewEngine(config *Config) (*Engine, error) {
 				result.Success = false
 				result.Error = nil
 				result.ErrorRate = 0
+			},
+		),
+		
+		// Pool for result copies to optimize memory allocation during copying
+		copyPool: utils.NewPool[*Result](
+			func() *Result {
+				return &Result{
+					Data:     make(map[string]interface{}),
+					Errors:   make([]string, 0, 4),   // Pre-allocate with small capacity
+					Warnings: make([]string, 0, 2),   // Pre-allocate with small capacity
+				}
+			},
+			func(result *Result) {
+				// Reset copy result for reuse
+				for k := range result.Data {
+					delete(result.Data, k)
+				}
+				result.Errors = result.Errors[:0]
+				result.Warnings = result.Warnings[:0]
+				result.Success = false
+				result.Error = nil
+				result.ErrorRate = 0
+				result.Timestamp = time.Time{}
 			},
 		),
 	}
@@ -306,48 +330,14 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 		result.Errors = append(result.Errors, circuitErr.Error())
 		e.perfMetrics.RecordOperation(timer.Elapsed(), false)
 		
-		// Create a copy before returning and putting back to pool
-		resultCopy := &Result{
-			Data:      make(map[string]interface{}),
-			Success:   result.Success,
-			Error:     result.Error,
-			Timestamp: result.Timestamp,
-			Errors:    make([]string, len(result.Errors)),
-			Warnings:  make([]string, len(result.Warnings)),
-			ErrorRate: result.ErrorRate,
-		}
-		
-		// Copy data and slices
-		for k, v := range result.Data {
-			resultCopy.Data[k] = v
-		}
-		copy(resultCopy.Errors, result.Errors)
-		copy(resultCopy.Warnings, result.Warnings)
-		
-		// Now safe to put the result back to pool
+		// Create an efficient copy before returning and putting back to pool
+		resultCopy := e.copyResult(result)
 		e.resultPool.Put(result)
 		return resultCopy, circuitErr
 	}
 
-	// Create a copy of the result to return (since we'll put the pooled one back)
-	resultCopy := &Result{
-		Data:      make(map[string]interface{}),
-		Success:   result.Success,
-		Error:     result.Error,
-		Timestamp: result.Timestamp,
-		Errors:    make([]string, len(result.Errors)),
-		Warnings:  make([]string, len(result.Warnings)),
-		ErrorRate: result.ErrorRate,
-	}
-	
-	// Copy data and slices
-	for k, v := range result.Data {
-		resultCopy.Data[k] = v
-	}
-	copy(resultCopy.Errors, result.Errors)
-	copy(resultCopy.Warnings, result.Warnings)
-	
-	// Now safe to put the result back to pool after creating the copy
+	// Create an efficient copy of the result to return (since we'll put the pooled one back)
+	resultCopy := e.copyResult(result)
 	e.resultPool.Put(result)
 	
 	return resultCopy, nil
@@ -1069,4 +1059,50 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// copyResult efficiently copies a Result using sync.Pool to reduce allocations
+func (e *Engine) copyResult(src *Result) *Result {
+	// Get a copy from the pool to avoid allocations
+	dst := e.copyPool.Get()
+	
+	// Copy scalar fields
+	dst.Success = src.Success
+	dst.Error = src.Error
+	dst.Timestamp = src.Timestamp
+	dst.ErrorRate = src.ErrorRate
+	
+	// Efficiently copy map - ensure it has enough capacity
+	if len(dst.Data) > 0 {
+		// Clear existing map entries
+		for k := range dst.Data {
+			delete(dst.Data, k)
+		}
+	}
+	if len(src.Data) > 0 {
+		// Ensure map exists and copy data
+		if dst.Data == nil {
+			dst.Data = make(map[string]interface{}, len(src.Data))
+		}
+		for k, v := range src.Data {
+			dst.Data[k] = v
+		}
+	}
+	
+	// Efficiently copy slices - grow if needed
+	if cap(dst.Errors) < len(src.Errors) {
+		dst.Errors = make([]string, len(src.Errors))
+	} else {
+		dst.Errors = dst.Errors[:len(src.Errors)]
+	}
+	copy(dst.Errors, src.Errors)
+	
+	if cap(dst.Warnings) < len(src.Warnings) {
+		dst.Warnings = make([]string, len(src.Warnings))
+	} else {
+		dst.Warnings = dst.Warnings[:len(src.Warnings)]
+	}
+	copy(dst.Warnings, src.Warnings)
+	
+	return dst
 }

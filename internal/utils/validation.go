@@ -707,20 +707,20 @@ func isEmptyValue(v reflect.Value) bool {
 // This is more performant than utf8.RuneCountInString when character-level accuracy isn't needed
 // or when the string contains only ASCII characters.
 func countCharsOptimized(s string) int {
-	// Fast path: if all characters are ASCII (< 128), len() is accurate for character count
-	isASCII := true
-	for i := 0; i < len(s); i++ {
-		if s[i] >= 128 {
-			isASCII = false
-			break
+	// Fast path: check if string is valid UTF-8 and all characters are ASCII
+	// For ASCII-only strings, byte length equals character count
+	if utf8.ValidString(s) {
+		// Check if all bytes are ASCII (< 128)
+		for i := 0; i < len(s); i++ {
+			if s[i] >= 128 {
+				// Non-ASCII character found, use accurate UTF-8 rune counting
+				return utf8.RuneCountInString(s)
+			}
 		}
-	}
-	
-	if isASCII {
-		// ASCII-only string: byte length equals character count
+		// All characters are ASCII: byte length equals character count
 		return len(s)
 	}
 	
-	// Non-ASCII string: fall back to accurate UTF-8 rune counting
+	// Invalid UTF-8: fall back to accurate UTF-8 rune counting for best effort
 	return utf8.RuneCountInString(s)
 }

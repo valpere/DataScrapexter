@@ -518,6 +518,17 @@ type ObfuscatedString struct {
 //   - Azure Key Vault: https://azure.microsoft.com/en-us/products/key-vault/
 // Replace usage of ObfuscatedString with integration to one of these services for secure secret storage and retrieval.
 func NewObfuscatedString(dataBytes []byte) (*ObfuscatedString, error) {
+	// TODO: FUTURE IMPROVEMENTS - Replace XOR obfuscation with secure alternatives
+	// Priority improvements for enhanced security:
+	// 1. Implement AES-256-GCM encryption with proper key derivation (PBKDF2/Argon2)
+	// 2. Add secure random salt generation and storage
+	// 3. Implement memory protection (mlock) where available
+	// 4. Add integration with hardware security modules (HSM)
+	// 5. Implement secure key rotation mechanisms
+	// 6. Add constant-time operations to prevent timing attacks
+	// 7. Consider using established libraries like libsodium or Go's crypto/nacl
+	// 8. Add secure memory wiping techniques beyond simple zeroing
+	
 	// Log security warning only once per application run to prevent log spam
 	securityWarningOnce.Do(func() {
 		logger := utils.GetLogger("security")
