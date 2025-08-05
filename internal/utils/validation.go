@@ -23,7 +23,32 @@ var (
 	pseudoElementPattern     = regexp.MustCompile(`^::[a-zA-Z-]{2,}$`)
 	complexSelectorPattern   = regexp.MustCompile(`^[a-zA-Z0-9\s\[\].:_#>+~()"'=-]+$`)
 	combinatorPattern        = regexp.MustCompile(`\s*[>+~]\s*`)
-	compoundSelectorPattern  = regexp.MustCompile(`^(?:[a-zA-Z][a-zA-Z0-9-]*|\*)?(?:\.[a-zA-Z_-][a-zA-Z0-9_-]*)*(?:#[a-zA-Z_-][a-zA-Z0-9_-]*)?(?:\[[^\]]+\])*(?::[a-zA-Z-]+(?:\([^)]*\))?)*(?:::[a-zA-Z-]+)*$`)
+	// Compound selector is made up of the following components:
+	// - Element selector: [a-zA-Z][a-zA-Z0-9-]* or *
+	// - Class selector: \.[a-zA-Z_-][a-zA-Z0-9_-]*
+	// - ID selector: #[a-zA-Z_-][a-zA-Z0-9_-]*
+	// - Attribute selector: \[[^\]]+\]
+	// - Pseudo-class: :[a-zA-Z-]+(\([^)]*\))?
+	// - Pseudo-element: ::[a-zA-Z-]+
+	//
+	// Each component can appear zero or more times in a compound selector.
+	//
+	// The final pattern is constructed by concatenating the components.
+	elementSelectorComponent   = `(?:[a-zA-Z][a-zA-Z0-9-]*|\*)?`
+	classSelectorComponent     = `(?:\.[a-zA-Z_-][a-zA-Z0-9_-]*)*`
+	idSelectorComponent        = `(?:#[a-zA-Z_-][a-zA-Z0-9_-]*)?`
+	attributeSelectorComponent = `(?:\[[^\]]+\])*`
+	pseudoClassComponent       = `(?:\:[a-zA-Z-]+(?:\([^)]*\))?)*`
+	pseudoElementComponent     = `(?:\:\:[a-zA-Z-]+)*`
+	compoundSelectorPattern    = regexp.MustCompile(
+		`^` +
+			elementSelectorComponent +
+			classSelectorComponent +
+			idSelectorComponent +
+			attributeSelectorComponent +
+			pseudoClassComponent +
+			pseudoElementComponent +
+		`$`)
 	normalizeSpacePattern    = regexp.MustCompile(`\s+`)
 
 	// Security validation patterns
