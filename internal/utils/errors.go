@@ -568,8 +568,6 @@ func IsDebugModeEnabled() bool {
 //
 // Performance Impact: ~10-50μs per call depending on stack depth
 // Consider using atomic counters or other alternatives for performance-critical paths.
-// getGoroutineIDForDebug returns the current goroutine ID using expensive runtime operations.
-// This should ONLY be used for debugging purposes when absolutely necessary.
 func getGoroutineIDForDebug() uint64 {
 	if !IsDebugModeEnabled() {
 		return 0

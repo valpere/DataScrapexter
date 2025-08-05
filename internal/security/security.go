@@ -471,21 +471,19 @@ func (sv *SecurityValidator) AddCustomRule(rule ValidationRule) {
 	sv.customRules = append(sv.customRules, rule)
 }
 
-// ObfuscatedString provides basic string obfuscation with memory clearing capabilities.
-// ⚠️  WARNING: Basic XOR obfuscation only - NOT cryptographically secure!
-// 
-// IMPORTANT SECURITY NOTICE:
-// This implementation provides BASIC obfuscation only and does NOT offer true security:
+// ObfuscatedString provides basic XOR obfuscation for in-memory data with memory clearing capabilities.
+//
+// ⚠️  SECURITY WARNING: This implementation uses BASIC XOR obfuscation and is NOT cryptographically secure!
+//
+// LIMITATIONS:
 // - Does NOT protect against memory dumps or OS-level memory inspection
 // - Does NOT prevent memory swapping to disk
 // - Does NOT use OS-level memory protection (mlock)
 // - Data may be visible in core dumps or swap files
 // - Uses simple XOR obfuscation which can be easily reversed
 // - The name "ObfuscatedString" reflects its limited security guarantees
-// 
-// ObfuscatedString provides basic XOR obfuscation for in-memory data.
 //
-// SECURITY WARNING: This type is NOT cryptographically secure and is NOT suitable for protecting secrets in production.
+// PRODUCTION USAGE: This type is NOT suitable for protecting secrets in production.
 // For production, use dedicated secret management solutions (e.g., HashiCorp Vault, AWS Secrets Manager).
 //
 // TODO: Future Security Improvements

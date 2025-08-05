@@ -482,10 +482,10 @@ func (cc *ConfigCache) put(filename string, config *ScraperConfig, fileSize int6
 	
 	// Check cache size and evict if necessary - do this atomically with addition
 	// to prevent race conditions where multiple goroutines could bypass the size check
+	logger := utils.GetLogger("config") // Create logger once outside loop for better performance
 	for len(cc.cache) >= cc.maxSize {
 		if !cc.evictLRU() {
 			// Eviction failed (cache was empty or inconsistent), break to prevent infinite loop
-			logger := utils.GetLogger("config")
 			logger.Errorf("Cache eviction failed despite cache size %d >= max size %d", len(cc.cache), cc.maxSize)
 			break
 		}

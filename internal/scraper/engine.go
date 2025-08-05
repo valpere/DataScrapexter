@@ -1070,9 +1070,6 @@ func (e *Engine) checkErrorThresholds(scraperConfig *config.ScraperConfig, batch
 	return false
 }
 
-// Note: Using Go 1.21+ built-in min function instead of custom implementation
-// The min function is now available as a built-in function in Go 1.21+
-
 // copyResult efficiently copies a Result using sync.Pool to reduce allocations
 func (e *Engine) copyResult(src *Result) *Result {
 	// Get a copy from the pool to avoid allocations
