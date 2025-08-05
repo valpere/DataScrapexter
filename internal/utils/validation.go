@@ -552,17 +552,14 @@ func SanitizeFieldName(name string) string {
 }
 
 // ValidateConfigIntegrity performs cross-field validation on configuration objects
-// TODO: This is a placeholder for future cross-field validation implementation
-// Use the configuration's own Validate() methods for now
+// Delegates to the configuration's own Validate() method if available.
+// Returns invalid result if config does not implement Validate().
 func ValidateConfigIntegrity(config interface{}) *ValidationResult {
-	result := &ValidationResult{Valid: true}
-
-	// Note: This is a minimal implementation that always returns valid
-	// For production use, implement specific cross-field validation logic:
-	// - Check if proxy is enabled but no providers are configured
-	// - Validate browser automation settings consistency
-	// - Ensure database connection details are complete
-	// - Verify output format compatibility with selected fields
-
-	return result
+	if v, ok := config.(interface{ Validate() *ValidationResult }); ok {
+		return v.Validate()
+	}
+	return &ValidationResult{
+		Valid:  false,
+		Errors: []string{"Config does not implement Validate() method for integrity check."},
+	}
 }
