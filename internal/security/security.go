@@ -21,6 +21,13 @@ import (
 // securityWarningOnce ensures security warning is only logged once per application run
 var securityWarningOnce sync.Once
 
+// Security warning messages
+const (
+	obfuscatedStringWarning = "ObfuscatedString uses only XOR obfuscation and is NOT suitable for secrets. " +
+		"Use proper secret management for production (AWS Secrets Manager, HashiCorp Vault, etc.). " +
+		"This warning is shown only once per application run."
+)
+
 // SecurityLevel represents different security validation levels
 type SecurityLevel int
 
@@ -502,7 +509,7 @@ func NewObfuscatedString(dataBytes []byte) (*ObfuscatedString, error) {
 	// Log security warning only once per application run to prevent log spam
 	securityWarningOnce.Do(func() {
 		logger := utils.GetLogger("security")
-		logger.Security("ObfuscatedString uses only XOR obfuscation and is NOT suitable for secrets. Use proper secret management for production (AWS Secrets Manager, HashiCorp Vault, etc.). This warning is shown only once per application run.")
+		logger.Security(obfuscatedStringWarning)
 	})
 	// Create a copy to avoid modifying the original slice
 	dataCopy := make([]byte, len(dataBytes))

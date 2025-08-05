@@ -1075,20 +1075,7 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 				defer cancel() // Ensure resources are cleaned up
 				
 				// Execute legacy callback directly with timeout protection
-				// Create a channel to signal callback completion
-				done := make(chan struct{})
-				go func() {
-					defer func() {
-						if r := recover(); r != nil {
-							// Log panic using proper logging framework for better categorization and management
-							logger := utils.GetLogger("config")
-							logger.Panicf("Legacy callback panic recovered: %v", r)
-						}
-						close(done)
-					}()
-					// Execute the legacy callback (non-context-aware)
-					cb(config, err)
-				}()
+				done := cw.executeLegacyCallbackSafely(cb, config, err)
 				
 				// Wait for either completion or timeout
 				select {
@@ -1115,6 +1102,25 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 			}
 		}(callback)
 	}
+}
+
+// executeLegacyCallbackSafely executes a legacy callback with panic recovery and completion signaling.
+// This method extracts the nested panic recovery logic for better readability and testability.
+func (cw *ConfigWatcher) executeLegacyCallbackSafely(cb func(*ScraperConfig, error), config *ScraperConfig, err error) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				// Log panic using proper logging framework for better categorization and management
+				logger := utils.GetLogger("config")
+				logger.Panicf("Legacy callback panic recovered: %v", r)
+			}
+			close(done)
+		}()
+		// Execute the legacy callback (non-context-aware)
+		cb(config, err)
+	}()
+	return done
 }
 
 // GetGoroutineStats returns statistics about callback goroutine usage

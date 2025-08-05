@@ -961,9 +961,16 @@ func (e *Engine) ScrapeWithBatching(ctx context.Context, urls []string, extracto
 		if len(errors) > 0 {
 			logger := utils.GetLogger("scraper")
 			
-			// Log individual errors using structured logging
-			for _, err := range errors {
-				logger.Errorf("Batch processing error: %v", err)
+			// Aggregate errors to prevent log spam in high-error scenarios
+			if len(errors) <= 5 {
+				// Log individual errors only for small error counts
+				for _, err := range errors {
+					logger.Errorf("Batch processing error: %v", err)
+				}
+			} else {
+				// For many errors, log a summary with sample errors
+				logger.Errorf("Batch processing encountered %d errors. Sample errors: %v, %v, %v (and %d more)", 
+					len(errors), errors[0], errors[1], errors[2], len(errors)-3)
 			}
 			
 			// Check if error thresholds are exceeded and should stop processing

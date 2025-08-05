@@ -320,7 +320,11 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 	if elapsed < 0 {
 		// System time went backwards, reset timing reference to avoid negative calculations
 		logger := GetLogger("performance")
-		logger.Warnf("TokenBucketRateLimiter: system time went backwards by %v (possible causes: NTP correction, VM migration, manual clock change). Timing reference reset to avoid negative calculations. Impact: rate limiting may be temporarily inaccurate, but will self-correct. If this occurs frequently, investigate system clock stability.", -elapsed)
+		logger.Warnf("TokenBucketRateLimiter: system time went backwards by %v "+
+			"(possible causes: NTP correction, VM migration, manual clock change). "+
+			"Timing reference reset to avoid negative calculations. "+
+			"Impact: rate limiting may be temporarily inaccurate, but will self-correct. "+
+			"If this occurs frequently, investigate system clock stability.", -elapsed)
 		trl.lastRefill = now
 		elapsed = 0
 	}
@@ -335,6 +339,8 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 		trl.tokens = 0
 	} else if trl.tokens > trl.maxTokens {
 		// This could happen due to calculation precision, clamp to max
+		logger := GetLogger("performance")
+		logger.Warnf("TokenBucketRateLimiter: tokens (%d) exceeded maximum (%d), clamping to maximum", trl.tokens, trl.maxTokens)
 		trl.tokens = trl.maxTokens
 	}
 
@@ -342,16 +348,33 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 	if elapsed >= trl.refillRate {
 		tokensToAdd := int64(elapsed / trl.refillRate)
 		if tokensToAdd > 0 {
-			trl.tokens += tokensToAdd
-			if trl.tokens > trl.maxTokens {
+			// Prevent overflow by checking if addition would exceed maximum
+			if trl.tokens+tokensToAdd > trl.maxTokens {
 				trl.tokens = trl.maxTokens
+			} else {
+				trl.tokens += tokensToAdd
+			}
+			
+			// Additional safety check to ensure tokens are valid
+			if trl.tokens < 0 {
+				logger := GetLogger("performance")
+				logger.Errorf("TokenBucketRateLimiter: tokens became negative (%d) after refill, resetting to 0", trl.tokens)
+				trl.tokens = 0
 			}
 		}
 		trl.lastRefill = now
 	}
 
+	// Safely decrement tokens with validation
 	if trl.tokens > 0 {
 		trl.tokens--
+		// Final validation to ensure tokens didn't go negative
+		if trl.tokens < 0 {
+			logger := GetLogger("performance")
+			logger.Errorf("TokenBucketRateLimiter: tokens became negative (%d) after decrement, resetting to 0", trl.tokens)
+			trl.tokens = 0
+			return false
+		}
 		return true
 	}
 	return false

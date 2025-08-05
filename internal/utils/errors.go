@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -536,11 +537,25 @@ func shortenFuncName(funcName string) string {
 }
 
 // debugMode controls whether expensive debug operations are enabled.
-var debugMode bool
+// Uses atomic operations to prevent race conditions in concurrent environments.
+var debugMode int32
 
 // EnableDebugMode sets debugMode to true, allowing expensive debug operations.
+// Thread-safe using atomic operations.
 func EnableDebugMode() {
-	debugMode = true
+	atomic.StoreInt32(&debugMode, 1)
+}
+
+// DisableDebugMode sets debugMode to false, disabling expensive debug operations.
+// Thread-safe using atomic operations.
+func DisableDebugMode() {
+	atomic.StoreInt32(&debugMode, 0)
+}
+
+// IsDebugModeEnabled returns true if debug mode is currently enabled.
+// Thread-safe using atomic operations.
+func IsDebugModeEnabled() bool {
+	return atomic.LoadInt32(&debugMode) != 0
 }
 
 // getExpensiveGoroutineID returns the current goroutine ID using expensive runtime operations.
@@ -556,7 +571,7 @@ func EnableDebugMode() {
 // getGoroutineIDForDebug returns the current goroutine ID using expensive runtime operations.
 // This should ONLY be used for debugging purposes when absolutely necessary.
 func getGoroutineIDForDebug() uint64 {
-	if !debugMode {
+	if !IsDebugModeEnabled() {
 		return 0
 	}
 
