@@ -20,7 +20,7 @@ var (
 	universalSelectorPattern = regexp.MustCompile(`^\*$`)
 	attributeSelectorPattern = regexp.MustCompile(`^\[[a-zA-Z][a-zA-Z0-9-]*(?:[~|^$*]?=["']?[^"'\]]*["']?)?\]$`)
 	pseudoClassPattern       = regexp.MustCompile(`^:[a-zA-Z-]+(?:\([^)]*\))?$`)
-	pseudoElementPattern     = regexp.MustCompile(`^::[a-zA-Z-]+$`)
+	pseudoElementPattern     = regexp.MustCompile(`^::[a-zA-Z-]{2,}$`)
 	complexSelectorPattern   = regexp.MustCompile(`^[a-zA-Z0-9\s\[\].:_#>+~()"'=-]+$`)
 	combinatorPattern        = regexp.MustCompile(`\s*[>+~]\s*`)
 	compoundSelectorPattern  = regexp.MustCompile(`^(?:[a-zA-Z][a-zA-Z0-9-]*|\*)?(?:\.[a-zA-Z_-][a-zA-Z0-9_-]*)*(?:#[a-zA-Z_-][a-zA-Z0-9_-]*)?(?:\[[^\]]+\])*(?::[a-zA-Z-]+(?:\([^)]*\))?)*(?:::[a-zA-Z-]+)*$`)
