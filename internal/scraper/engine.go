@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -952,8 +953,9 @@ func (e *Engine) ScrapeWithBatching(ctx context.Context, urls []string, extracto
 		if len(errors) > 0 {
 			// Log errors but continue processing
 			for _, err := range errors {
-				// In a production system, you'd use a proper logger here
-				_ = err // Suppress unused variable warning
+				// Log error to stderr for visibility (in production, use structured logging)
+				// This ensures errors are visible rather than silently suppressed
+				fmt.Fprintf(os.Stderr, "Scraper batch error: %v\n", err)
 			}
 		}
 		

@@ -833,8 +833,8 @@ func (cr *CallbackRegistry) executeCallback(parentCtx context.Context, callback 
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				// Log panic but don't crash the system
-				// In production, this would log to a proper logger
+				// Log panic to stderr for visibility (in production, use structured logging)
+				fmt.Fprintf(os.Stderr, "Callback registry panic recovered: %v\n", r)
 			}
 		}()
 		
@@ -1030,8 +1030,29 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 				ctx, cancel := context.WithTimeout(cw.ctx, cw.callbackTimeout)
 				defer cancel() // Ensure resources are cleaned up
 				
-				// Execute callback with proper cancellation support
-				cw.executeCallbackWithContext(ctx, cb, config, err)
+				// Execute legacy callback directly with timeout protection
+				// Create a channel to signal callback completion
+				done := make(chan struct{})
+				go func() {
+					defer func() {
+						if r := recover(); r != nil {
+							// Log panic to stderr for visibility (in production, use structured logging)
+							fmt.Fprintf(os.Stderr, "Legacy callback panic recovered: %v\n", r)
+						}
+						close(done)
+					}()
+					// Execute the legacy callback (non-context-aware)
+					cb(config, err)
+				}()
+				
+				// Wait for either completion or timeout
+				select {
+				case <-done:
+					// Callback completed successfully
+				case <-ctx.Done():
+					// Context cancelled (timeout) - goroutine may still be running
+					// but we don't wait for it to prevent blocking the watcher
+				}
 			case <-cw.ctx.Done():
 				// Watcher context is cancelled, don't execute callback
 				return
@@ -1048,54 +1069,6 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 				}
 			}
 		}(callback)
-	}
-}
-
-// executeCallbackWithContext executes a callback with context cancellation support (DEPRECATED)
-//
-// DEPRECATED: This function is deprecated due to potential goroutine leaks. Use the new 
-// CallbackRegistry system via OnChangeWithContext() instead, which provides better goroutine
-// management and eliminates the nested goroutine problem.
-//
-// IMPORTANT: This function, together with notifyCallbacks, creates two layers of goroutines
-// for each callback: one in notifyCallbacks and one here. If a callback blocks indefinitely,
-// both goroutines may become "orphaned" and remain alive until the callback eventually returns
-// or the process exits. The timeout prevents the caller from blocking, but does not forcibly
-// terminate the callback goroutine. This design is a trade-off: it prevents deadlocks and
-// resource exhaustion in the configuration watcher, but may result in temporary goroutine leaks
-// if callbacks do not respect context cancellation or block forever. This is considered acceptable
-// because forcibly terminating goroutines is not possible in Go, and callbacks are expected to
-// be well-behaved. Maintainers should be aware of this risk when registering callbacks.
-//
-// MIGRATION: Replace OnChange() calls with OnChangeWithContext() and update callback signatures
-// to accept context.Context as the first parameter.
-func (cw *ConfigWatcher) executeCallbackWithContext(ctx context.Context, callback func(*ScraperConfig, error), config *ScraperConfig, err error) {
-	// Channel to signal callback completion
-	done := make(chan struct{})
-	
-	go func() {
-		defer func() {
-			// Recover from any panic in the callback to prevent crashing
-			if r := recover(); r != nil {
-				// Log panic if possible, but don't crash the watcher
-			}
-			close(done)
-		}()
-		
-		// Execute the callback
-		callback(config, err)
-	}()
-	
-	// Wait for either completion or context cancellation
-	select {
-	case <-done:
-		// Callback completed successfully
-		return
-	case <-ctx.Done():
-		// Context cancelled (timeout or explicit cancellation)
-		// The callback goroutine will continue but we don't wait for it
-		// The defer in the goroutine will still close the done channel
-		return
 	}
 }
 

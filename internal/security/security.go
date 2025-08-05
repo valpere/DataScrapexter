@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -494,7 +495,7 @@ type ObfuscatedString struct {
 // Replace usage of ObfuscatedString with integration to one of these services for secure secret storage and retrieval.
 func NewObfuscatedString(dataBytes []byte) (*ObfuscatedString, error) {
 	// RUNTIME WARNING: ObfuscatedString is NOT secure for secrets. Use a proper secret manager for production.
-	log.Printf("[SECURITY WARNING] ObfuscatedString uses only XOR obfuscation and is NOT suitable for secrets. Migrate to a proper secret management solution for production use.")
+	fmt.Fprintf(os.Stderr, "[SECURITY WARNING] ObfuscatedString uses only XOR obfuscation and is NOT suitable for secrets. Migrate to a proper secret management solution for production use.\n")
 	// Create a copy to avoid modifying the original slice
 	dataCopy := make([]byte, len(dataBytes))
 	copy(dataCopy, dataBytes)
