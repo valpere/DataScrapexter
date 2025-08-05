@@ -10,6 +10,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/valpere/DataScrapexter/internal/browser"
+	"github.com/valpere/DataScrapexter/internal/config"
 	"github.com/valpere/DataScrapexter/internal/errors"
 	"github.com/valpere/DataScrapexter/internal/proxy"
 	"github.com/valpere/DataScrapexter/internal/utils"
@@ -882,7 +883,7 @@ func (e *Engine) ScrapeMultipleOptimized(ctx context.Context, urls []string, ext
 
 // ScrapeWithBatching processes URLs in batches for memory efficiency
 // This method reuses a single worker pool across all batches for better performance
-func (e *Engine) ScrapeWithBatching(ctx context.Context, urls []string, extractors []FieldConfig, batchSize int) ([]*Result, error) {
+func (e *Engine) ScrapeWithBatching(ctx context.Context, urls []string, extractors []FieldConfig, scraperConfig *config.ScraperConfig, batchSize int) ([]*Result, error) {
 	if batchSize <= 0 {
 		batchSize = 10 // Default batch size
 	}
@@ -911,6 +912,10 @@ func (e *Engine) ScrapeWithBatching(ctx context.Context, urls []string, extracto
 	defer workerPool.Close()
 	
 	allResults := make([]*Result, 0, len(urls))
+	
+	// Track error thresholds across batches
+	totalProcessed := 0
+	totalErrors := 0
 	
 	// Process URLs in batches
 	for i := 0; i < len(urls); i += batchSize {
@@ -948,13 +953,25 @@ func (e *Engine) ScrapeWithBatching(ctx context.Context, urls []string, extracto
 		// Add batch results to total results
 		allResults = append(allResults, batchResults...)
 		
-		// Report any errors from this batch (non-fatal)
+		// Update totals for error threshold tracking
+		totalProcessed += len(batchResults)
+		totalErrors += len(errors)
+		
+		// Report any errors from this batch and check error thresholds
 		if len(errors) > 0 {
-			// Log errors but continue processing using structured logging
 			logger := utils.GetLogger("scraper")
+			
+			// Log individual errors using structured logging
 			for _, err := range errors {
-				// Use proper logging framework for error visibility and management
 				logger.Errorf("Batch processing error: %v", err)
+			}
+			
+			// Check if error thresholds are exceeded and should stop processing
+			shouldStop := e.checkErrorThresholds(scraperConfig, len(errors), len(batchResults), totalProcessed, totalErrors)
+			if shouldStop {
+				logger.Warnf("Error threshold exceeded: %d errors in current batch, %d total errors out of %d processed items. Stopping batch processing as configured.", 
+					len(errors), totalErrors, totalProcessed)
+				break // Stop processing remaining batches
 			}
 		}
 		
@@ -995,6 +1012,33 @@ func (e *Engine) OptimizeForMemory() {
 		transport.MaxIdleConnsPerHost = 5
 		transport.IdleConnTimeout = 30 * time.Second
 	}
+}
+
+// checkErrorThresholds checks if error thresholds are exceeded and processing should stop
+func (e *Engine) checkErrorThresholds(scraperConfig *config.ScraperConfig, batchErrors, batchSize, totalProcessed, totalErrors int) bool {
+	if scraperConfig == nil {
+		return false
+	}
+	
+	// Only check if stop_on_error_threshold is enabled
+	if !scraperConfig.StopOnErrorThreshold {
+		return false
+	}
+
+	// Check absolute error threshold per batch
+	if scraperConfig.ErrorThreshold > 0 && batchErrors >= scraperConfig.ErrorThreshold {
+		return true
+	}
+
+	// Check percentage error threshold (overall rate)
+	if scraperConfig.ErrorThresholdPercent > 0 && totalProcessed > 0 {
+		errorRate := float64(totalErrors) / float64(totalProcessed) * 100
+		if errorRate >= scraperConfig.ErrorThresholdPercent {
+			return true
+		}
+	}
+
+	return false
 }
 
 // min utility function

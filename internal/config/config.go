@@ -23,9 +23,12 @@ type ScraperConfig struct {
 	UserAgents []string          `yaml:"user_agents,omitempty" json:"user_agents,omitempty"`
 	RateLimit  string            `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
 	Timeout    string            `yaml:"timeout,omitempty" json:"timeout,omitempty"`
-	MaxRetries int               `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
-	Retries    int               `yaml:"retries,omitempty" json:"retries,omitempty"` // Added missing field
-	Headers    map[string]string `yaml:"headers,omitempty" json:"headers,omitempty"`
+	MaxRetries              int               `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
+	Retries                 int               `yaml:"retries,omitempty" json:"retries,omitempty"` // Added missing field
+	ErrorThreshold          int               `yaml:"error_threshold,omitempty" json:"error_threshold,omitempty"`          // Maximum errors per batch before stopping
+	ErrorThresholdPercent   float64           `yaml:"error_threshold_percent,omitempty" json:"error_threshold_percent,omitempty"` // Error rate threshold (0-100)
+	StopOnErrorThreshold    bool              `yaml:"stop_on_error_threshold,omitempty" json:"stop_on_error_threshold,omitempty"` // Whether to stop processing when threshold is exceeded
+	Headers                 map[string]string `yaml:"headers,omitempty" json:"headers,omitempty"`
 	Cookies    map[string]string `yaml:"cookies,omitempty" json:"cookies,omitempty"`
 	Proxy      *ProxyConfig      `yaml:"proxy,omitempty" json:"proxy,omitempty"`
 	Browser    *BrowserConfig    `yaml:"browser,omitempty" json:"browser,omitempty"`
@@ -222,6 +225,14 @@ func (c *ScraperConfig) SimpleValidate() error {
 
 	if c.Output.File == "" {
 		c.Output.File = "output." + c.Output.Format // Default filename
+	}
+
+	// Validate error threshold configuration
+	if c.ErrorThreshold < 0 {
+		return fmt.Errorf("error_threshold must be non-negative, got %d", c.ErrorThreshold)
+	}
+	if c.ErrorThresholdPercent < 0 || c.ErrorThresholdPercent > 100 {
+		return fmt.Errorf("error_threshold_percent must be between 0 and 100, got %.2f", c.ErrorThresholdPercent)
 	}
 
 	return nil
@@ -756,15 +767,23 @@ func GenerateTemplate(templateType string) *ScraperConfig {
 // ContextualCallback represents a callback that accepts context for cancellation support
 type ContextualCallback func(ctx context.Context, config *ScraperConfig, err error)
 
+// CallbackInfo contains callback function and metadata for better debugging
+type CallbackInfo struct {
+	Callback ContextualCallback
+	ID       string // Unique identifier for debugging
+	Name     string // Human-readable name for debugging
+}
+
 // CallbackRegistry manages callbacks with mandatory context support to prevent goroutine leaks
 type CallbackRegistry struct {
-	callbacks     []ContextualCallback
+	callbacks     []CallbackInfo
 	mutex         sync.RWMutex
 	maxWorkers    int
 	workerPool    chan struct{}
 	timeout       time.Duration
 	activeCount   int64
 	totalExecuted int64
+	nextID        int64 // Auto-incrementing ID counter
 }
 
 // NewCallbackRegistry creates a new callback registry with goroutine leak prevention
@@ -777,34 +796,57 @@ func NewCallbackRegistry(maxWorkers int, timeout time.Duration) *CallbackRegistr
 	}
 	
 	return &CallbackRegistry{
-		callbacks:  make([]ContextualCallback, 0),
+		callbacks:  make([]CallbackInfo, 0),
 		maxWorkers: maxWorkers,
 		workerPool: make(chan struct{}, maxWorkers),
 		timeout:    timeout,
+		nextID:     1, // Start ID counter at 1
 	}
 }
 
-// Register adds a new context-aware callback to the registry
-func (cr *CallbackRegistry) Register(callback ContextualCallback) {
+// Register adds a new context-aware callback to the registry with automatic ID generation
+func (cr *CallbackRegistry) Register(callback ContextualCallback) string {
+	return cr.RegisterNamed(callback, "")
+}
+
+// RegisterNamed adds a named context-aware callback to the registry
+func (cr *CallbackRegistry) RegisterNamed(callback ContextualCallback, name string) string {
 	cr.mutex.Lock()
 	defer cr.mutex.Unlock()
-	cr.callbacks = append(cr.callbacks, callback)
+	
+	// Generate unique ID
+	id := fmt.Sprintf("callback-%d", cr.nextID)
+	cr.nextID++
+	
+	// Use provided name or generate a default one
+	if name == "" {
+		name = fmt.Sprintf("Callback %d", cr.nextID-1)
+	}
+	
+	callbackInfo := CallbackInfo{
+		Callback: callback,
+		ID:       id,
+		Name:     name,
+	}
+	
+	cr.callbacks = append(cr.callbacks, callbackInfo)
+	return id
 }
 
 // Execute executes all registered callbacks with proper context support and goroutine management
 func (cr *CallbackRegistry) Execute(ctx context.Context, config *ScraperConfig, err error) {
 	cr.mutex.RLock()
-	callbacks := make([]ContextualCallback, len(cr.callbacks))
+	callbacks := make([]CallbackInfo, len(cr.callbacks))
 	copy(callbacks, cr.callbacks)
 	cr.mutex.RUnlock()
 	
 	// Execute callbacks with bounded concurrency and no goroutine leaks
-	for _, callback := range callbacks {
+	for _, callbackInfo := range callbacks {
 		// Try to acquire a worker slot with context cancellation support
 		select {
 		case cr.workerPool <- struct{}{}:
 			// Worker slot acquired, execute callback safely
-			go cr.executeCallback(ctx, callback, config, err)
+			go cr.executeCallback(ctx, callbackInfo, config, err)
 		case <-ctx.Done():
 			// Context cancelled, skip remaining callbacks
 			return
@@ -817,7 +859,7 @@ func (cr *CallbackRegistry) Execute(ctx context.Context, config *ScraperConfig, 
 }
 
 // executeCallback safely executes a single callback with timeout and leak prevention
-func (cr *CallbackRegistry) executeCallback(parentCtx context.Context, callback ContextualCallback, config *ScraperConfig, err error) {
+func (cr *CallbackRegistry) executeCallback(parentCtx context.Context, callbackInfo CallbackInfo, config *ScraperConfig, err error) {
 	defer func() {
 		<-cr.workerPool // Release worker slot
 		atomic.AddInt64(&cr.activeCount, -1)
@@ -830,19 +872,19 @@ func (cr *CallbackRegistry) executeCallback(parentCtx context.Context, callback 
 	ctx, cancel := context.WithTimeout(parentCtx, cr.timeout)
 	defer cancel()
 	
-	// Execute callback with panic recovery
+	// Execute callback with panic recovery and callback identification
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				// Log panic using proper logging framework for better categorization and management
+				// Log panic with callback identification information for better debugging
 				logger := utils.GetLogger("config")
-				logger.Panicf("Callback registry panic recovered: %v", r)
+				logger.Panicf("Callback registry panic recovered in callback '%s' (ID: %s): %v", callbackInfo.Name, callbackInfo.ID, r)
 			}
 		}()
 		
 		// Execute the context-aware callback
 		// The callback MUST respect context cancellation to prevent leaks
-		callback(ctx, config, err)
+		callbackInfo.Callback(ctx, config, err)
 	}()
 }
 

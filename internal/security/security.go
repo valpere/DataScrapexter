@@ -12,10 +12,14 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/valpere/DataScrapexter/internal/utils"
 )
+
+// securityWarningOnce ensures security warning is only logged once per application run
+var securityWarningOnce sync.Once
 
 // SecurityLevel represents different security validation levels
 type SecurityLevel int
@@ -495,9 +499,11 @@ type ObfuscatedString struct {
 //   - Azure Key Vault: https://azure.microsoft.com/en-us/products/key-vault/
 // Replace usage of ObfuscatedString with integration to one of these services for secure secret storage and retrieval.
 func NewObfuscatedString(dataBytes []byte) (*ObfuscatedString, error) {
-	// Log security warning using proper logging framework with configurable visibility
-	logger := utils.GetLogger("security")
-	logger.Security("ObfuscatedString uses only XOR obfuscation and is NOT suitable for secrets. Use proper secret management for production (AWS Secrets Manager, HashiCorp Vault, etc.)")
+	// Log security warning only once per application run to prevent log spam
+	securityWarningOnce.Do(func() {
+		logger := utils.GetLogger("security")
+		logger.Security("ObfuscatedString uses only XOR obfuscation and is NOT suitable for secrets. Use proper secret management for production (AWS Secrets Manager, HashiCorp Vault, etc.). This warning is shown only once per application run.")
+	})
 	// Create a copy to avoid modifying the original slice
 	dataCopy := make([]byte, len(dataBytes))
 	copy(dataCopy, dataBytes)
