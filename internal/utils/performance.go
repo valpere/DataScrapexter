@@ -291,11 +291,12 @@ func (wp *WorkerPool[T]) GetMetrics() PerformanceMetrics {
 
 // TokenBucketRateLimiter provides token bucket rate limiting
 type TokenBucketRateLimiter struct {
-	tokens   int64
-	maxTokens int64
+	tokens     int64
+	maxTokens  int64
 	refillRate time.Duration
 	lastRefill int64
 	mutex      sync.Mutex
+	logger     *ComponentLogger // Cached logger instance to avoid repeated creation
 }
 
 // NewTokenBucketRateLimiter creates a new token bucket rate limiter
@@ -305,6 +306,7 @@ func NewTokenBucketRateLimiter(maxTokens int64, refillRate time.Duration) *Token
 		maxTokens:  maxTokens,
 		refillRate: refillRate,
 		lastRefill: time.Now().UnixNano(),
+		logger:     GetLogger("performance"), // Cache logger instance
 	}
 }
 
@@ -319,8 +321,7 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 	// Handle system time going backwards (e.g., NTP corrections, system clock changes)
 	if elapsed < 0 {
 		// System time went backwards, reset timing reference to avoid negative calculations
-		logger := GetLogger("performance")
-		logger.Warnf("TokenBucketRateLimiter: system time went backwards by %v "+
+		trl.logger.Warnf("TokenBucketRateLimiter: system time went backwards by %v "+
 			"(possible causes: NTP correction, VM migration, manual clock change). "+
 			"Timing reference reset to avoid negative calculations. "+
 			"Impact: rate limiting may be temporarily inaccurate, but will self-correct. "+
@@ -334,13 +335,11 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 	// it indicates a bug that should be investigated and fixed.
 	if trl.tokens < 0 {
 		// This should never happen with correct implementation - log for debugging
-		logger := GetLogger("performance")
-		logger.Errorf("TokenBucketRateLimiter: tokens became negative (%d), this indicates a bug in the implementation. Resetting to 0.", trl.tokens)
+		trl.logger.Errorf("TokenBucketRateLimiter: tokens became negative (%d), this indicates a bug in the implementation. Resetting to 0.", trl.tokens)
 		trl.tokens = 0
 	} else if trl.tokens > trl.maxTokens {
 		// This could happen due to calculation precision, clamp to max
-		logger := GetLogger("performance")
-		logger.Warnf("TokenBucketRateLimiter: tokens (%d) exceeded maximum (%d), clamping to maximum", trl.tokens, trl.maxTokens)
+		trl.logger.Warnf("TokenBucketRateLimiter: tokens (%d) exceeded maximum (%d), clamping to maximum", trl.tokens, trl.maxTokens)
 		trl.tokens = trl.maxTokens
 	}
 
@@ -357,8 +356,7 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 			
 			// Additional safety check to ensure tokens are valid
 			if trl.tokens < 0 {
-				logger := GetLogger("performance")
-				logger.Errorf("TokenBucketRateLimiter: tokens became negative (%d) after refill, resetting to 0", trl.tokens)
+				trl.logger.Errorf("TokenBucketRateLimiter: tokens became negative (%d) after refill, resetting to 0", trl.tokens)
 				trl.tokens = 0
 			}
 		}
@@ -370,8 +368,7 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 		trl.tokens--
 		// Final validation to ensure tokens didn't go negative
 		if trl.tokens < 0 {
-			logger := GetLogger("performance")
-			logger.Errorf("TokenBucketRateLimiter: tokens became negative (%d) after decrement, resetting to 0", trl.tokens)
+			trl.logger.Errorf("TokenBucketRateLimiter: tokens became negative (%d) after decrement, resetting to 0", trl.tokens)
 			trl.tokens = 0
 			return false
 		}

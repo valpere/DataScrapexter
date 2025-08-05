@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/valpere/DataScrapexter/internal/config"
 	"github.com/valpere/DataScrapexter/internal/pipeline"
 )
 
@@ -33,6 +34,51 @@ type FieldConfig struct {
 type ExtractionConfig struct {
 	StrictMode      bool `yaml:"strict_mode" json:"strict_mode"`
 	ContinueOnError bool `yaml:"continue_on_error" json:"continue_on_error"`
+}
+
+// BatchScrapingConfig encapsulates all parameters for batch scraping operations
+type BatchScrapingConfig struct {
+	URLs           []string              `json:"urls"`
+	Extractors     []FieldConfig         `json:"extractors"`
+	ScraperConfig  *config.ScraperConfig `json:"scraper_config"`
+	BatchSize      int                   `json:"batch_size"`
+}
+
+// NewBatchScrapingConfig creates a new BatchScrapingConfig with validation
+func NewBatchScrapingConfig(urls []string, extractors []FieldConfig, scraperConfig *config.ScraperConfig, batchSize int) (*BatchScrapingConfig, error) {
+	config := &BatchScrapingConfig{
+		URLs:          urls,
+		Extractors:    extractors,
+		ScraperConfig: scraperConfig,
+		BatchSize:     batchSize,
+	}
+	
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+	
+	return config, nil
+}
+
+// Validate checks if the BatchScrapingConfig is valid
+func (bsc *BatchScrapingConfig) Validate() error {
+	if len(bsc.URLs) == 0 {
+		return fmt.Errorf("URLs list cannot be empty")
+	}
+	
+	if len(bsc.Extractors) == 0 {
+		return fmt.Errorf("Extractors list cannot be empty")
+	}
+	
+	if bsc.ScraperConfig == nil {
+		return fmt.Errorf("ScraperConfig cannot be nil")
+	}
+	
+	if bsc.BatchSize <= 0 {
+		bsc.BatchSize = 10 // Set default batch size
+	}
+	
+	return nil
 }
 
 // EngineConfig defines scraping engine configuration

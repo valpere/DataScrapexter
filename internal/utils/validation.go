@@ -128,15 +128,16 @@ func (sv *StringValidator) Validate(value interface{}) *ValidationError {
 		return nil
 	}
 
-	// Check length constraints
-	if sv.MinLength > 0 && utf8.RuneCountInString(str) < sv.MinLength {
+	// Check length constraints using optimized character counting
+	charCount := countCharsOptimized(str)
+	if sv.MinLength > 0 && charCount < sv.MinLength {
 		return &ValidationError{
 			Message: fmt.Sprintf("must be at least %d characters long", sv.MinLength),
 			Code:    "MIN_LENGTH",
 		}
 	}
 
-	if sv.MaxLength > 0 && utf8.RuneCountInString(str) > sv.MaxLength {
+	if sv.MaxLength > 0 && charCount > sv.MaxLength {
 		return &ValidationError{
 			Message: fmt.Sprintf("must not exceed %d characters", sv.MaxLength),
 			Code:    "MAX_LENGTH",
@@ -559,17 +560,142 @@ func SanitizeFieldName(name string) string {
 	return clean
 }
 
-// TODO: This is a placeholder for future cross-field validation implementation
-// Use the configuration's own Validate() methods for now
+// ValidateConfigIntegrity performs cross-field validation on configuration objects.
+// This function validates the internal consistency and completeness of configuration data.
 func ValidateConfigIntegrity(config interface{}) *ValidationResult {
-	result := &ValidationResult{Valid: true}
+	result := &ValidationResult{
+		Valid:  true,
+		Errors: make([]ValidationError, 0),
+	}
 
-	// Note: This is a minimal implementation that always returns valid
-	// For production use, implement specific cross-field validation logic:
-	// - Check if proxy is enabled but no providers are configured
-	// - Validate browser automation settings consistency
-	// - Ensure database connection details are complete
-	// - Verify output format compatibility with selected fields
+	if config == nil {
+		result.Valid = false
+		result.Errors = append(result.Errors, ValidationError{
+			Field:   "config",
+			Message: "Configuration cannot be nil",
+		})
+		return result
+	}
+
+	// Use reflection to perform generic validation based on the config type
+	v := reflect.ValueOf(config)
+	
+	// Handle pointer types
+	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			result.Valid = false
+			result.Errors = append(result.Errors, ValidationError{
+				Field:   "config",
+				Message: "Configuration pointer cannot be nil",
+			})
+			return result
+		}
+		v = v.Elem()
+	}
+
+	// If the config has its own Validate method, use it
+	if validateMethod := v.MethodByName("Validate"); validateMethod.IsValid() {
+		// Call the Validate() method if it exists
+		if validateMethod.Type().NumIn() == 0 && validateMethod.Type().NumOut() == 1 {
+			returnValues := validateMethod.Call([]reflect.Value{})
+			if len(returnValues) > 0 {
+				if err, ok := returnValues[0].Interface().(error); ok && err != nil {
+					result.Valid = false
+					result.Errors = append(result.Errors, ValidationError{
+						Field:   "config",
+						Message: fmt.Sprintf("Configuration validation failed: %v", err),
+					})
+				}
+			}
+		}
+	}
+
+	// Perform additional cross-field validation based on struct tags and types
+	if v.Kind() == reflect.Struct {
+		result = validateStructIntegrity(v, result)
+	}
 
 	return result
+}
+
+// validateStructIntegrity performs detailed struct validation
+func validateStructIntegrity(v reflect.Value, result *ValidationResult) *ValidationResult {
+	structType := v.Type()
+	
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		fieldType := structType.Field(i)
+		
+		// Skip unexported fields
+		if !field.CanInterface() {
+			continue
+		}
+		
+		// Check for required fields that are empty
+		if tag := fieldType.Tag.Get("validate"); tag != "" {
+			if strings.Contains(tag, "required") {
+				if isEmptyValue(field) {
+					result.Valid = false
+					result.Errors = append(result.Errors, ValidationError{
+						Field:   fieldType.Name,
+						Message: "Required field is empty",
+					})
+				}
+			}
+		}
+		
+		// Recursively validate nested structs
+		if field.Kind() == reflect.Struct {
+			result = validateStructIntegrity(field, result)
+		} else if field.Kind() == reflect.Ptr && field.Type().Elem().Kind() == reflect.Struct {
+			if !field.IsNil() {
+				result = validateStructIntegrity(field.Elem(), result)
+			}
+		}
+	}
+	
+	return result
+}
+
+// isEmptyValue checks if a reflect.Value represents an empty value
+func isEmptyValue(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.String:
+		return v.Len() == 0
+	case reflect.Bool:
+		return !v.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return v.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return v.Float() == 0
+	case reflect.Interface, reflect.Ptr:
+		return v.IsNil()
+	case reflect.Array, reflect.Slice, reflect.Map, reflect.Chan:
+		return v.Len() == 0
+	}
+	return false
+}
+
+// countCharsOptimized counts characters in a string with fast path for ASCII-only strings.
+// This is more performant than utf8.RuneCountInString when character-level accuracy isn't needed
+// or when the string contains only ASCII characters.
+func countCharsOptimized(s string) int {
+	// Fast path: if all characters are ASCII (< 128), len() is accurate for character count
+	isASCII := true
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 128 {
+			isASCII = false
+			break
+		}
+	}
+	
+	if isASCII {
+		// ASCII-only string: byte length equals character count
+		return len(s)
+	}
+	
+	// Non-ASCII string: fall back to accurate UTF-8 rune counting
+	return utf8.RuneCountInString(s)
 }

@@ -881,8 +881,23 @@ func (e *Engine) ScrapeMultipleOptimized(ctx context.Context, urls []string, ext
 	return results, nil
 }
 
+// ScrapeWithBatchingConfig processes URLs in batches using a configuration struct for better usability
+// This method provides an improved API with fewer parameters and better maintainability
+func (e *Engine) ScrapeWithBatchingConfig(ctx context.Context, config *BatchScrapingConfig) ([]*Result, error) {
+	if config == nil {
+		return nil, fmt.Errorf("BatchScrapingConfig cannot be nil")
+	}
+	
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid batch scraping config: %w", err)
+	}
+	
+	return e.ScrapeWithBatching(ctx, config.URLs, config.Extractors, config.ScraperConfig, config.BatchSize)
+}
+
 // ScrapeWithBatching processes URLs in batches for memory efficiency
 // This method reuses a single worker pool across all batches for better performance
+// Deprecated: Use ScrapeWithBatchingConfig for better parameter management
 func (e *Engine) ScrapeWithBatching(ctx context.Context, urls []string, extractors []FieldConfig, scraperConfig *config.ScraperConfig, batchSize int) ([]*Result, error) {
 	if batchSize <= 0 {
 		batchSize = 10 // Default batch size

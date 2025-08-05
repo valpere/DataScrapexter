@@ -924,6 +924,8 @@ type ConfigWatcher struct {
 	activeGoroutines int64         // Atomic counter for active callback goroutines
 	totalCallbacks   int64         // Total callbacks executed (for metrics)
 	callbackTimeout  time.Duration // Timeout for individual callback execution
+	timedOutCallbacks int64        // Counter for callbacks that timed out (potential resource leaks)
+	cleanupInterval   time.Duration // Interval for cleanup operations
 	wg               sync.WaitGroup // WaitGroup for graceful shutdown
 }
 
@@ -1084,6 +1086,10 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 				case <-ctx.Done():
 					// Context cancelled (timeout) - goroutine may still be running
 					// but we don't wait for it to prevent blocking the watcher
+					atomic.AddInt64(&cw.timedOutCallbacks, 1)
+					logger := utils.GetLogger("config")
+					logger.Warnf("Legacy callback timed out after %v, goroutine may still be running (potential resource leak). Total timed out: %d", 
+						cw.callbackTimeout, atomic.LoadInt64(&cw.timedOutCallbacks))
 				}
 			case <-cw.ctx.Done():
 				// Watcher context is cancelled, don't execute callback
@@ -1128,6 +1134,7 @@ func (cw *ConfigWatcher) GetGoroutineStats() map[string]interface{} {
 	legacyStats := map[string]interface{}{
 		"legacy_active_goroutines": atomic.LoadInt64(&cw.activeGoroutines),
 		"legacy_total_callbacks":   atomic.LoadInt64(&cw.totalCallbacks),
+		"legacy_timed_out_callbacks": atomic.LoadInt64(&cw.timedOutCallbacks),
 		"legacy_max_workers":       cw.maxWorkers,
 		"legacy_available_slots":   cw.maxWorkers - len(cw.callbackWorkers),
 	}
@@ -1144,6 +1151,26 @@ func (cw *ConfigWatcher) GetGoroutineStats() map[string]interface{} {
 // GetCallbackRegistryStats returns statistics specifically for the new callback registry
 func (cw *ConfigWatcher) GetCallbackRegistryStats() map[string]interface{} {
 	return cw.callbackRegistry.GetStats()
+}
+
+// HasPotentialResourceLeaks checks if there are signs of resource leaks from timed-out callbacks
+func (cw *ConfigWatcher) HasPotentialResourceLeaks() bool {
+	timedOut := atomic.LoadInt64(&cw.timedOutCallbacks)
+	return timedOut > 0
+}
+
+// GetResourceLeakInfo returns information about potential resource leaks
+func (cw *ConfigWatcher) GetResourceLeakInfo() map[string]interface{} {
+	timedOut := atomic.LoadInt64(&cw.timedOutCallbacks)
+	active := atomic.LoadInt64(&cw.activeGoroutines)
+	
+	return map[string]interface{}{
+		"timed_out_callbacks": timedOut,
+		"active_goroutines":   active,
+		"potential_leaks":     timedOut > 0,
+		"callback_timeout":    cw.callbackTimeout.String(),
+		"recommendation":      "Consider reducing callback timeout or optimizing callback performance if timed_out_callbacks > 0",
+	}
 }
 
 // SetCallbackTimeout configures the timeout for callback execution

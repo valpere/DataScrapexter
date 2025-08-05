@@ -487,6 +487,18 @@ func (sv *SecurityValidator) AddCustomRule(rule ValidationRule) {
 //
 // SECURITY WARNING: This type is NOT cryptographically secure and is NOT suitable for protecting secrets in production.
 // For production, use dedicated secret management solutions (e.g., HashiCorp Vault, AWS Secrets Manager).
+//
+// TODO: Future Security Improvements
+// - Replace XOR obfuscation with proper encryption (AES-256-GCM)
+// - Implement key derivation functions (PBKDF2, Argon2, or scrypt)
+// - Add secure random salt generation
+// - Implement memory-locked pages where supported (mlock/VirtualLock)
+// - Add integration with hardware security modules (HSM)
+// - Implement automatic key rotation mechanisms
+// - Add support for external key management systems
+// - Consider using libsodium or similar cryptographic libraries
+// - Add timing attack resistance for sensitive operations
+// - Implement secure comparison functions using constant-time operations
 type ObfuscatedString struct {
 	data []byte
 	key  []byte
