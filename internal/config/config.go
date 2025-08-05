@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/valpere/DataScrapexter/internal/utils"
 	"gopkg.in/yaml.v3"
 )
 
@@ -833,8 +834,9 @@ func (cr *CallbackRegistry) executeCallback(parentCtx context.Context, callback 
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				// Log panic to stderr for visibility (in production, use structured logging)
-				fmt.Fprintf(os.Stderr, "Callback registry panic recovered: %v\n", r)
+				// Log panic using proper logging framework for better categorization and management
+				logger := utils.GetLogger("config")
+				logger.Panicf("Callback registry panic recovered: %v", r)
 			}
 		}()
 		
@@ -1036,8 +1038,9 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 				go func() {
 					defer func() {
 						if r := recover(); r != nil {
-							// Log panic to stderr for visibility (in production, use structured logging)
-							fmt.Fprintf(os.Stderr, "Legacy callback panic recovered: %v\n", r)
+							// Log panic using proper logging framework for better categorization and management
+							logger := utils.GetLogger("config")
+							logger.Panicf("Legacy callback panic recovered: %v", r)
 						}
 						close(done)
 					}()

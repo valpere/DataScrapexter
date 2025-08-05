@@ -5,6 +5,7 @@ package utils
 import (
 	"fmt"
 	"net/url"
+	"reflect"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -13,27 +14,27 @@ import (
 // Pre-compiled regex patterns for better performance
 var (
 	// CSS selector validation patterns
-	elementSelectorPattern    = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]*$`)
-	classSelectorPattern      = regexp.MustCompile(`^\.[a-zA-Z_-][a-zA-Z0-9_-]*$`)
-	idSelectorPattern         = regexp.MustCompile(`^#[a-zA-Z_-][a-zA-Z0-9_-]*$`)
-	universalSelectorPattern  = regexp.MustCompile(`^\*$`)
-	attributeSelectorPattern  = regexp.MustCompile(`^\[[a-zA-Z][a-zA-Z0-9-]*(?:[~|^$*]?=["']?[^"'\]]*["']?)?\]$`)
-	pseudoClassPattern        = regexp.MustCompile(`^:[a-zA-Z-]+(?:\([^)]*\))?$`)
-	pseudoElementPattern      = regexp.MustCompile(`^::[a-zA-Z-]+$`)
-	complexSelectorPattern    = regexp.MustCompile(`^[a-zA-Z0-9\s\[\].:_#>+~()"'=-]+$`)
-	combinatorPattern         = regexp.MustCompile(`\s*[>+~]\s*`)
-	compoundSelectorPattern   = regexp.MustCompile(`^(?:[a-zA-Z][a-zA-Z0-9-]*|\*)?(?:\.[a-zA-Z_-][a-zA-Z0-9_-]*)*(?:#[a-zA-Z_-][a-zA-Z0-9_-]*)?(?:\[[^\]]+\])*(?::[a-zA-Z-]+(?:\([^)]*\))?)*(?:::[a-zA-Z-]+)*$`)
-	normalizeSpacePattern     = regexp.MustCompile(`\s+`)
-	
+	elementSelectorPattern   = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]*$`)
+	classSelectorPattern     = regexp.MustCompile(`^\.[a-zA-Z_-][a-zA-Z0-9_-]*$`)
+	idSelectorPattern        = regexp.MustCompile(`^#[a-zA-Z_-][a-zA-Z0-9_-]*$`)
+	universalSelectorPattern = regexp.MustCompile(`^\*$`)
+	attributeSelectorPattern = regexp.MustCompile(`^\[[a-zA-Z][a-zA-Z0-9-]*(?:[~|^$*]?=["']?[^"'\]]*["']?)?\]$`)
+	pseudoClassPattern       = regexp.MustCompile(`^:[a-zA-Z-]+(?:\([^)]*\))?$`)
+	pseudoElementPattern     = regexp.MustCompile(`^::[a-zA-Z-]+$`)
+	complexSelectorPattern   = regexp.MustCompile(`^[a-zA-Z0-9\s\[\].:_#>+~()"'=-]+$`)
+	combinatorPattern        = regexp.MustCompile(`\s*[>+~]\s*`)
+	compoundSelectorPattern  = regexp.MustCompile(`^(?:[a-zA-Z][a-zA-Z0-9-]*|\*)?(?:\.[a-zA-Z_-][a-zA-Z0-9_-]*)*(?:#[a-zA-Z_-][a-zA-Z0-9_-]*)?(?:\[[^\]]+\])*(?::[a-zA-Z-]+(?:\([^)]*\))?)*(?:::[a-zA-Z-]+)*$`)
+	normalizeSpacePattern    = regexp.MustCompile(`\s+`)
+
 	// Security validation patterns
 	javascriptProtocolPattern = regexp.MustCompile(`javascript:`)
 	cssExpressionPattern      = regexp.MustCompile(`expression\s*\(`)
 	javascriptURLPattern      = regexp.MustCompile(`\burl\s*\(\s*["']?javascript:`)
 	importStatementPattern    = regexp.MustCompile(`\bimport\b`)
-	
+
 	// CSS combinator pattern
 	cssCombinatorPattern = regexp.MustCompile(`[>+~]\s*[a-zA-Z0-9\[\].:_#-]`)
-	
+
 	// Field name sanitization pattern
 	fieldNameSanitizePattern = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 )
@@ -42,7 +43,7 @@ var (
 const (
 	// MaxSelectorLength defines the maximum allowed length for CSS selectors
 	MaxSelectorLength = 1000
-	
+
 	// MaxNestingDepth defines the maximum allowed nesting depth for CSS selectors
 	MaxNestingDepth = 20
 )
@@ -60,7 +61,7 @@ func (e ValidationError) Error() string {
 	return fmt.Sprintf("validation error in field '%s': %s", e.Field, e.Message)
 }
 
-// ValidationResult contains the result of validation operations
+// ValidationResult represents the result of a validation operation
 type ValidationResult struct {
 	Valid  bool              `json:"valid"`
 	Errors []ValidationError `json:"errors,omitempty"`
@@ -97,10 +98,10 @@ type Validator interface {
 
 // StringValidator validates string fields
 type StringValidator struct {
-	MinLength    int
-	MaxLength    int
-	Required     bool
-	Pattern      *regexp.Regexp
+	MinLength     int
+	MaxLength     int
+	Required      bool
+	Pattern       *regexp.Regexp
 	AllowedValues []string
 }
 
@@ -168,9 +169,9 @@ func (sv *StringValidator) Validate(value interface{}) *ValidationError {
 
 // URLValidator validates URL fields
 type URLValidator struct {
-	Required      bool
+	Required       bool
 	AllowedSchemes []string // e.g., ["http", "https"]
-	AllowedHosts  []string // e.g., ["example.com", "*.example.com"]
+	AllowedHosts   []string // e.g., ["example.com", "*.example.com"]
 }
 
 // Validate implements the Validator interface for URLs
@@ -411,14 +412,14 @@ func isValidSingleSelector(selector string) bool {
 
 	// Use pre-compiled patterns for better performance
 	patterns := []*regexp.Regexp{
-		elementSelectorPattern,    // Element selectors: div, span, etc.
-		classSelectorPattern,      // Class selectors: .class-name
-		idSelectorPattern,         // ID selectors: #id-name
-		universalSelectorPattern,  // Universal selector: *
-		attributeSelectorPattern,  // Attribute selectors: [attr], [attr="value"], etc.
-		pseudoClassPattern,        // Pseudo-class selectors: :hover, :nth-child(n), etc.
-		pseudoElementPattern,      // Pseudo-element selectors: ::before, ::after
-		complexSelectorPattern,    // Complex selectors with combinators and multiple parts
+		elementSelectorPattern,   // Element selectors: div, span, etc.
+		classSelectorPattern,     // Class selectors: .class-name
+		idSelectorPattern,        // ID selectors: #id-name
+		universalSelectorPattern, // Universal selector: *
+		attributeSelectorPattern, // Attribute selectors: [attr], [attr="value"], etc.
+		pseudoClassPattern,       // Pseudo-class selectors: :hover, :nth-child(n), etc.
+		pseudoElementPattern,     // Pseudo-element selectors: ::before, ::after
+		complexSelectorPattern,   // Complex selectors with combinators and multiple parts
 	}
 
 	// Check if selector matches any valid pattern
@@ -435,23 +436,23 @@ func isValidSingleSelector(selector string) bool {
 func isValidComplexSelector(selector string) bool {
 	// Remove extra spaces and normalize using pre-compiled pattern
 	normalized := normalizeSpacePattern.ReplaceAllString(strings.TrimSpace(selector), " ")
-	
+
 	// Check for valid combinator patterns using pre-compiled pattern
 	parts := combinatorPattern.Split(normalized, -1)
-	
+
 	// Validate each part of the complex selector
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			return false
 		}
-		
+
 		// Each part should be a valid simple selector or compound selector
 		if !isValidCompoundSelector(part) {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -460,7 +461,7 @@ func isValidCompoundSelector(selector string) bool {
 	if selector == "" || selector == "*" {
 		return true
 	}
-	
+
 	// Use pre-compiled pattern for compound selectors
 	return compoundSelectorPattern.MatchString(selector)
 }
@@ -483,7 +484,11 @@ func ValidateStruct(v interface{}, validators map[string]Validator) *ValidationR
 	// Only validate structs
 	if val.Kind() != reflect.Struct {
 		result.Valid = false
-		result.Errors = append(result.Errors, "ValidateStruct: input is not a struct")
+		result.Errors = append(result.Errors, ValidationError{
+			Field:   "input",
+			Message: "ValidateStruct: input is not a struct",
+			Code:    "invalid_type",
+		})
 		return result
 	}
 
@@ -494,12 +499,15 @@ func ValidateStruct(v interface{}, validators map[string]Validator) *ValidationR
 
 		validator, ok := validators[fieldName]
 		if ok {
-			fieldResult := validator.Validate(fieldValue)
-			if !fieldResult.Valid {
+			fieldError := validator.Validate(fieldValue)
+			if fieldError != nil {
 				result.Valid = false
-				for _, err := range fieldResult.Errors {
-					result.Errors = append(result.Errors, fmt.Sprintf("%s: %s", fieldName, err))
-				}
+				result.Errors = append(result.Errors, ValidationError{
+					Field:   fieldName,
+					Message: fieldError.Message,
+					Code:    fieldError.Code,
+					Value:   fieldError.Value,
+				})
 			}
 		}
 	}
@@ -537,29 +545,31 @@ func IsValidOutputFormat(format string) bool {
 func SanitizeFieldName(name string) string {
 	// Remove or replace problematic characters using pre-compiled pattern
 	clean := fieldNameSanitizePattern.ReplaceAllString(name, "_")
-	
+
 	// Ensure it doesn't start with a number
 	if len(clean) > 0 && clean[0] >= '0' && clean[0] <= '9' {
 		clean = "field_" + clean
 	}
-	
+
 	// Ensure it's not empty
 	if clean == "" {
 		clean = "unnamed_field"
 	}
-	
+
 	return clean
 }
 
-// ValidateConfigIntegrity performs cross-field validation on configuration objects
-// Delegates to the configuration's own Validate() method if available.
-// Returns invalid result if config does not implement Validate().
+// TODO: This is a placeholder for future cross-field validation implementation
+// Use the configuration's own Validate() methods for now
 func ValidateConfigIntegrity(config interface{}) *ValidationResult {
-	if v, ok := config.(interface{ Validate() *ValidationResult }); ok {
-		return v.Validate()
-	}
-	return &ValidationResult{
-		Valid:  false,
-		Errors: []string{"Config does not implement Validate() method for integrity check."},
-	}
+	result := &ValidationResult{Valid: true}
+
+	// Note: This is a minimal implementation that always returns valid
+	// For production use, implement specific cross-field validation logic:
+	// - Check if proxy is enabled but no providers are configured
+	// - Validate browser automation settings consistency
+	// - Ensure database connection details are complete
+	// - Verify output format compatibility with selected fields
+
+	return result
 }

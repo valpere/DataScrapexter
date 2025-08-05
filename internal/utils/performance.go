@@ -316,14 +316,25 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 	now := time.Now().UnixNano()
 	elapsed := time.Duration(now - trl.lastRefill)
 
-	// Clamp tokens to valid range before refill.
-	// Defensive programming: tokens may become negative or exceed maxTokens due to
-	// timing discrepancies, concurrent access, or integer overflows in edge cases.
-	// This ensures the rate limiter remains robust even if token calculation logic
-	// encounters unexpected states.
+	// Handle system time going backwards (e.g., NTP corrections, system clock changes)
+	if elapsed < 0 {
+		// System time went backwards, reset timing reference to avoid negative calculations
+		logger := GetLogger("performance")
+		logger.Warnf("TokenBucketRateLimiter: system time went backwards by %v, resetting timing reference", -elapsed)
+		trl.lastRefill = now
+		elapsed = 0
+	}
+
+	// Validate token state and detect potential bugs in the implementation.
+	// Tokens should never be negative with the current logic, so if they are,
+	// it indicates a bug that should be investigated and fixed.
 	if trl.tokens < 0 {
+		// This should never happen with correct implementation - log for debugging
+		logger := GetLogger("performance")
+		logger.Errorf("TokenBucketRateLimiter: tokens became negative (%d), this indicates a bug in the implementation. Resetting to 0.", trl.tokens)
 		trl.tokens = 0
 	} else if trl.tokens > trl.maxTokens {
+		// This could happen due to calculation precision, clamp to max
 		trl.tokens = trl.maxTokens
 	}
 

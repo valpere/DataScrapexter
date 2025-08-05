@@ -10,10 +10,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/valpere/DataScrapexter/internal/utils"
 )
 
 // SecurityLevel represents different security validation levels
@@ -494,8 +495,9 @@ type ObfuscatedString struct {
 //   - Azure Key Vault: https://azure.microsoft.com/en-us/products/key-vault/
 // Replace usage of ObfuscatedString with integration to one of these services for secure secret storage and retrieval.
 func NewObfuscatedString(dataBytes []byte) (*ObfuscatedString, error) {
-	// RUNTIME WARNING: ObfuscatedString is NOT secure for secrets. Use a proper secret manager for production.
-	fmt.Fprintf(os.Stderr, "[SECURITY WARNING] ObfuscatedString uses only XOR obfuscation and is NOT suitable for secrets. Migrate to a proper secret management solution for production use.\n")
+	// Log security warning using proper logging framework with configurable visibility
+	logger := utils.GetLogger("security")
+	logger.Security("ObfuscatedString uses only XOR obfuscation and is NOT suitable for secrets. Use proper secret management for production (AWS Secrets Manager, HashiCorp Vault, etc.)")
 	// Create a copy to avoid modifying the original slice
 	dataCopy := make([]byte, len(dataBytes))
 	copy(dataCopy, dataBytes)
