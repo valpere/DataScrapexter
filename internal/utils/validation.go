@@ -8,61 +8,87 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
-// Pre-compiled regex patterns for better performance
+// Regex patterns for validation - initialized once for thread safety and performance
 var (
 	// CSS selector validation patterns
-	elementSelectorPattern   = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]*$`)
-	classSelectorPattern     = regexp.MustCompile(`^\.[a-zA-Z_-][a-zA-Z0-9_-]*$`)
-	idSelectorPattern        = regexp.MustCompile(`^#[a-zA-Z_-][a-zA-Z0-9_-]*$`)
-	universalSelectorPattern = regexp.MustCompile(`^\*$`)
-	attributeSelectorPattern = regexp.MustCompile(`^\[[a-zA-Z][a-zA-Z0-9-]*(?:[~|^$*]?=["']?[^"'\]]*["']?)?\]$`)
-	pseudoClassPattern       = regexp.MustCompile(`^:[a-zA-Z-]+(?:\([^)]*\))?$`)
-	pseudoElementPattern     = regexp.MustCompile(`^::[a-zA-Z-]{2,}$`)
-	complexSelectorPattern   = regexp.MustCompile(`^[a-zA-Z0-9\s\[\].:_#>+~()"'=-]+$`)
-	combinatorPattern        = regexp.MustCompile(`\s*[>+~]\s*`)
-	// Compound selector is made up of the following components:
-	// - Element selector: [a-zA-Z][a-zA-Z0-9-]* or *
-	// - Class selector: \.[a-zA-Z_-][a-zA-Z0-9_-]*
-	// - ID selector: #[a-zA-Z_-][a-zA-Z0-9_-]*
-	// - Attribute selector: \[[^\]]+\]
-	// - Pseudo-class: :[a-zA-Z-]+(\([^)]*\))?
-	// - Pseudo-element: ::[a-zA-Z-]+
-	//
-	// Each component can appear zero or more times in a compound selector.
-	//
-	// The final pattern is constructed by concatenating the components.
-	elementSelectorComponent   = `(?:[a-zA-Z][a-zA-Z0-9-]*|\*)?`
-	classSelectorComponent     = `(?:\.[a-zA-Z_-][a-zA-Z0-9_-]*)*`
-	idSelectorComponent        = `(?:#[a-zA-Z_-][a-zA-Z0-9_-]*)?`
-	attributeSelectorComponent = `(?:\[[^\]]+\])*`
-	pseudoClassComponent       = `(?:\:[a-zA-Z-]+(?:\([^)]*\))?)*`
-	pseudoElementComponent     = `(?:\:\:[a-zA-Z-]+)*`
-	compoundSelectorPattern    = regexp.MustCompile(
-		`^` +
-			elementSelectorComponent +
-			classSelectorComponent +
-			idSelectorComponent +
-			attributeSelectorComponent +
-			pseudoClassComponent +
-			pseudoElementComponent +
-		`$`)
-	normalizeSpacePattern    = regexp.MustCompile(`\s+`)
+	elementSelectorPattern   *regexp.Regexp
+	classSelectorPattern     *regexp.Regexp
+	idSelectorPattern        *regexp.Regexp
+	universalSelectorPattern *regexp.Regexp
+	attributeSelectorPattern *regexp.Regexp
+	pseudoClassPattern       *regexp.Regexp
+	pseudoElementPattern     *regexp.Regexp
+	complexSelectorPattern   *regexp.Regexp
+	combinatorPattern        *regexp.Regexp
+	compoundSelectorPattern  *regexp.Regexp
+	normalizeSpacePattern    *regexp.Regexp
 
 	// Security validation patterns
-	javascriptProtocolPattern = regexp.MustCompile(`javascript:`)
-	cssExpressionPattern      = regexp.MustCompile(`expression\s*\(`)
-	javascriptURLPattern      = regexp.MustCompile(`\burl\s*\(\s*["']?javascript:`)
-	importStatementPattern    = regexp.MustCompile(`\bimport\b`)
+	javascriptProtocolPattern *regexp.Regexp
+	cssExpressionPattern      *regexp.Regexp
+	javascriptURLPattern      *regexp.Regexp
+	importStatementPattern    *regexp.Regexp
 
 	// CSS combinator pattern
-	cssCombinatorPattern = regexp.MustCompile(`[>+~]\s*[a-zA-Z0-9\[\].:_#-]`)
+	cssCombinatorPattern *regexp.Regexp
 
 	// Field name sanitization pattern
-	fieldNameSanitizePattern = regexp.MustCompile(`[^a-zA-Z0-9_]`)
+	fieldNameSanitizePattern *regexp.Regexp
+
+	// Sync.Once for thread-safe initialization
+	regexInitOnce sync.Once
 )
+
+// initRegexPatterns initializes all regex patterns in a thread-safe manner
+func initRegexPatterns() {
+	regexInitOnce.Do(func() {
+		// CSS selector validation patterns
+		elementSelectorPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]*$`)
+		classSelectorPattern = regexp.MustCompile(`^\.[a-zA-Z_-][a-zA-Z0-9_-]*$`)
+		idSelectorPattern = regexp.MustCompile(`^#[a-zA-Z_-][a-zA-Z0-9_-]*$`)
+		universalSelectorPattern = regexp.MustCompile(`^\*$`)
+		attributeSelectorPattern = regexp.MustCompile(`^\[[a-zA-Z][a-zA-Z0-9-]*(?:[~|^$*]?=["']?[^"'\]]*["']?)?\]$`)
+		pseudoClassPattern = regexp.MustCompile(`^:[a-zA-Z-]+(?:\([^)]*\))?$`)
+		pseudoElementPattern = regexp.MustCompile(`^::[a-zA-Z-]{2,}$`)
+		complexSelectorPattern = regexp.MustCompile(`^[a-zA-Z0-9\s\[\].:_#>+~()"'=-]+$`)
+		combinatorPattern = regexp.MustCompile(`\s*[>+~]\s*`)
+		normalizeSpacePattern = regexp.MustCompile(`\s+`)
+
+		// Compound selector pattern components
+		elementSelectorComponent := `(?:[a-zA-Z][a-zA-Z0-9-]*|\*)?`
+		classSelectorComponent := `(?:\.[a-zA-Z_-][a-zA-Z0-9_-]*)*`
+		idSelectorComponent := `(?:#[a-zA-Z_-][a-zA-Z0-9_-]*)?`
+		attributeSelectorComponent := `(?:\[[^\]]+\])*`
+		pseudoClassComponent := `(?:\:[a-zA-Z-]+(?:\([^)]*\))?)*`
+		pseudoElementComponent := `(?:\:\:[a-zA-Z-]+)*`
+		
+		compoundSelectorPattern = regexp.MustCompile(
+			`^` +
+				elementSelectorComponent +
+				classSelectorComponent +
+				idSelectorComponent +
+				attributeSelectorComponent +
+				pseudoClassComponent +
+				pseudoElementComponent +
+			`$`)
+
+		// Security validation patterns
+		javascriptProtocolPattern = regexp.MustCompile(`javascript:`)
+		cssExpressionPattern = regexp.MustCompile(`expression\s*\(`)
+		javascriptURLPattern = regexp.MustCompile(`\burl\s*\(\s*["']?javascript:`)
+		importStatementPattern = regexp.MustCompile(`\bimport\b`)
+
+		// CSS combinator pattern
+		cssCombinatorPattern = regexp.MustCompile(`[>+~]\s*[a-zA-Z0-9\[\].:_#-]`)
+
+		// Field name sanitization pattern
+		fieldNameSanitizePattern = regexp.MustCompile(`[^a-zA-Z0-9_]`)
+	})
+}
 
 // Validation constants for configurable limits
 const (
@@ -285,6 +311,8 @@ type SelectorValidator struct {
 
 // Validate implements the Validator interface for CSS selectors
 func (sv *SelectorValidator) Validate(value interface{}) *ValidationError {
+	// Ensure regex patterns are initialized
+	initRegexPatterns()
 	str, ok := value.(string)
 	if !ok {
 		return &ValidationError{
@@ -402,12 +430,16 @@ func (sv *SelectorValidator) validateSelectorSafety(selector string) *Validation
 
 // isValidCSSCombinator checks if the string contains valid CSS combinators
 func isValidCSSCombinator(selector string) bool {
+	// Ensure regex patterns are initialized
+	initRegexPatterns()
 	// Check for valid CSS combinators: >, +, ~, space
 	return cssCombinatorPattern.MatchString(selector)
 }
 
 // isValidSelectorPattern performs comprehensive CSS selector pattern validation
 func isValidSelectorPattern(selector string) bool {
+	// Ensure regex patterns are initialized
+	initRegexPatterns()
 	// Trim whitespace and check for empty selector
 	trimmed := strings.TrimSpace(selector)
 	if trimmed == "" {
@@ -460,6 +492,8 @@ func isValidSingleSelector(selector string) bool {
 
 // isValidComplexSelector validates complex selectors with combinators
 func isValidComplexSelector(selector string) bool {
+	// Ensure regex patterns are initialized
+	initRegexPatterns()
 	// Remove extra spaces and normalize using pre-compiled pattern
 	normalized := normalizeSpacePattern.ReplaceAllString(strings.TrimSpace(selector), " ")
 
@@ -484,6 +518,8 @@ func isValidComplexSelector(selector string) bool {
 
 // isValidCompoundSelector validates compound selectors (element.class#id:pseudo)
 func isValidCompoundSelector(selector string) bool {
+	// Ensure regex patterns are initialized
+	initRegexPatterns()
 	if selector == "" || selector == "*" {
 		return true
 	}
@@ -569,6 +605,8 @@ func IsValidOutputFormat(format string) bool {
 
 // SanitizeFieldName ensures field names are safe for use in outputs
 func SanitizeFieldName(name string) string {
+	// Ensure regex patterns are initialized
+	initRegexPatterns()
 	// Remove or replace problematic characters using pre-compiled pattern
 	clean := fieldNameSanitizePattern.ReplaceAllString(name, "_")
 

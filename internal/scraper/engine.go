@@ -974,8 +974,25 @@ func (e *Engine) ScrapeWithBatching(ctx context.Context, urls []string, extracto
 				}
 			} else {
 				// For many errors, log a summary with sample errors
-				logger.Errorf("Batch processing encountered %d errors. Sample errors: %v, %v, %v (and %d more)", 
-					len(errors), errors[0], errors[1], errors[2], len(errors)-3)
+				// Ensure we have at least 3 errors before accessing by index
+				sampleErrors := make([]error, 0, 3)
+				for i := 0; i < len(errors) && i < 3; i++ {
+					sampleErrors = append(sampleErrors, errors[i])
+				}
+				
+				switch len(sampleErrors) {
+				case 1:
+					logger.Errorf("Batch processing encountered %d errors. Sample error: %v (and %d more)", 
+						len(errors), sampleErrors[0], len(errors)-1)
+				case 2:
+					logger.Errorf("Batch processing encountered %d errors. Sample errors: %v, %v (and %d more)", 
+						len(errors), sampleErrors[0], sampleErrors[1], len(errors)-2)
+				case 3:
+					logger.Errorf("Batch processing encountered %d errors. Sample errors: %v, %v, %v (and %d more)", 
+						len(errors), sampleErrors[0], sampleErrors[1], sampleErrors[2], len(errors)-3)
+				default:
+					logger.Errorf("Batch processing encountered %d errors", len(errors))
+				}
 			}
 			
 			// Check if error thresholds are exceeded and should stop processing
@@ -1053,13 +1070,8 @@ func (e *Engine) checkErrorThresholds(scraperConfig *config.ScraperConfig, batch
 	return false
 }
 
-// min utility function
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
+// Note: Using Go 1.21+ built-in min function instead of custom implementation
+// The min function is now available as a built-in function in Go 1.21+
 
 // copyResult efficiently copies a Result using sync.Pool to reduce allocations
 func (e *Engine) copyResult(src *Result) *Result {

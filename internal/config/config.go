@@ -477,13 +477,19 @@ func (cc *ConfigCache) put(filename string, config *ScraperConfig, fileSize int6
 		return
 	}
 
-	// Check cache size and evict if necessary
-	if len(cc.cache) >= cc.maxSize {
-		cc.evictLRU()
-	}
-
-	// Create new LRU node
+	// Create new LRU node first
 	node := &lruNode{key: filename}
+	
+	// Check cache size and evict if necessary - do this atomically with addition
+	// to prevent race conditions where multiple goroutines could bypass the size check
+	for len(cc.cache) >= cc.maxSize {
+		if !cc.evictLRU() {
+			// Eviction failed (cache was empty or inconsistent), break to prevent infinite loop
+			logger := utils.GetLogger("config")
+			logger.Errorf("Cache eviction failed despite cache size %d >= max size %d", len(cc.cache), cc.maxSize)
+			break
+		}
+	}
 	
 	// Calculate hash for integrity checking
 	hash := cc.calculateHash(config)
@@ -506,17 +512,29 @@ func (cc *ConfigCache) put(filename string, config *ScraperConfig, fileSize int6
 }
 
 // evictLRU removes the least recently used item in O(1) time
-func (cc *ConfigCache) evictLRU() {
+// Returns true if an item was evicted, false if cache was empty
+func (cc *ConfigCache) evictLRU() bool {
 	// Get the least recently used node (tail's previous)
 	lru := cc.lruTail.prev
 	if lru == cc.lruList {
 		// List is empty, nothing to evict
-		return
+		return false
 	}
 	
-	// Remove from cache and LRU list
+	// Verify the key exists in cache before removal (defensive programming)
+	if _, exists := cc.cache[lru.key]; !exists {
+		// Node exists in LRU list but not in cache - inconsistent state
+		// Remove from LRU list only and log the issue
+		cc.removeFromLRU(lru)
+		logger := utils.GetLogger("config")
+		logger.Errorf("LRU cache inconsistency detected: node %s exists in LRU list but not in cache", lru.key)
+		return false
+	}
+	
+	// Remove from cache and LRU list atomically
 	delete(cc.cache, lru.key)
 	cc.removeFromLRU(lru)
+	return true
 }
 
 // addToFront adds a node to the front of the LRU list (most recently used)
@@ -1072,24 +1090,41 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 				// Worker slot acquired, execute callback
 				defer func() { <-cw.callbackWorkers }() // Release worker slot
 				
-				// Use the watcher's context with configurable timeout to prevent indefinite blocking
-				ctx, cancel := context.WithTimeout(cw.ctx, cw.callbackTimeout)
+				// Use context.WithCancel for proper cleanup instead of WithTimeout
+				ctx, cancel := context.WithCancel(cw.ctx)
 				defer cancel() // Ensure resources are cleaned up
 				
-				// Execute legacy callback directly with timeout protection
-				done := cw.executeLegacyCallbackSafely(cb, config, err)
+				// Execute legacy callback with context cancellation support
+				done := cw.executeLegacyCallbackSafely(ctx, cb, config, err)
+				
+				// Create timeout using timer instead of context timeout for better control
+				timer := time.NewTimer(cw.callbackTimeout)
+				defer timer.Stop()
 				
 				// Wait for either completion or timeout
 				select {
 				case <-done:
 					// Callback completed successfully
-				case <-ctx.Done():
-					// Context cancelled (timeout) - goroutine may still be running
-					// but we don't wait for it to prevent blocking the watcher
+				case <-timer.C:
+					// Timer expired - cancel context to signal goroutine to stop
+					cancel()
 					atomic.AddInt64(&cw.timedOutCallbacks, 1)
 					logger := utils.GetLogger("config")
-					logger.Warnf("Legacy callback timed out after %v, goroutine may still be running (potential resource leak). Total timed out: %d", 
+					logger.Warnf("Legacy callback timed out after %v, context cancelled to signal cleanup. Total timed out: %d", 
 						cw.callbackTimeout, atomic.LoadInt64(&cw.timedOutCallbacks))
+					
+					// Give a brief grace period for cleanup
+					select {
+					case <-done:
+						// Callback completed during grace period
+					case <-time.After(100 * time.Millisecond):
+						// Grace period expired
+						logger.Warnf("Callback did not complete during grace period, potential goroutine leak")
+					}
+				case <-cw.ctx.Done():
+					// Parent context cancelled, cancel callback context
+					cancel()
+					return
 				}
 			case <-cw.ctx.Done():
 				// Watcher context is cancelled, don't execute callback
@@ -1110,9 +1145,9 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 	}
 }
 
-// executeLegacyCallbackSafely executes a legacy callback with panic recovery and completion signaling.
-// This method extracts the nested panic recovery logic for better readability and testability.
-func (cw *ConfigWatcher) executeLegacyCallbackSafely(cb func(*ScraperConfig, error), config *ScraperConfig, err error) <-chan struct{} {
+// executeLegacyCallbackSafely executes a legacy callback with panic recovery, completion signaling, and context cancellation support.
+// This method provides controlled execution with proper resource cleanup.
+func (cw *ConfigWatcher) executeLegacyCallbackSafely(ctx context.Context, cb func(*ScraperConfig, error), config *ScraperConfig, err error) <-chan struct{} {
 	done := make(chan struct{})
 	go func() {
 		defer func() {
@@ -1123,8 +1158,25 @@ func (cw *ConfigWatcher) executeLegacyCallbackSafely(cb func(*ScraperConfig, err
 			}
 			close(done)
 		}()
-		// Execute the legacy callback (non-context-aware)
-		cb(config, err)
+		
+		// Create a channel to signal callback completion
+		callbackDone := make(chan struct{})
+		go func() {
+			defer close(callbackDone)
+			// Execute the legacy callback (non-context-aware)
+			cb(config, err)
+		}()
+		
+		// Wait for either callback completion or context cancellation
+		select {
+		case <-callbackDone:
+			// Callback completed successfully
+		case <-ctx.Done():
+			// Context cancelled - we can't forcibly stop the callback
+			// but we signal completion to prevent the parent from waiting
+			logger := utils.GetLogger("config")
+			logger.Warnf("Legacy callback context cancelled, callback may still be running")
+		}
 	}()
 	return done
 }
