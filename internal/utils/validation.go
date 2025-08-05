@@ -470,11 +470,39 @@ func isValidCompoundSelector(selector string) bool {
 // Use individual field validators for now (StringValidator, URLValidator, etc.)
 func ValidateStruct(v interface{}, validators map[string]Validator) *ValidationResult {
 	result := &ValidationResult{Valid: true}
-	
-	// Note: This is a minimal implementation that always returns valid
-	// For production use, implement reflection-based struct field validation
-	// or use a dedicated validation library like github.com/go-playground/validator
-	
+
+	val := reflect.ValueOf(v)
+	typ := reflect.TypeOf(v)
+
+	// If pointer, get the element
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+		typ = typ.Elem()
+	}
+
+	// Only validate structs
+	if val.Kind() != reflect.Struct {
+		result.Valid = false
+		result.Errors = append(result.Errors, "ValidateStruct: input is not a struct")
+		return result
+	}
+
+	for i := 0; i < val.NumField(); i++ {
+		field := typ.Field(i)
+		fieldName := field.Name
+		fieldValue := val.Field(i).Interface()
+
+		validator, ok := validators[fieldName]
+		if ok {
+			fieldResult := validator.Validate(fieldValue)
+			if !fieldResult.Valid {
+				result.Valid = false
+				for _, err := range fieldResult.Errors {
+					result.Errors = append(result.Errors, fmt.Sprintf("%s: %s", fieldName, err))
+				}
+			}
+		}
+	}
 	return result
 }
 
