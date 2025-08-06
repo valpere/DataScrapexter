@@ -308,23 +308,16 @@ func NewTokenBucketRateLimiter(maxTokens int64, refillRate time.Duration) *Token
 	return NewTokenBucketRateLimiterWithLogger(maxTokens, refillRate, nil)
 }
 
-// NewTokenBucketRateLimiterWithPerformanceLogging creates a token bucket rate limiter with performance logging
-// This avoids circular imports by having the caller provide the logger
+// NewTokenBucketRateLimiterWithPerformanceLogging is DEPRECATED due to circular import issues.
+// Use NewTokenBucketRateLimiterWithLogger with a custom LogFunc instead.
+// 
+// CIRCULAR IMPORT WARNING: This function calls utils.GetLogger which can cause
+// import cycles since performance utilities are used by the logging system.
+// 
+// TODO: REMOVE this function in v2.0.0 after migration period
 func NewTokenBucketRateLimiterWithPerformanceLogging(maxTokens int64, refillRate time.Duration) *TokenBucketRateLimiter {
-	logger := GetLogger("performance")
-	logFunc := func(level string, format string, args ...interface{}) {
-		switch level {
-		case "warn":
-			logger.Warnf(format, args...)
-		case "error":
-			logger.Errorf(format, args...)
-		case "info":
-			logger.Infof(format, args...)
-		default:
-			logger.Infof(format, args...)
-		}
-	}
-	return NewTokenBucketRateLimiterWithLogger(maxTokens, refillRate, logFunc)
+	// Return no-op logger to avoid circular import - users should use NewTokenBucketRateLimiterWithLogger
+	return NewTokenBucketRateLimiterWithLogger(maxTokens, refillRate, nil)
 }
 
 // NewTokenBucketRateLimiterWithLogger creates a new token bucket rate limiter with custom logging

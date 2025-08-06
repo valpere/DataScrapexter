@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"reflect"
 	"strings"
 	"time"
 
@@ -1045,37 +1044,6 @@ func (e *Engine) checkErrorThresholds(scraperConfig *config.ScraperConfig, batch
 	return false
 }
 
-// deepCopy recursively copies maps and slices, detects cycles, and enforces a depth limit.
-func deepCopy(val interface{}, visited map[uintptr]interface{}, depth int) interface{} {
-	const maxDepth = 100
-	if depth > maxDepth {
-		return nil // or panic, or return a special error value
-	}
-	switch v := val.(type) {
-	case map[string]interface{}:
-		if visited != nil {
-			// Use reflect to get the actual pointer address for cycle detection
-			ptr := reflect.ValueOf(v).Pointer()
-			if _, ok := visited[ptr]; ok {
-				return nil // cycle detected
-			}
-			visited[ptr] = v
-		}
-		copied := make(map[string]interface{}, len(v))
-		for k, vv := range v {
-			copied[k] = deepCopy(vv, visited, depth+1)
-		}
-		return copied
-	case []interface{}:
-		copied := make([]interface{}, len(v))
-		for i, vv := range v {
-			copied[i] = deepCopy(vv, visited, depth+1)
-		}
-		return copied
-	default:
-		return v
-	}
-}
 // copyResult efficiently copies a Result using sync.Pool to reduce allocations
 func (e *Engine) copyResult(src *Result) *Result {
 	// Get a copy from the pool to avoid allocations
@@ -1087,7 +1055,7 @@ func (e *Engine) copyResult(src *Result) *Result {
 	dst.Timestamp = src.Timestamp
 	dst.ErrorRate = src.ErrorRate
 	
-	// Deep copy map to handle nested structures and prevent reference sharing
+	// Efficiently copy map - simple shallow copy since scraped data is typically flat
 	if len(dst.Data) > 0 {
 		// Clear existing map entries
 		for k := range dst.Data {
@@ -1095,15 +1063,12 @@ func (e *Engine) copyResult(src *Result) *Result {
 		}
 	}
 	if len(src.Data) > 0 {
-		// Ensure map exists and perform deep copy with cycle detection
+		// Ensure map exists and copy data (shallow copy is sufficient for scraped data)
 		if dst.Data == nil {
 			dst.Data = make(map[string]interface{}, len(src.Data))
 		}
-		
-		// Use visited map to track circular references during deep copy
-		visited := make(map[uintptr]interface{})
 		for k, v := range src.Data {
-			dst.Data[k] = deepCopy(v, visited, 0)
+			dst.Data[k] = v
 		}
 	}
 	

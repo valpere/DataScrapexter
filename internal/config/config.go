@@ -482,6 +482,18 @@ func (cc *ConfigCache) put(filename string, config *ScraperConfig, fileSize int6
 	
 	// Check cache size and evict if necessary - do this atomically with addition
 	// to prevent race conditions where multiple goroutines could bypass the size check
+	// TODO: DESIGN COMPLEXITY WARNING
+	// The circuit breaker logic and extensive error checking below suggest the LRU cache 
+	// state management is fragile. The need for this complexity indicates potential 
+	// underlying design issues that should be addressed in v2.0.0:
+	//
+	// 1. Consider using a well-tested LRU library (e.g., hashicorp/golang-lru)
+	// 2. Simplify the doubly-linked list implementation to reduce state corruption
+	// 3. Use atomic operations for better thread safety
+	// 4. Eliminate the need for extensive defensive programming
+	//
+	// The current implementation works but requires careful maintenance due to its complexity.
+	
 	logger := utils.GetLogger("config") // Create logger once outside loop for better performance
 	maxEvictions := cc.maxSize + 1 // Circuit breaker: prevent infinite loops in edge cases
 	evictionCount := 0
@@ -1216,6 +1228,24 @@ func (cw *ConfigWatcher) handleNoWorkerSlotsAvailable() {
 
 // executeLegacyCallbackSafely executes a legacy callback with panic recovery, completion signaling, and context cancellation support.
 // This method provides controlled execution with proper resource cleanup.
+//
+// TODO: LEGACY CALLBACK DEPRECATION PLAN
+// The legacy callback execution logic is extremely complex with multiple goroutines, 
+// channels, timeout handling, and sophisticated error recovery. This complexity 
+// significantly increases the risk of goroutine leaks and race conditions.
+//
+// DEPRECATION ROADMAP:
+// 1. v1.5.0: Mark legacy callbacks as deprecated with migration guide
+// 2. v1.8.0: Add warning logs when legacy callbacks are used
+// 3. v2.0.0: Remove legacy callback support entirely
+//
+// MIGRATION STRATEGY:
+// - Encourage users to migrate to context-aware callbacks (CallbackRegistry)
+// - Provide automated migration tools
+// - Simplify callback execution to single-goroutine, context-aware pattern
+// - Eliminate complex timeout and goroutine management
+//
+// The current implementation works but should be aggressively deprecated due to complexity.
 func (cw *ConfigWatcher) executeLegacyCallbackSafely(ctx context.Context, cb func(*ScraperConfig, error), config *ScraperConfig, err error) <-chan struct{} {
 	done := make(chan struct{})
 	go func() {
