@@ -12,10 +12,7 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL driver
 )
 
-// PostgreSQL column type inference constants
-const (
-	VarcharLengthMultiplier = 2 // Multiplier for VARCHAR length to provide extra space
-)
+// PostgreSQL column type inference constants moved to types.go for shared use
 
 // PostgreSQLWriter provides methods for writing data to a PostgreSQL database.
 // It manages the connection, table creation, and batch insertion of records.

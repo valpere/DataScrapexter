@@ -162,6 +162,9 @@ const (
 	// Database-specific limits
 	MaxPostgreSQLIdentifierLength = 63  // PostgreSQL maximum identifier length
 	MaxSQLiteIdentifierLength     = 999 // SQLite maximum identifier length (much higher than PostgreSQL)
+	
+	// Database column type inference constants - shared across database implementations
+	VarcharLengthMultiplier = 2 // Multiplier for VARCHAR length to provide extra space
 )
 
 // Time format patterns for quick validation before parsing
