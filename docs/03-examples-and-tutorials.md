@@ -22,6 +22,7 @@ This guide provides practical, real-world examples and step-by-step tutorials fo
 **Scenario**: Extract quotes from a simple quotes website.
 
 **Configuration** (`quotes.yaml`):
+
 ```yaml
 name: "quotes_scraper"
 base_url: "http://quotes.toscrape.com/"
@@ -49,11 +50,13 @@ output:
 ```
 
 **Usage**:
+
 ```bash
 datascrapexter run quotes.yaml
 ```
 
 **Expected Output**:
+
 ```json
 {
   "metadata": {
@@ -76,6 +79,7 @@ datascrapexter run quotes.yaml
 **Scenario**: Extract book information with pagination.
 
 **Configuration** (`books.yaml`):
+
 ```yaml
 name: "book_catalog"
 base_url: "http://books.toscrape.com/"
@@ -127,6 +131,7 @@ output:
 **Scenario**: Monitor product prices with anti-detection.
 
 **Configuration** (`ecommerce-monitor.yaml`):
+
 ```yaml
 name: "product_price_monitor"
 base_url: "https://example-store.com/products"
@@ -245,6 +250,7 @@ output:
 ```
 
 **Environment Setup**:
+
 ```bash
 export CAPTCHA_API_KEY="your-2captcha-key"
 export PROXY_URL_1="http://proxy.example.com:8080"
@@ -258,6 +264,7 @@ export TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 **Scenario**: Compare products across multiple categories.
 
 **Configuration** (`product-comparison.yaml`):
+
 ```yaml
 name: "product_comparison"
 base_url: "https://comparison-site.com/category/electronics"
@@ -311,6 +318,7 @@ output:
 **Scenario**: Collect news articles with full content.
 
 **Configuration** (`news-collector.yaml`):
+
 ```yaml
 name: "news_article_collector"
 base_url: "https://news-site.com/latest"
@@ -409,6 +417,7 @@ output:
 **Scenario**: Aggregate blog posts from multiple sources.
 
 **Configuration** (`blog-aggregator.yaml`):
+
 ```yaml
 name: "blog_aggregator"
 base_url: "${BLOG_URL}"
@@ -452,6 +461,7 @@ output:
 **Scenario**: Extract real estate listings with detailed information.
 
 **Configuration** (`real-estate.yaml`):
+
 ```yaml
 name: "real_estate_scraper"
 base_url: "https://realestate-site.com/listings"
@@ -568,6 +578,7 @@ output:
 **Scenario**: Extract job postings for market analysis.
 
 **Configuration** (`job-board.yaml`):
+
 ```yaml
 name: "job_board_scraper"
 base_url: "https://jobboard.com/search?q=software+engineer"
@@ -664,6 +675,7 @@ output:
 **Scenario**: Compare data across multiple similar websites.
 
 **Configuration Template** (`multi-site-template.yaml`):
+
 ```yaml
 name: "${SITE_NAME}_scraper"
 base_url: "${SITE_URL}"
@@ -690,6 +702,7 @@ output:
 ```
 
 **Usage Script**:
+
 ```bash
 #!/bin/bash
 
@@ -721,6 +734,7 @@ jq -s 'map(.data) | add' *_data.json > combined_results.json
 **Scenario**: Scrape JavaScript-heavy single-page applications.
 
 **Configuration** (`spa-scraper.yaml`):
+
 ```yaml
 name: "spa_scraper"
 base_url: "https://spa-app.com"
@@ -765,6 +779,7 @@ output:
 **Scenario**: Scrape heavily protected sites with comprehensive anti-detection.
 
 **Configuration** (`stealth-scraper.yaml`):
+
 ```yaml
 name: "stealth_scraper"
 base_url: "https://protected-site.com"
@@ -837,6 +852,7 @@ output:
 **Scenario**: Enterprise-grade scraper with comprehensive monitoring.
 
 **Configuration** (`production-scraper.yaml`):
+
 ```yaml
 name: "production_scraper"
 base_url: "${TARGET_URL}"
@@ -899,6 +915,7 @@ output:
 ```
 
 **Docker Compose for Production**:
+
 ```yaml
 version: '3.8'
 services:
@@ -936,6 +953,7 @@ services:
 ### Environment-Specific Configurations
 
 **Development** (`config-dev.yaml`):
+
 ```yaml
 name: "dev_scraper"
 rate_limit: "5s"
@@ -946,6 +964,7 @@ output:
 ```
 
 **Staging** (`config-staging.yaml`):
+
 ```yaml
 name: "staging_scraper"
 rate_limit: "3s"
@@ -961,6 +980,7 @@ output:
 ```
 
 **Production** (`config-prod.yaml`):
+
 ```yaml
 name: "prod_scraper"
 rate_limit: "2s"

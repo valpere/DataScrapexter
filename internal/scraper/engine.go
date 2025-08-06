@@ -10,8 +10,16 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/valpere/DataScrapexter/internal/browser"
+	"github.com/valpere/DataScrapexter/internal/config"
 	"github.com/valpere/DataScrapexter/internal/errors"
 	"github.com/valpere/DataScrapexter/internal/proxy"
+	"github.com/valpere/DataScrapexter/internal/utils"
+)
+
+// Default configuration constants
+const (
+	// DefaultMaxConcurrency defines the default maximum number of concurrent operations
+	DefaultMaxConcurrency = 10
 )
 
 // Enhanced Engine struct (existing fields preserved, error service added)
@@ -27,6 +35,14 @@ type Engine struct {
 	errorService   *errors.Service
 	browserManager *browser.BrowserManager
 	proxyManager   proxy.Manager
+	
+	// Performance optimizations
+	resultPool     *utils.Pool[*Result]
+	copyPool       *utils.Pool[*Result]      // Pool for result copies to reduce allocations
+	perfMetrics    *utils.PerformanceMetrics
+	memManager     *utils.MemoryManager
+	circuitBreaker *utils.CircuitBreaker
+	MaxConcurrency int // Maximum number of concurrent operations
 }
 
 // Enhanced Result struct (existing fields preserved, error info added)
@@ -55,7 +71,18 @@ func NewEngine(config *Config) (*Engine, error) {
 			MaxRedirects:    10,
 			RateLimit:       1 * time.Second,
 			BurstSize:       5,
+			MaxConcurrency:  DefaultMaxConcurrency,
 		}
+	}
+	
+	// Set default MaxConcurrency if not specified
+	if config.MaxConcurrency == 0 {
+		config.MaxConcurrency = DefaultMaxConcurrency
+	}
+	
+	// Validate configuration
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	// Existing HTTP client setup preserved
@@ -68,11 +95,61 @@ func NewEngine(config *Config) (*Engine, error) {
 		},
 	}
 
-	// Enhanced with error service and browser manager
+	// Enhanced with error service and performance optimizations
 	engine := &Engine{
-		httpClient:   client,
-		config:       config,
-		errorService: errors.NewService(),
+		httpClient:     client,
+		config:         config,
+		errorService:   errors.NewService(),
+		MaxConcurrency: config.MaxConcurrency, // Use configured max concurrency
+		
+		// Initialize performance optimizations
+		perfMetrics:    utils.NewPerformanceMetrics(),
+		memManager:     utils.NewMemoryManager(100*1024*1024, 30*time.Second), // 100MB, 30s GC interval
+		circuitBreaker: utils.NewCircuitBreaker(5, 60*time.Second), // 5 failures, 60s timeout
+		
+		resultPool: utils.NewPool[*Result](
+			func() *Result {
+				return &Result{
+					Data:     make(map[string]interface{}),
+					Errors:   make([]string, 0),
+					Warnings: make([]string, 0),
+				}
+			},
+			func(result *Result) {
+				// Reset result for reuse
+				for k := range result.Data {
+					delete(result.Data, k)
+				}
+				result.Errors = result.Errors[:0]
+				result.Warnings = result.Warnings[:0]
+				result.Success = false
+				result.Error = nil
+				result.ErrorRate = 0
+			},
+		),
+		
+		// Pool for result copies to optimize memory allocation during copying
+		copyPool: utils.NewPool[*Result](
+			func() *Result {
+				return &Result{
+					Data:     make(map[string]interface{}),
+					Errors:   make([]string, 0, 4),   // Pre-allocate with small capacity
+					Warnings: make([]string, 0, 2),   // Pre-allocate with small capacity
+				}
+			},
+			func(result *Result) {
+				// Reset copy result for reuse
+				for k := range result.Data {
+					delete(result.Data, k)
+				}
+				result.Errors = result.Errors[:0]
+				result.Warnings = result.Warnings[:0]
+				result.Success = false
+				result.Error = nil
+				result.ErrorRate = 0
+				result.Timestamp = time.Time{}
+			},
+		),
 	}
 
 	// Setup browser automation if configured
@@ -225,16 +302,49 @@ func NewEngine(config *Config) (*Engine, error) {
 	return engine, nil
 }
 
-// Enhanced Scrape method (existing signature preserved, error handling improved)
+// Enhanced Scrape method (existing signature preserved, optimized for performance)
 func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfig) (*Result, error) {
-	result := &Result{
-		Data:      make(map[string]interface{}),
-		Success:   false,
-		Timestamp: time.Now(),
-		Errors:    make([]string, 0),
-		Warnings:  make([]string, 0),
+	// Start performance tracking
+	timer := utils.NewTimer("scrape_operation")
+	defer func() {
+		duration := timer.Stop()
+		e.perfMetrics.RecordOperation(duration, true) // Will be updated if error occurs
+	}()
+	
+	// Check memory pressure and trigger GC if needed
+	e.memManager.CheckMemoryUsage()
+	
+	// Get result from pool for memory efficiency
+	result := e.resultPool.Get()
+	// Note: Put will be called after creating the copy to avoid race conditions
+	
+	result.Timestamp = time.Now()
+	
+	// Use circuit breaker to prevent cascading failures
+	circuitErr := e.circuitBreaker.Execute(func() error {
+		return e.performScrapeOperation(ctx, url, extractors, result)
+	})
+	
+	if circuitErr != nil {
+		result.Error = circuitErr
+		result.Errors = append(result.Errors, circuitErr.Error())
+		e.perfMetrics.RecordOperation(timer.Elapsed(), false)
+		
+		// Create an efficient copy before returning and putting back to pool
+		resultCopy := e.copyResult(result)
+		e.resultPool.Put(result)
+		return resultCopy, circuitErr
 	}
 
+	// Create an efficient copy of the result to return (since we'll put the pooled one back)
+	resultCopy := e.copyResult(result)
+	e.resultPool.Put(result)
+	
+	return resultCopy, nil
+}
+
+// performScrapeOperation performs the actual scraping operation
+func (e *Engine) performScrapeOperation(ctx context.Context, url string, extractors []FieldConfig, result *Result) error {
 	// Execute with comprehensive error recovery
 	recoveryResult := e.errorService.ExecuteWithRecovery(ctx, "fetch_document", func() (interface{}, error) {
 		doc, err := e.fetchDocument(ctx, url)
@@ -247,7 +357,7 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 		if recoveryResult.UsedFallback {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("Used fallback strategy: %s", recoveryResult.FallbackType))
 		}
-		return result, fmt.Errorf("failed to fetch document after %d attempts: %w", recoveryResult.AttemptCount, recoveryResult.OriginalError)
+		return fmt.Errorf("failed to fetch document after %d attempts: %w", recoveryResult.AttemptCount, recoveryResult.OriginalError)
 	}
 
 	var doc *goquery.Document
@@ -256,7 +366,7 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 		err := fmt.Errorf("unexpected result type from document fetch")
 		result.Error = err
 		result.Errors = append(result.Errors, err.Error())
-		return result, err
+		return err
 	}
 
 	// Extract fields with error tracking
@@ -288,7 +398,7 @@ func (e *Engine) Scrape(ctx context.Context, url string, extractors []FieldConfi
 		result.Success = successCount > 0 // Partial success if any field extracted
 	}
 
-	return result, nil
+	return nil
 }
 
 // Enhanced fetchDocument method (existing logic preserved, browser automation added)
@@ -691,4 +801,374 @@ func (e *Engine) ScrapeWithPagination(ctx context.Context, baseURL string, extra
 		StartTime:      startTime,
 		EndTime:        time.Now(),
 	}, nil
+}
+
+// Performance and monitoring methods
+
+// GetPerformanceMetrics returns current performance metrics
+func (e *Engine) GetPerformanceMetrics() utils.PerformanceMetrics {
+	return e.perfMetrics.GetSnapshot()
+}
+
+// GetMemoryStats returns current memory statistics
+func (e *Engine) GetMemoryStats() interface{} {
+	return e.memManager.GetMemoryStats()
+}
+
+// GetCircuitBreakerState returns the current circuit breaker state
+func (e *Engine) GetCircuitBreakerState() int32 {
+	return e.circuitBreaker.GetState()
+}
+
+// ScrapeMultipleOptimized performs optimized batch scraping
+func (e *Engine) ScrapeMultipleOptimized(ctx context.Context, urls []string, extractors []FieldConfig, concurrency int) ([]*Result, error) {
+	if concurrency <= 0 {
+		concurrency = 5 // Default concurrency
+	}
+	
+	// Use worker pool for efficient concurrent processing
+	workerPool := utils.NewWorkerPool[string](
+		concurrency, 
+		len(urls),
+		func(url string) (interface{}, error) {
+			return e.Scrape(ctx, url, extractors)
+		},
+	)
+	
+	// Start worker pool
+	workerPool.Start()
+	defer workerPool.Close()
+	
+	// Submit URLs to worker pool
+	for _, url := range urls {
+		if err := workerPool.Submit(url); err != nil {
+			return nil, fmt.Errorf("failed to submit URL %s: %w", url, err)
+		}
+	}
+	
+	// Collect results
+	results := make([]*Result, 0, len(urls))
+	errors := make([]error, 0)
+	
+	for i := 0; i < len(urls); i++ {
+		select {
+		case result := <-workerPool.Results():
+			if scrapingResult, ok := result.(*Result); ok {
+				results = append(results, scrapingResult)
+			}
+		case err := <-workerPool.Errors():
+			errors = append(errors, err)
+		case <-ctx.Done():
+			return results, ctx.Err()
+		}
+	}
+	
+	// Return error if there were any errors
+	if len(errors) > 0 {
+		return results, fmt.Errorf("encountered %d errors during batch scraping", len(errors))
+	}
+	
+	return results, nil
+}
+
+// ScrapeWithBatchingConfig processes URLs in batches using a configuration struct for better usability
+// This method provides an improved API with fewer parameters and better maintainability
+func (e *Engine) ScrapeWithBatchingConfig(ctx context.Context, config *BatchScrapingConfig) ([]*Result, error) {
+	if config == nil {
+		return nil, fmt.Errorf("BatchScrapingConfig cannot be nil")
+	}
+	
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid batch scraping config: %w", err)
+	}
+	
+	return e.ScrapeWithBatching(ctx, config.URLs, config.Extractors, config.ScraperConfig, config.BatchSize)
+}
+
+// ScrapeWithBatching processes URLs in batches for memory efficiency
+// This method reuses a single worker pool across all batches for better performance
+// Deprecated: Use ScrapeWithBatchingConfig for better parameter management
+func (e *Engine) ScrapeWithBatching(ctx context.Context, urls []string, extractors []FieldConfig, scraperConfig *config.ScraperConfig, batchSize int) ([]*Result, error) {
+	if batchSize <= 0 {
+		batchSize = 10 // Default batch size
+	}
+	
+	if len(urls) == 0 {
+		return []*Result{}, nil
+	}
+	
+	// Use configurable concurrency limit, default to DefaultMaxConcurrency if not set
+	maxConc := e.MaxConcurrency
+	if maxConc <= 0 {
+		maxConc = DefaultMaxConcurrency
+	}
+	
+	// Create a single worker pool for all batches to avoid overhead
+	workerPool := utils.NewWorkerPool[string](
+		min(maxConc, batchSize), // Don't exceed batch size for worker count
+		batchSize*2,             // Buffer size for input queue
+		func(url string) (interface{}, error) {
+			return e.Scrape(ctx, url, extractors)
+		},
+	)
+	
+	// Start the worker pool
+	workerPool.Start()
+	defer workerPool.Close()
+	
+	allResults := make([]*Result, 0, len(urls))
+	
+	// Track error thresholds across batches
+	totalProcessed := 0
+	totalErrors := 0
+	
+	// Process URLs in batches
+	for i := 0; i < len(urls); i += batchSize {
+		end := i + batchSize
+		if end > len(urls) {
+			end = len(urls)
+		}
+		
+		batch := urls[i:end]
+		
+		// Submit batch to worker pool
+		for _, url := range batch {
+			if err := workerPool.Submit(url); err != nil {
+				return allResults, fmt.Errorf("failed to submit URL %s in batch %d-%d: %w", url, i, end-1, err)
+			}
+		}
+		
+		// Collect results for this batch
+		batchResults := make([]*Result, 0, len(batch))
+		errors := make([]error, 0)
+		
+		for j := 0; j < len(batch); j++ {
+			select {
+			case result := <-workerPool.Results():
+				if scrapingResult, ok := result.(*Result); ok {
+					batchResults = append(batchResults, scrapingResult)
+				}
+			case err := <-workerPool.Errors():
+				errors = append(errors, err)
+			case <-ctx.Done():
+				return allResults, ctx.Err()
+			}
+		}
+		
+		// Add batch results to total results
+		allResults = append(allResults, batchResults...)
+		
+		// Update totals for error threshold tracking
+		totalProcessed += len(batchResults)
+		totalErrors += len(errors)
+		
+		// Report any errors from this batch and check error thresholds
+		if len(errors) > 0 {
+			logger := utils.GetLogger("scraper")
+			
+			// Use optimized error logging with efficient batching/sampling for performance
+			e.logBatchErrors(logger, errors)
+			
+			// Check if error thresholds are exceeded and should stop processing
+			shouldStop := e.checkErrorThresholds(scraperConfig, len(errors), len(batchResults), totalProcessed, totalErrors)
+			if shouldStop {
+				logger.Warnf("Error threshold exceeded: %d errors in current batch, %d total errors out of %d processed items. Stopping batch processing as configured.", 
+					len(errors), totalErrors, totalProcessed)
+				break // Stop processing remaining batches
+			}
+		}
+		
+		// Check memory pressure after each batch
+		e.memManager.CheckMemoryUsage()
+		
+		// Optional: Add delay between batches to be respectful
+		if i+batchSize < len(urls) {
+			select {
+			case <-time.After(time.Second):
+			case <-ctx.Done():
+				return allResults, ctx.Err()
+			}
+		}
+	}
+	
+	return allResults, nil
+}
+
+// OptimizeForThroughput optimizes engine settings for maximum throughput
+func (e *Engine) OptimizeForThroughput() {
+	// Increase HTTP client connection limits
+	if transport, ok := e.httpClient.Transport.(*http.Transport); ok {
+		transport.MaxIdleConns = 200
+		transport.MaxIdleConnsPerHost = 50
+		transport.IdleConnTimeout = 120 * time.Second
+	}
+	
+	// Reset performance counters
+	e.perfMetrics.Reset()
+}
+
+// OptimizeForMemory optimizes engine settings for minimal memory usage
+func (e *Engine) OptimizeForMemory() {
+	// Reduce HTTP client connection limits
+	if transport, ok := e.httpClient.Transport.(*http.Transport); ok {
+		transport.MaxIdleConns = 50
+		transport.MaxIdleConnsPerHost = 5
+		transport.IdleConnTimeout = 30 * time.Second
+	}
+}
+
+// checkErrorThresholds checks if error thresholds are exceeded and processing should stop
+func (e *Engine) checkErrorThresholds(scraperConfig *config.ScraperConfig, batchErrors, batchSize, totalProcessed, totalErrors int) bool {
+	if scraperConfig == nil {
+		return false
+	}
+	
+	// Only check if stop_on_error_threshold is enabled
+	if !scraperConfig.StopOnErrorThreshold {
+		return false
+	}
+
+	// Check absolute error threshold per batch
+	if scraperConfig.ErrorThreshold > 0 && batchErrors >= scraperConfig.ErrorThreshold {
+		return true
+	}
+
+	// Check percentage error threshold (overall rate)
+	if scraperConfig.ErrorThresholdPercent > 0 && totalProcessed > 0 {
+		errorRate := float64(totalErrors) / float64(totalProcessed) * 100
+		if errorRate >= scraperConfig.ErrorThresholdPercent {
+			return true
+		}
+	}
+
+	return false
+}
+
+// copyResult efficiently copies a Result using sync.Pool to reduce allocations
+func (e *Engine) copyResult(src *Result) *Result {
+	// Get a copy from the pool to avoid allocations
+	dst := e.copyPool.Get()
+	
+	// Copy scalar fields
+	dst.Success = src.Success
+	dst.Error = src.Error
+	dst.Timestamp = src.Timestamp
+	dst.ErrorRate = src.ErrorRate
+	
+	// Efficiently copy map - simple shallow copy since scraped data is typically flat
+	if len(dst.Data) > 0 {
+		// Clear existing map entries
+		for k := range dst.Data {
+			delete(dst.Data, k)
+		}
+	}
+	if len(src.Data) > 0 {
+		// Ensure map exists and copy data (shallow copy is sufficient for scraped data)
+		if dst.Data == nil {
+			dst.Data = make(map[string]interface{}, len(src.Data))
+		}
+		for k, v := range src.Data {
+			dst.Data[k] = v
+		}
+	}
+	
+	// Efficiently copy slices - grow if needed
+	if cap(dst.Errors) < len(src.Errors) {
+		dst.Errors = make([]string, len(src.Errors))
+	} else {
+		dst.Errors = dst.Errors[:len(src.Errors)]
+	}
+	copy(dst.Errors, src.Errors)
+	
+	if cap(dst.Warnings) < len(src.Warnings) {
+		dst.Warnings = make([]string, len(src.Warnings))
+	} else {
+		dst.Warnings = dst.Warnings[:len(src.Warnings)]
+	}
+	copy(dst.Warnings, src.Warnings)
+	
+	return dst
+}
+
+// logBatchErrors efficiently logs error batches with sampling to avoid performance issues in high-error scenarios
+func (e *Engine) logBatchErrors(logger *utils.ComponentLogger, errors []error) {
+	switch {
+	case len(errors) <= 5:
+		// Log individual errors for small error counts - avoid unnecessary loops
+		for _, err := range errors {
+			logger.Errorf("Batch processing error: %v", err)
+		}
+	case len(errors) <= 100:
+		// For moderate error counts, use efficient sampling without nested loops
+		logger.Errorf("Batch processing encountered %d errors. First 3 samples: [%v] [%v] [%v] (and %d more)", 
+			len(errors), errors[0], errors[1], errors[2], len(errors)-3)
+	default:
+		// For very high error counts, use optimized sampling with categorization
+		e.logHighVolumeErrors(logger, errors)
+	}
+}
+
+// logHighVolumeErrors handles high-volume error scenarios with efficient categorization and sampling
+func (e *Engine) logHighVolumeErrors(logger *utils.ComponentLogger, errors []error) {
+	totalErrors := len(errors)
+	
+	// Sample errors from different parts of the batch for better representation
+	sampleSize := min(10, totalErrors)
+	step := totalErrors / sampleSize
+	
+	samples := make([]string, 0, sampleSize)
+	errorTypes := make(map[string]int)
+	
+	// Collect samples and categorize error types efficiently
+	for i := 0; i < sampleSize; i++ {
+		idx := i * step
+		if idx >= totalErrors {
+			break
+		}
+		
+		err := errors[idx]
+		samples = append(samples, err.Error())
+		
+		// Simple error type categorization based on error string
+		errorType := "unknown"
+		errStr := err.Error()
+		switch {
+		case len(errStr) > 0:
+			// Use first word as error type for simple categorization
+			if spaceIdx := len(errStr); spaceIdx > 20 {
+				errorType = errStr[:20] + "..."
+			} else {
+				errorType = errStr
+			}
+		}
+		errorTypes[errorType]++
+	}
+	
+	// Log summary with samples and error type distribution
+	if len(samples) > 0 {
+		sampleCount := min(3, len(samples))
+		logger.Errorf("High-volume batch processing encountered %d errors. Sample errors: %v", totalErrors, samples[:sampleCount])
+	} else {
+		logger.Errorf("High-volume batch processing encountered %d errors. No samples collected.", totalErrors)
+	}
+	logger.Warnf("Error type distribution (top 5): %v", getTopErrorTypes(errorTypes, 5))
+}
+
+// getTopErrorTypes returns the top N error types by frequency
+func getTopErrorTypes(errorTypes map[string]int, topN int) map[string]int {
+	if len(errorTypes) <= topN {
+		return errorTypes
+	}
+	
+	// Simple approach: return first topN entries (good enough for logging purposes)
+	result := make(map[string]int)
+	count := 0
+	for errType, freq := range errorTypes {
+		if count >= topN {
+			break
+		}
+		result[errType] = freq
+		count++
+	}
+	return result
 }

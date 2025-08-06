@@ -61,10 +61,24 @@ func (cl *ComponentLogger) Debug(msg string) {
 	}
 }
 
+// Debugf logs a formatted debug message
+func (cl *ComponentLogger) Debugf(format string, args ...interface{}) {
+	if globalLogLevel <= LevelDebug {
+		cl.logger.Printf("DEBUG: "+format, args...)
+	}
+}
+
 // Info logs an info message
 func (cl *ComponentLogger) Info(msg string) {
 	if globalLogLevel <= LevelInfo {
 		cl.logger.Printf("INFO: %s", msg)
+	}
+}
+
+// Infof logs a formatted info message
+func (cl *ComponentLogger) Infof(format string, args ...interface{}) {
+	if globalLogLevel <= LevelInfo {
+		cl.logger.Printf("INFO: "+format, args...)
 	}
 }
 
@@ -75,9 +89,49 @@ func (cl *ComponentLogger) Warn(msg string) {
 	}
 }
 
+// Warnf logs a formatted warning message
+func (cl *ComponentLogger) Warnf(format string, args ...interface{}) {
+	if globalLogLevel <= LevelWarn {
+		cl.logger.Printf("WARN: "+format, args...)
+	}
+}
+
 // Error logs an error message
 func (cl *ComponentLogger) Error(msg string) {
 	if globalLogLevel <= LevelError {
 		cl.logger.Printf("ERROR: %s", msg)
 	}
+}
+
+// Errorf logs a formatted error message
+func (cl *ComponentLogger) Errorf(format string, args ...interface{}) {
+	if globalLogLevel <= LevelError {
+		cl.logger.Printf("ERROR: "+format, args...)
+	}
+}
+
+// Security logs a security-related message (always visible regardless of log level)
+func (cl *ComponentLogger) Security(msg string) {
+	cl.logger.Printf("SECURITY: %s", msg)
+}
+
+// Securityf logs a formatted security-related message (always visible)
+func (cl *ComponentLogger) Securityf(format string, args ...interface{}) {
+	cl.logger.Printf("SECURITY: "+format, args...)
+}
+
+// Panic logs a panic recovery message (always visible)
+func (cl *ComponentLogger) Panic(msg string) {
+	cl.logger.Printf("PANIC_RECOVERED: %s", msg)
+}
+
+// Panicf logs a formatted panic recovery message (always visible)
+func (cl *ComponentLogger) Panicf(format string, args ...interface{}) {
+	cl.logger.Printf("PANIC_RECOVERED: "+format, args...)
+}
+
+// GetLogger returns a component logger for the specified component
+// This provides a centralized way to get loggers across the application
+func GetLogger(component string) *ComponentLogger {
+	return NewComponentLogger(component)
 }

@@ -45,6 +45,7 @@ anti_detection:
 ```
 
 **Capabilities**:
+
 - Randomizes WebGL vendor and renderer strings
 - Adds noise to WebGL parameters
 - Spoofs graphics card capabilities
@@ -69,6 +70,7 @@ Automatic CAPTCHA solving with multiple service providers.
 #### Supported Services
 
 1. **2Captcha**
+
 ```yaml
 anti_detection:
   captcha:
@@ -80,6 +82,7 @@ anti_detection:
 ```
 
 2. **Anti-Captcha**
+
 ```yaml
 anti_detection:
   captcha:
@@ -90,6 +93,7 @@ anti_detection:
 ```
 
 3. **CapMonster**
+
 ```yaml
 anti_detection:
   captcha:
@@ -131,6 +135,7 @@ anti_detection:
 ```
 
 **Features**:
+
 - JA3/JA4 fingerprint randomization
 - Browser-specific TLS profiles
 - Cipher suite randomization
@@ -145,7 +150,8 @@ Comprehensive metrics collection for production monitoring.
 #### Key Metrics Categories
 
 1. **Request Metrics**
-```
+
+```plaintext
 datascrapexter_scraper_requests_total
 datascrapexter_scraper_request_duration_seconds
 datascrapexter_scraper_requests_in_flight
@@ -153,7 +159,8 @@ datascrapexter_scraper_request_errors_total
 ```
 
 2. **Scraping Metrics**
-```
+
+```plaintext
 datascrapexter_scraper_pages_scraped_total
 datascrapexter_scraper_extraction_success_total
 datascrapexter_scraper_extraction_errors_total
@@ -161,7 +168,8 @@ datascrapexter_scraper_records_extracted_total
 ```
 
 3. **Anti-Detection Metrics**
-```
+
+```plaintext
 datascrapexter_scraper_proxy_usage_total
 datascrapexter_scraper_captcha_solved_total
 datascrapexter_scraper_captcha_failed_total
@@ -247,6 +255,7 @@ monitoring:
 ```
 
 **Dashboard Features**:
+
 - Real-time metrics visualization
 - Health status overview
 - Active job monitoring

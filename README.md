@@ -13,6 +13,7 @@
 ## ✨ Key Features
 
 ### Core Capabilities
+
 - **🎯 Universal Website Support**: Scrape any website type - e-commerce, news, directories, social media
 - **⚙️ Configuration-Driven**: No-code setup through YAML configuration files
 - **⚡ High Performance**: Go's concurrency model for processing 10,000+ pages per hour
@@ -21,6 +22,7 @@
 - **📈 Real-time Monitoring**: Comprehensive metrics and health monitoring
 
 ### Anti-Detection
+
 - **🛡️ Browser Fingerprinting Evasion**: Canvas, WebGL, audio spoofing
 - **🔐 CAPTCHA Solving**: 2Captcha, Anti-Captcha, CapMonster integration
 - **🔒 TLS Fingerprinting**: JA3/JA4 randomization
@@ -28,6 +30,7 @@
 - **🤖 Human-like Behavior**: Realistic timing and interaction patterns
 
 ### Enterprise Features
+
 - **📊 Monitoring & Alerting**: Prometheus, Grafana, health checks
 - **🏗️ High Availability**: Load balancing, failover, replication
 - **☁️ Cloud Integration**: AWS, GCP, Azure support
@@ -94,6 +97,7 @@ cat results.json
 The documentation is organized in a logical reading order, from basic concepts to advanced enterprise features:
 
 ### 📚 [01. Getting Started](docs/01-getting-started.md)
+
 *Start here for installation, first scraper, and basic concepts*
 
 - Installation (binary, source, Docker)
@@ -103,6 +107,7 @@ The documentation is organized in a logical reading order, from basic concepts t
 - Next steps and learning path
 
 ### ⚙️ [02. Configuration Reference](docs/02-configuration-reference.md)
+
 *Complete reference for all configuration options*
 
 - Configuration file structure
@@ -115,6 +120,7 @@ The documentation is organized in a logical reading order, from basic concepts t
 - Environment variables
 
 ### 🎯 [03. Examples and Tutorials](docs/03-examples-and-tutorials.md)
+
 *Real-world examples and step-by-step tutorials*
 
 - Basic examples (quotes, books)
@@ -126,6 +132,7 @@ The documentation is organized in a logical reading order, from basic concepts t
 - Production configurations
 
 ### 🔧 [04. Advanced Features](docs/04-advanced-features.md)
+
 *Sophisticated features for enterprise-grade scraping*
 
 - Anti-detection technologies
@@ -137,6 +144,7 @@ The documentation is organized in a logical reading order, from basic concepts t
 - Enterprise features
 
 ### 🔌 [05. API Reference](docs/05-api-reference.md)
+
 *Complete Go programming interface documentation*
 
 - Core packages and interfaces
@@ -150,6 +158,7 @@ The documentation is organized in a logical reading order, from basic concepts t
 - Complete code examples
 
 ### 🔍 [06. Troubleshooting](docs/06-troubleshooting.md)
+
 *Solutions to common issues and debugging guide*
 
 - Quick diagnostics
@@ -203,6 +212,7 @@ output:
   format: "csv"
   file: "products.csv"
 ```
+
 </details>
 
 <details>
@@ -232,6 +242,7 @@ output:
   format: "json"
   file: "articles.json"
 ```
+
 </details>
 
 <details>
@@ -262,6 +273,7 @@ output:
   format: "json"
   file: "spa_data.json"
 ```
+
 </details>
 
 <details>
@@ -289,6 +301,7 @@ output:
     create_table: true
     on_conflict: "ignore"
 ```
+
 </details>
 
 ## 🔧 Advanced Configuration
@@ -319,6 +332,7 @@ rate_limit:
   base_delay: "2s"
   max_delay: "30s"
 ```
+
 </details>
 
 <details>
@@ -345,6 +359,7 @@ services:
       POSTGRES_USER: scraper
       POSTGRES_PASSWORD: password
 ```
+
 </details>
 
 <details>
@@ -386,6 +401,7 @@ func main() {
     }
 }
 ```
+
 </details>
 
 ## 🛠️ CLI Commands
@@ -407,7 +423,7 @@ datascrapexter health                                 # Health check
 
 ## 🏗️ Architecture
 
-```
+```plaintext
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   CLI/API       │    │  Scraping Engine │    │  Anti-Detection │
 │                 │────│                  │────│                 │
@@ -429,12 +445,14 @@ datascrapexter health                                 # Health check
 ## 📊 Performance & Monitoring
 
 **Performance Metrics:**
+
 - **Throughput**: 10,000+ pages/hour per instance
 - **Concurrency**: 1,000+ concurrent goroutines
 - **Memory**: <100MB for typical workloads
 - **Latency**: <1200ns/op for HTTP operations
 
 **Monitoring Endpoints:**
+
 ```bash
 # Health checks
 curl http://localhost:8080/health
@@ -445,6 +463,7 @@ curl http://localhost:9090/metrics
 ```
 
 **Key Metrics:**
+
 - `datascrapexter_requests_total` - Total requests
 - `datascrapexter_requests_duration_seconds` - Request latency
 - `datascrapexter_extraction_success_rate` - Success rate
@@ -471,6 +490,7 @@ DataScrapexter includes built-in compliance features:
 ✅ **Terms Monitoring** - Compliance checking tools
 
 **Best Practices:**
+
 1. Always check robots.txt before scraping
 2. Implement reasonable rate limiting (2+ seconds)
 3. Respect website terms of service
@@ -482,6 +502,7 @@ DataScrapexter includes built-in compliance features:
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md).
 
 **Quick Development Setup:**
+
 ```bash
 git clone https://github.com/valpere/DataScrapexter.git
 cd DataScrapexter
@@ -496,6 +517,7 @@ go build -o bin/datascrapexter cmd/datascrapexter/main.go
 <summary><strong>Common Issues</strong></summary>
 
 **High Error Rates:**
+
 ```bash
 datascrapexter proxy-test --config config.yaml
 datascrapexter validate config.yaml --strict
@@ -503,16 +525,19 @@ datascrapexter run config.yaml --log-level debug
 ```
 
 **Memory Issues:**
+
 ```bash
 datascrapexter run config.yaml --pprof-port 6060
 go tool pprof http://localhost:6060/debug/pprof/heap
 ```
 
 **CAPTCHA Problems:**
+
 ```bash
 datascrapexter captcha-test --solver 2captcha --api-key YOUR_KEY
 curl http://localhost:9090/metrics | grep captcha_solve_rate
 ```
+
 </details>
 
 **Need Help?** Check our [Troubleshooting Guide](docs/troubleshooting.md) or [FAQ](docs/faq.md).
@@ -541,7 +566,7 @@ Built with: [Colly](https://go-colly.org/) • [Goquery](https://github.com/Puer
 - 📖 **Documentation**: [docs/](docs/)
 - 🐛 **Issues**: [GitHub Issues](https://github.com/valpere/DataScrapexter/issues)
 - 💬 **Discussions**: [GitHub Discussions](https://github.com/valpere/DataScrapexter/discussions)
-- ✉️ **Email**: support@datascrapexter.com
+- ✉️ **Email**: <support@datascrapexter.com>
 
 ---
 

@@ -170,6 +170,7 @@ fields:
 ### Field Types
 
 #### text
+
 Extract text content from elements.
 
 ```yaml
@@ -179,6 +180,7 @@ Extract text content from elements.
 ```
 
 #### attr
+
 Extract attribute values from elements.
 
 ```yaml
@@ -189,6 +191,7 @@ Extract attribute values from elements.
 ```
 
 #### html
+
 Extract raw HTML content.
 
 ```yaml
@@ -198,6 +201,7 @@ Extract raw HTML content.
 ```
 
 #### list
+
 Extract from all matching elements as array.
 
 ```yaml

@@ -75,11 +75,13 @@ datascrapexter network-test --target example.com
 **Problem**: Configuration file has YAML syntax errors.
 
 **Symptoms**:
-```
+
+```plaintext
 Error: yaml: line 15: mapping values are not allowed in this context
 ```
 
 **Solutions**:
+
 ```bash
 # Validate YAML syntax
 yamllint config.yaml
@@ -94,6 +96,7 @@ datascrapexter validate config.yaml
 ```
 
 **Example Fix**:
+
 ```yaml
 # Incorrect
 fields:
@@ -113,11 +116,13 @@ fields:
 **Problem**: CSS selectors don't match any elements.
 
 **Symptoms**:
-```
+
+```plaintext
 WARN: Field 'title' extraction failed: no elements found for selector 'h1.title'
 ```
 
 **Solutions**:
+
 ```bash
 # Test selectors against live page
 datascrapexter test-selectors config.yaml --url "https://example.com"
@@ -127,6 +132,7 @@ datascrapexter test-selectors config.yaml --url "https://example.com"
 ```
 
 **Configuration Fix**:
+
 ```yaml
 # Use multiple fallback selectors
 fields:
@@ -141,11 +147,13 @@ fields:
 **Problem**: Environment variables not being substituted.
 
 **Symptoms**:
-```
+
+```plaintext
 Error: invalid URL: ${TARGET_URL}
 ```
 
 **Solutions**:
+
 ```bash
 # Check environment variables are set
 echo $TARGET_URL
@@ -156,6 +164,7 @@ env | grep TARGET
 ```
 
 **Configuration Fix**:
+
 ```yaml
 # Use defaults for missing variables
 name: "${SCRAPER_NAME:-default_scraper}"
@@ -171,12 +180,14 @@ proxy:
 **Problem**: Rate limiting causing timeouts or blocks.
 
 **Symptoms**:
-```
+
+```plaintext
 Error: request timeout after 30s
 HTTP 429: Too Many Requests
 ```
 
 **Solutions**:
+
 ```yaml
 # Increase delays
 rate_limit: "5s"
@@ -202,12 +213,14 @@ monitoring:
 **Problem**: Cannot connect to target websites.
 
 **Symptoms**:
-```
+
+```plaintext
 Error: Get "https://example.com": dial tcp: no such host
 Error: context deadline exceeded
 ```
 
 **Solutions**:
+
 ```bash
 # Test basic connectivity
 curl -I https://example.com
@@ -219,6 +232,7 @@ nslookup example.com
 ```
 
 **Configuration Fixes**:
+
 ```yaml
 # Increase timeouts
 timeout: "60s"
@@ -239,12 +253,14 @@ proxy:
 **Problem**: SSL certificate verification failures.
 
 **Symptoms**:
-```
+
+```plaintext
 Error: x509: certificate signed by unknown authority
 Error: tls: handshake failure
 ```
 
 **Solutions**:
+
 ```yaml
 # Disable certificate verification (not recommended for production)
 browser:
@@ -267,12 +283,14 @@ anti_detection:
 **Problem**: Content not loading without JavaScript.
 
 **Symptoms**:
-```
+
+```plaintext
 WARN: No data extracted, page might require JavaScript
 Empty results from dynamic content
 ```
 
 **Solutions**:
+
 ```yaml
 # Enable browser automation
 browser:
@@ -297,13 +315,15 @@ browser:
 **Problem**: Sites requiring login or authentication.
 
 **Symptoms**:
-```
+
+```plaintext
 HTTP 401: Unauthorized
 HTTP 403: Forbidden
 Redirected to login page
 ```
 
 **Solutions**:
+
 ```yaml
 # Add authentication headers
 headers:
@@ -332,13 +352,15 @@ browser:
 **Problem**: Frequently blocked or challenged with CAPTCHAs.
 
 **Symptoms**:
-```
+
+```plaintext
 HTTP 403: Forbidden
 CAPTCHA challenges appearing frequently
 Proxy IPs getting blocked
 ```
 
 **Solutions**:
+
 ```yaml
 # Enable comprehensive anti-detection
 anti_detection:
@@ -373,13 +395,15 @@ proxy:
 **Problem**: CAPTCHAs not being solved correctly.
 
 **Symptoms**:
-```
+
+```plaintext
 Error: CAPTCHA solving failed after 3 attempts
 Error: Invalid CAPTCHA solution
 Timeout waiting for CAPTCHA solution
 ```
 
 **Solutions**:
+
 ```yaml
 anti_detection:
   captcha:
@@ -403,6 +427,7 @@ anti_detection:
 ```
 
 **Service-Specific Debugging**:
+
 ```bash
 # Test 2Captcha service
 curl -X POST "http://2captcha.com/in.php" \
@@ -420,13 +445,15 @@ datascrapexter test-captcha --service anti-captcha --api-key $API_KEY
 **Problem**: Proxies failing or being detected.
 
 **Symptoms**:
-```
+
+```plaintext
 Error: proxy connection failed
 HTTP 407: Proxy Authentication Required
 All proxies marked as unhealthy
 ```
 
 **Solutions**:
+
 ```yaml
 proxy:
   # Enable health checking
@@ -451,6 +478,7 @@ proxy:
 ```
 
 **Debugging Steps**:
+
 ```bash
 # Test proxy directly
 curl --proxy http://user:pass@proxy.com:8080 http://httpbin.org/ip
@@ -467,13 +495,15 @@ datascrapexter proxy-health --config config.yaml
 **Problem**: Requests blocked due to TLS fingerprinting.
 
 **Symptoms**:
-```
+
+```plaintext
 Connection reset by peer
 Unusual TLS handshake failures
 Blocking despite using different IPs
 ```
 
 **Solutions**:
+
 ```yaml
 anti_detection:
   tls:
@@ -503,13 +533,15 @@ anti_detection:
 **Problem**: Scraping taking too long to complete.
 
 **Symptoms**:
-```
+
+```plaintext
 Very low pages per second
 High response times
 Timeouts on slow pages
 ```
 
 **Solutions**:
+
 ```yaml
 # Increase concurrency
 performance:
@@ -539,13 +571,15 @@ rate_limit: "1s"
 **Problem**: Memory consumption growing over time.
 
 **Symptoms**:
-```
+
+```plaintext
 Out of memory errors
 Increasing RSS memory usage
 System becoming unresponsive
 ```
 
 **Solutions**:
+
 ```yaml
 # Enable streaming for large datasets
 output:
@@ -570,6 +604,7 @@ monitoring:
 ```
 
 **System-Level Solutions**:
+
 ```bash
 # Monitor memory usage
 htop
@@ -587,13 +622,15 @@ sudo swapon -a
 **Problem**: Network bottlenecks affecting performance.
 
 **Symptoms**:
-```
+
+```plaintext
 High response times
 Connection timeouts
 DNS resolution delays
 ```
 
 **Solutions**:
+
 ```yaml
 # Optimize connection pooling
 performance:
@@ -621,12 +658,14 @@ headers:
 **Problem**: Cannot write output files.
 
 **Symptoms**:
-```
+
+```plaintext
 Error: permission denied: output.json
 Error: no such file or directory
 ```
 
 **Solutions**:
+
 ```bash
 # Check directory permissions
 ls -la /path/to/output/
@@ -638,6 +677,7 @@ chmod 755 /path/to/output/
 ```
 
 **Configuration Fixes**:
+
 ```yaml
 # Use environment variables for paths
 output:
@@ -655,13 +695,15 @@ output:
 **Problem**: Cannot connect to database.
 
 **Symptoms**:
-```
+
+```plaintext
 Error: failed to connect to database
 Error: authentication failed
 Connection timeout
 ```
 
 **Solutions**:
+
 ```yaml
 output:
   database:
@@ -682,6 +724,7 @@ output:
 ```
 
 **Debugging Steps**:
+
 ```bash
 # Test database connection
 psql -h localhost -U scraper -d scraping_data -c "SELECT 1;"
@@ -698,13 +741,15 @@ datascrapexter database-stats --config config.yaml
 **Problem**: Failed to upload files to cloud storage.
 
 **Symptoms**:
-```
+
+```plaintext
 Error: AWS credentials not found
 Error: access denied to S3 bucket
 Upload timeout
 ```
 
 **Solutions**:
+
 ```yaml
 output:
   cloud_storage:
@@ -725,6 +770,7 @@ output:
 ```
 
 **AWS Debugging**:
+
 ```bash
 # Test AWS credentials
 aws sts get-caller-identity
@@ -743,13 +789,15 @@ aws iam get-user
 **Problem**: Prometheus metrics not being exported.
 
 **Symptoms**:
-```
+
+```plaintext
 404 Not Found on /metrics endpoint
 Empty metrics response
 Prometheus not scraping
 ```
 
 **Solutions**:
+
 ```yaml
 monitoring:
   metrics:
@@ -763,6 +811,7 @@ monitoring:
 ```
 
 **Debugging Steps**:
+
 ```bash
 # Test metrics endpoint
 curl http://localhost:9090/metrics
@@ -779,13 +828,15 @@ promtool check config prometheus.yml
 **Problem**: Health check endpoints returning unhealthy status.
 
 **Symptoms**:
-```
+
+```plaintext
 /health returns 503 Service Unavailable
 Kubernetes pods being restarted
 Load balancer removing instances
 ```
 
 **Solutions**:
+
 ```yaml
 monitoring:
   health:
@@ -811,13 +862,15 @@ monitoring:
 **Problem**: Monitoring dashboard not accessible.
 
 **Symptoms**:
-```
+
+```plaintext
 Connection refused on dashboard port
 Dashboard shows no data
 404 errors on dashboard resources
 ```
 
 **Solutions**:
+
 ```yaml
 monitoring:
   dashboard:
@@ -841,13 +894,15 @@ monitoring:
 **Problem**: Container failing to start or run.
 
 **Symptoms**:
-```
+
+```plaintext
 Container exits immediately
 Permission denied in container
 Volume mount issues
 ```
 
 **Solutions**:
+
 ```dockerfile
 # Use proper user permissions
 FROM golang:1.24-alpine AS builder
@@ -862,6 +917,7 @@ COPY --chown=scraper:scraper . .
 ```
 
 **Docker Compose Fixes**:
+
 ```yaml
 version: '3.8'
 services:
@@ -881,13 +937,15 @@ services:
 **Problem**: Pods not starting or being killed.
 
 **Symptoms**:
-```
+
+```plaintext
 ImagePullBackOff
 CrashLoopBackOff
 Pod being OOMKilled
 ```
 
 **Solutions**:
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -928,13 +986,15 @@ spec:
 **Problem**: Environment variables not being passed correctly.
 
 **Symptoms**:
-```
+
+```plaintext
 Configuration using literal ${VAR} instead of values
 Missing required environment variables
 Default values not working
 ```
 
 **Solutions**:
+
 ```bash
 # Check environment variables in container
 kubectl exec -it pod-name -- env | grep SCRAPER
@@ -948,6 +1008,7 @@ kubectl create secret generic scraper-secrets \
 ```
 
 **Kubernetes ConfigMap**:
+
 ```yaml
 apiVersion: v1
 kind: ConfigMap

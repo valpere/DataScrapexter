@@ -382,10 +382,10 @@ datascrapexter test-selectors config.yaml --url "https://example.com"
 
 ### 5. Community and Support
 
-- GitHub Repository: https://github.com/valpere/DataScrapexter
+- GitHub Repository: <https://github.com/valpere/DataScrapexter>
 - Issues and Bug Reports: Use GitHub Issues
 - Feature Requests: GitHub Discussions
-- Documentation: https://valpere.github.io/datascrapexter/
+- Documentation: <https://valpere.github.io/datascrapexter/>
 
 ## Common First Steps
 

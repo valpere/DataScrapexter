@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/valpere/DataScrapexter/internal/config"
 	"github.com/valpere/DataScrapexter/internal/pipeline"
 )
 
@@ -33,6 +34,51 @@ type FieldConfig struct {
 type ExtractionConfig struct {
 	StrictMode      bool `yaml:"strict_mode" json:"strict_mode"`
 	ContinueOnError bool `yaml:"continue_on_error" json:"continue_on_error"`
+}
+
+// BatchScrapingConfig encapsulates all parameters for batch scraping operations
+type BatchScrapingConfig struct {
+	URLs           []string              `json:"urls"`
+	Extractors     []FieldConfig         `json:"extractors"`
+	ScraperConfig  *config.ScraperConfig `json:"scraper_config"`
+	BatchSize      int                   `json:"batch_size"`
+}
+
+// NewBatchScrapingConfig creates a new BatchScrapingConfig with validation
+func NewBatchScrapingConfig(urls []string, extractors []FieldConfig, scraperConfig *config.ScraperConfig, batchSize int) (*BatchScrapingConfig, error) {
+	config := &BatchScrapingConfig{
+		URLs:          urls,
+		Extractors:    extractors,
+		ScraperConfig: scraperConfig,
+		BatchSize:     batchSize,
+	}
+	
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+	
+	return config, nil
+}
+
+// Validate checks if the BatchScrapingConfig is valid
+func (bsc *BatchScrapingConfig) Validate() error {
+	if len(bsc.URLs) == 0 {
+		return fmt.Errorf("URLs list cannot be empty")
+	}
+	
+	if len(bsc.Extractors) == 0 {
+		return fmt.Errorf("Extractors list cannot be empty")
+	}
+	
+	if bsc.ScraperConfig == nil {
+		return fmt.Errorf("ScraperConfig cannot be nil")
+	}
+	
+	if bsc.BatchSize <= 0 {
+		bsc.BatchSize = 10 // Set default batch size
+	}
+	
+	return nil
 }
 
 // EngineConfig defines scraping engine configuration
@@ -142,6 +188,34 @@ type Config struct {
 	Pagination      *PaginationConfig    `yaml:"pagination" json:"pagination"`
 	RateLimiter     *RateLimiterConfig   `yaml:"rate_limiter" json:"rate_limiter"`
 	ErrorRecovery   *ErrorRecoveryConfig `yaml:"error_recovery" json:"error_recovery"`
+	MaxConcurrency  int                  `yaml:"max_concurrency" json:"max_concurrency"` // Maximum concurrent operations
+}
+
+// Validate validates the scraper configuration
+func (c *Config) Validate() error {
+	// Validate MaxConcurrency
+	if c.MaxConcurrency < 0 {
+		return fmt.Errorf("max_concurrency must be non-negative, got %d", c.MaxConcurrency)
+	}
+	if c.MaxConcurrency > 1000 {
+		return fmt.Errorf("max_concurrency exceeds reasonable limit of 1000, got %d", c.MaxConcurrency)
+	}
+	
+	// Validate other fields
+	if c.MaxRetries < 0 {
+		return fmt.Errorf("max_retries must be non-negative, got %d", c.MaxRetries)
+	}
+	if c.Timeout < 0 {
+		return fmt.Errorf("timeout must be non-negative, got %v", c.Timeout)
+	}
+	if c.RateLimit < 0 {
+		return fmt.Errorf("rate_limit must be non-negative, got %v", c.RateLimit)
+	}
+	if c.BurstSize < 0 {
+		return fmt.Errorf("burst_size must be non-negative, got %d", c.BurstSize)
+	}
+	
+	return nil
 }
 
 // ProxyConfig represents proxy configuration for the scraper
