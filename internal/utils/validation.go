@@ -742,8 +742,20 @@ func isEmptyValue(v reflect.Value) bool {
 }
 
 // countCharsOptimized counts characters in a string with fast path for ASCII-only strings.
-// This is more performant than utf8.RuneCountInString when character-level accuracy isn't needed
-// or when the string contains only ASCII characters.
+// 
+// TODO: PERFORMANCE BENCHMARKING NEEDED
+// The current manual byte-by-byte scan may be slower than utf8.RuneCountInString 
+// for many real-world strings. Consider benchmarking this optimization against:
+// 1. utf8.RuneCountInString(s) directly (standard library is highly optimized)
+// 2. strings.ContainsAny(s, "\u0080-\uffff") for non-ASCII detection
+// 3. utf8.ValidString(s) + range over runes for mixed approach
+//
+// Benchmark scenarios should include:
+// - Pure ASCII strings (current fast path should win)
+// - Mixed ASCII/Unicode strings (may be slower due to double processing)  
+// - Pure Unicode strings (should be similar to utf8.RuneCountInString)
+// - Very long strings (cache effects matter)
+// - Very short strings (overhead of optimization may not be worth it)
 func countCharsOptimized(s string) int {
 	// Fast path: check if string is valid UTF-8 and all characters are ASCII
 	// For ASCII-only strings, byte length equals character count
@@ -760,5 +772,11 @@ func countCharsOptimized(s string) int {
 	}
 	
 	// Invalid UTF-8: fall back to accurate UTF-8 rune counting for best effort
+	return utf8.RuneCountInString(s)
+}
+
+// countCharsStandard provides a direct implementation using the standard library
+// This can be used for benchmarking comparison against countCharsOptimized
+func countCharsStandard(s string) int {
 	return utf8.RuneCountInString(s)
 }

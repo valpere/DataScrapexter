@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
@@ -1052,12 +1053,13 @@ func deepCopy(val interface{}, visited map[uintptr]interface{}, depth int) inter
 	}
 	switch v := val.(type) {
 	case map[string]interface{}:
-		ptr := fmt.Sprintf("%p", v)
 		if visited != nil {
-			if _, ok := visited[uintptr(len(ptr))]; ok {
+			// Use reflect to get the actual pointer address for cycle detection
+			ptr := reflect.ValueOf(v).Pointer()
+			if _, ok := visited[ptr]; ok {
 				return nil // cycle detected
 			}
-			visited[uintptr(len(ptr))] = v
+			visited[ptr] = v
 		}
 		copied := make(map[string]interface{}, len(v))
 		for k, vv := range v {
@@ -1178,7 +1180,12 @@ func (e *Engine) logHighVolumeErrors(logger *utils.ComponentLogger, errors []err
 	}
 	
 	// Log summary with samples and error type distribution
-	logger.Errorf("High-volume batch processing encountered %d errors. Sample errors: %v", totalErrors, samples[:min(3, len(samples))])
+	if len(samples) > 0 {
+		sampleCount := min(3, len(samples))
+		logger.Errorf("High-volume batch processing encountered %d errors. Sample errors: %v", totalErrors, samples[:sampleCount])
+	} else {
+		logger.Errorf("High-volume batch processing encountered %d errors. No samples collected.", totalErrors)
+	}
 	logger.Warnf("Error type distribution (top 5): %v", getTopErrorTypes(errorTypes, 5))
 }
 

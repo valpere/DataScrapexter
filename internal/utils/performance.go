@@ -302,27 +302,38 @@ type TokenBucketRateLimiter struct {
 	logFunc    LogFunc // Dependency injection for logging concerns
 }
 
-// NewTokenBucketRateLimiter creates a new token bucket rate limiter with default logging
+// NewTokenBucketRateLimiter creates a new token bucket rate limiter with default no-op logging
+// For logging functionality, use NewTokenBucketRateLimiterWithLogger with a custom LogFunc
 func NewTokenBucketRateLimiter(maxTokens int64, refillRate time.Duration) *TokenBucketRateLimiter {
 	return NewTokenBucketRateLimiterWithLogger(maxTokens, refillRate, nil)
 }
 
+// NewTokenBucketRateLimiterWithPerformanceLogging creates a token bucket rate limiter with performance logging
+// This avoids circular imports by having the caller provide the logger
+func NewTokenBucketRateLimiterWithPerformanceLogging(maxTokens int64, refillRate time.Duration) *TokenBucketRateLimiter {
+	logger := GetLogger("performance")
+	logFunc := func(level string, format string, args ...interface{}) {
+		switch level {
+		case "warn":
+			logger.Warnf(format, args...)
+		case "error":
+			logger.Errorf(format, args...)
+		case "info":
+			logger.Infof(format, args...)
+		default:
+			logger.Infof(format, args...)
+		}
+	}
+	return NewTokenBucketRateLimiterWithLogger(maxTokens, refillRate, logFunc)
+}
+
 // NewTokenBucketRateLimiterWithLogger creates a new token bucket rate limiter with custom logging
 func NewTokenBucketRateLimiterWithLogger(maxTokens int64, refillRate time.Duration, logFunc LogFunc) *TokenBucketRateLimiter {
-	// Default logging implementation if none provided
+	// Default logging implementation if none provided - use no-op to avoid circular imports
 	if logFunc == nil {
-		logger := GetLogger("performance")
 		logFunc = func(level string, format string, args ...interface{}) {
-			switch level {
-			case "warn":
-				logger.Warnf(format, args...)
-			case "error":
-				logger.Errorf(format, args...)
-			case "info":
-				logger.Infof(format, args...)
-			default:
-				logger.Infof(format, args...)
-			}
+			// No-op logger to avoid circular import with utils.GetLogger
+			// Users should provide their own logger if they want logging functionality
 		}
 	}
 	

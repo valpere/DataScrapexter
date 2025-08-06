@@ -487,7 +487,7 @@ func (cc *ConfigCache) put(filename string, config *ScraperConfig, fileSize int6
 	evictionCount := 0
 	
 	for len(cc.cache) >= cc.maxSize && evictionCount < maxEvictions {
-		if !cc.evictLRU() {
+		if !cc.evictLRUWithLogger(logger) {
 			// Eviction failed (cache was empty or inconsistent), break to prevent infinite loop
 			logger.Errorf("Cache eviction failed despite cache size %d >= max size %d, attempted %d evictions", 
 				len(cc.cache), cc.maxSize, evictionCount)
@@ -525,6 +525,11 @@ func (cc *ConfigCache) put(filename string, config *ScraperConfig, fileSize int6
 // evictLRU removes the least recently used item in O(1) time
 // Returns true if an item was evicted, false if cache was empty
 func (cc *ConfigCache) evictLRU() bool {
+	return cc.evictLRUWithLogger(utils.GetLogger("config"))
+}
+
+// evictLRUWithLogger removes the least recently used item with a provided logger for performance-critical paths
+func (cc *ConfigCache) evictLRUWithLogger(logger *utils.ComponentLogger) bool {
 	// Get the least recently used node (tail's previous)
 	lru := cc.lruTail.prev
 	if lru == cc.lruList {
@@ -533,12 +538,21 @@ func (cc *ConfigCache) evictLRU() bool {
 	}
 	
 	// Verify the key exists in cache before removal (defensive programming)
-	if _, exists := cc.cache[lru.key]; !exists {
+	// This double-check prevents race conditions in edge cases
+	cachedEntry, exists := cc.cache[lru.key]
+	if !exists {
 		// Node exists in LRU list but not in cache - inconsistent state
-		// Remove from LRU list only and log the issue
+		// This can happen if cache was manually cleared or corrupted
 		cc.removeFromLRU(lru)
-		logger := utils.GetLogger("config")
-		logger.Errorf("LRU cache inconsistency detected: node %s exists in LRU list but not in cache", lru.key)
+		logger.Errorf("LRU cache inconsistency detected: node %s exists in LRU list but not in cache map. Recovering by removing orphaned LRU node.", lru.key)
+		return false
+	}
+	
+	// Additional consistency check: verify the cached entry points to the same LRU node
+	if cachedEntry.lruNode != lru {
+		// Cache entry and LRU node are out of sync - another type of inconsistency
+		cc.removeFromLRU(lru)
+		logger.Errorf("LRU cache pointer inconsistency detected: cache entry for %s points to different LRU node. Recovering by removing stale LRU node.", lru.key)
 		return false
 	}
 	
@@ -556,10 +570,27 @@ func (cc *ConfigCache) addToFront(node *lruNode) {
 	cc.lruList.next = node
 }
 
-// removeFromLRU removes a node from the LRU list
+// removeFromLRU removes a node from the LRU list with safety checks
 func (cc *ConfigCache) removeFromLRU(node *lruNode) {
+	// Defensive programming: verify node integrity before removal
+	if node == nil || node.prev == nil || node.next == nil {
+		// Node is already corrupted or uninitialized, skip removal
+		return
+	}
+	
+	// Prevent removal of sentinel nodes (head/tail)
+	if node == cc.lruList || node == cc.lruTail {
+		// Attempting to remove sentinel node - this should never happen
+		return
+	}
+	
+	// Atomically update pointers
 	node.prev.next = node.next
 	node.next.prev = node.prev
+	
+	// Clear the removed node's pointers for safety
+	node.prev = nil
+	node.next = nil
 }
 
 // moveToFront moves an existing node to the front of the LRU list
