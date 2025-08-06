@@ -1044,6 +1044,36 @@ func (e *Engine) checkErrorThresholds(scraperConfig *config.ScraperConfig, batch
 	return false
 }
 
+// deepCopy recursively copies maps and slices, detects cycles, and enforces a depth limit.
+func deepCopy(val interface{}, visited map[uintptr]interface{}, depth int) interface{} {
+	const maxDepth = 100
+	if depth > maxDepth {
+		return nil // or panic, or return a special error value
+	}
+	switch v := val.(type) {
+	case map[string]interface{}:
+		ptr := fmt.Sprintf("%p", v)
+		if visited != nil {
+			if _, ok := visited[uintptr(len(ptr))]; ok {
+				return nil // cycle detected
+			}
+			visited[uintptr(len(ptr))] = v
+		}
+		copied := make(map[string]interface{}, len(v))
+		for k, vv := range v {
+			copied[k] = deepCopy(vv, visited, depth+1)
+		}
+		return copied
+	case []interface{}:
+		copied := make([]interface{}, len(v))
+		for i, vv := range v {
+			copied[i] = deepCopy(vv, visited, depth+1)
+		}
+		return copied
+	default:
+		return v
+	}
+}
 // copyResult efficiently copies a Result using sync.Pool to reduce allocations
 func (e *Engine) copyResult(src *Result) *Result {
 	// Get a copy from the pool to avoid allocations
