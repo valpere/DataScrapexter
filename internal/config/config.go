@@ -483,12 +483,23 @@ func (cc *ConfigCache) put(filename string, config *ScraperConfig, fileSize int6
 	// Check cache size and evict if necessary - do this atomically with addition
 	// to prevent race conditions where multiple goroutines could bypass the size check
 	logger := utils.GetLogger("config") // Create logger once outside loop for better performance
-	for len(cc.cache) >= cc.maxSize {
+	maxEvictions := cc.maxSize + 1 // Circuit breaker: prevent infinite loops in edge cases
+	evictionCount := 0
+	
+	for len(cc.cache) >= cc.maxSize && evictionCount < maxEvictions {
 		if !cc.evictLRU() {
 			// Eviction failed (cache was empty or inconsistent), break to prevent infinite loop
-			logger.Errorf("Cache eviction failed despite cache size %d >= max size %d", len(cc.cache), cc.maxSize)
+			logger.Errorf("Cache eviction failed despite cache size %d >= max size %d, attempted %d evictions", 
+				len(cc.cache), cc.maxSize, evictionCount)
 			break
 		}
+		evictionCount++
+	}
+	
+	// Circuit breaker triggered - log potential issue
+	if evictionCount >= maxEvictions {
+		logger.Errorf("Cache eviction circuit breaker triggered after %d attempts. Cache size: %d, max size: %d. Potential cache corruption or logic error.", 
+			evictionCount, len(cc.cache), cc.maxSize)
 	}
 	
 	// Calculate hash for integrity checking

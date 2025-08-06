@@ -1085,7 +1085,7 @@ func (e *Engine) copyResult(src *Result) *Result {
 	dst.Timestamp = src.Timestamp
 	dst.ErrorRate = src.ErrorRate
 	
-	// Efficiently copy map - ensure it has enough capacity
+	// Deep copy map to handle nested structures and prevent reference sharing
 	if len(dst.Data) > 0 {
 		// Clear existing map entries
 		for k := range dst.Data {
@@ -1093,12 +1093,15 @@ func (e *Engine) copyResult(src *Result) *Result {
 		}
 	}
 	if len(src.Data) > 0 {
-		// Ensure map exists and copy data
+		// Ensure map exists and perform deep copy with cycle detection
 		if dst.Data == nil {
 			dst.Data = make(map[string]interface{}, len(src.Data))
 		}
+		
+		// Use visited map to track circular references during deep copy
+		visited := make(map[uintptr]interface{})
 		for k, v := range src.Data {
-			dst.Data[k] = v
+			dst.Data[k] = deepCopy(v, visited, 0)
 		}
 	}
 	

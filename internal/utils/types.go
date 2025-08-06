@@ -5,6 +5,7 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
 	"strings"
@@ -12,11 +13,8 @@ import (
 	"time"
 )
 
-// Platform-specific integer limits
-const (
-	maxInt = int(^uint(0) >> 1)
-	minInt = -maxInt - 1
-)
+// Note: Using Go's built-in math.MaxInt and math.MinInt constants for better maintainability
+// These constants are available in Go 1.17+ and provide platform-specific integer limits
 
 // TypeConverter provides safe type conversion utilities
 type TypeConverter struct {
@@ -90,7 +88,7 @@ func (tc *TypeConverter) ToInt(value interface{}) ConversionResult {
 	case int32:
 		return ConversionResult{Value: int(v), Success: true}
 	case int64:
-		if tc.strict && (v > int64(maxInt) || v < int64(minInt)) {
+		if tc.strict && (v > int64(math.MaxInt) || v < int64(math.MinInt)) {
 			return ConversionResult{
 				Value:   0,
 				Success: false,
@@ -100,7 +98,7 @@ func (tc *TypeConverter) ToInt(value interface{}) ConversionResult {
 		return ConversionResult{Value: int(v), Success: true}
 	case uint, uint8, uint16, uint32:
 		uval := reflect.ValueOf(v).Uint()
-		if tc.strict && uval > uint64(maxInt) {
+		if tc.strict && uval > uint64(math.MaxInt) {
 			return ConversionResult{
 				Value:   0,
 				Success: false,
@@ -109,7 +107,7 @@ func (tc *TypeConverter) ToInt(value interface{}) ConversionResult {
 		}
 		return ConversionResult{Value: int(uval), Success: true}
 	case uint64:
-		if tc.strict && v > uint64(maxInt) {
+		if tc.strict && v > uint64(math.MaxInt) {
 			return ConversionResult{
 				Value:   0,
 				Success: false,

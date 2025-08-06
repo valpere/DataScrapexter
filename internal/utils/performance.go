@@ -289,24 +289,49 @@ func (wp *WorkerPool[T]) GetMetrics() PerformanceMetrics {
 	return wp.metrics.GetSnapshot()
 }
 
-// TokenBucketRateLimiter provides token bucket rate limiting
+// LogFunc represents a logging function for decoupled logging
+type LogFunc func(level string, format string, args ...interface{})
+
+// TokenBucketRateLimiter provides token bucket rate limiting with configurable logging
 type TokenBucketRateLimiter struct {
 	tokens     int64
 	maxTokens  int64
 	refillRate time.Duration
 	lastRefill int64
 	mutex      sync.Mutex
-	logger     *ComponentLogger // Cached logger instance to avoid repeated creation
+	logFunc    LogFunc // Dependency injection for logging concerns
 }
 
-// NewTokenBucketRateLimiter creates a new token bucket rate limiter
+// NewTokenBucketRateLimiter creates a new token bucket rate limiter with default logging
 func NewTokenBucketRateLimiter(maxTokens int64, refillRate time.Duration) *TokenBucketRateLimiter {
+	return NewTokenBucketRateLimiterWithLogger(maxTokens, refillRate, nil)
+}
+
+// NewTokenBucketRateLimiterWithLogger creates a new token bucket rate limiter with custom logging
+func NewTokenBucketRateLimiterWithLogger(maxTokens int64, refillRate time.Duration, logFunc LogFunc) *TokenBucketRateLimiter {
+	// Default logging implementation if none provided
+	if logFunc == nil {
+		logger := GetLogger("performance")
+		logFunc = func(level string, format string, args ...interface{}) {
+			switch level {
+			case "warn":
+				logger.Warnf(format, args...)
+			case "error":
+				logger.Errorf(format, args...)
+			case "info":
+				logger.Infof(format, args...)
+			default:
+				logger.Infof(format, args...)
+			}
+		}
+	}
+	
 	return &TokenBucketRateLimiter{
 		tokens:     maxTokens,
 		maxTokens:  maxTokens,
 		refillRate: refillRate,
 		lastRefill: time.Now().UnixNano(),
-		logger:     GetLogger("performance"), // Cache logger instance
+		logFunc:    logFunc,
 	}
 }
 
@@ -321,7 +346,7 @@ func (trl *TokenBucketRateLimiter) Allow() bool {
 	// Handle system time going backwards (e.g., NTP corrections, system clock changes)
 	if elapsed < 0 {
 		// System time went backwards, reset timing reference to avoid negative calculations
-		trl.logger.Warnf(`TokenBucketRateLimiter: system time went backwards by %v.
+		trl.logFunc("warn", `TokenBucketRateLimiter: system time went backwards by %v.
 Possible causes: NTP correction, VM migration, manual clock change.
 Timing reference reset to avoid negative calculations.
 Impact: rate limiting may be temporarily inaccurate, but will self-correct.
@@ -335,11 +360,11 @@ If this occurs frequently, investigate system clock stability.`, -elapsed)
 	// it indicates a bug that should be investigated and fixed.
 	if trl.tokens < 0 {
 		// This should never happen with correct implementation - log for debugging
-		trl.logger.Errorf("TokenBucketRateLimiter: tokens became negative (%d), this indicates a bug in the implementation. Resetting to 0.", trl.tokens)
+		trl.logFunc("error", "TokenBucketRateLimiter: tokens became negative (%d), this indicates a bug in the implementation. Resetting to 0.", trl.tokens)
 		trl.tokens = 0
 	} else if trl.tokens > trl.maxTokens {
 		// This could happen due to calculation precision, clamp to max
-		trl.logger.Warnf("TokenBucketRateLimiter: tokens (%d) exceeded maximum (%d), clamping to maximum", trl.tokens, trl.maxTokens)
+		trl.logFunc("warn", "TokenBucketRateLimiter: tokens (%d) exceeded maximum (%d), clamping to maximum", trl.tokens, trl.maxTokens)
 		trl.tokens = trl.maxTokens
 	}
 
