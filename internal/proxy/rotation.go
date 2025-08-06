@@ -2,10 +2,12 @@
 package proxy
 
 import (
+	"crypto/rand"
 	"fmt"
 	"math"
-	"math/rand"
+	mathrand "math/rand"
 	"net"
+	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -13,6 +15,24 @@ import (
 
 	"github.com/valpere/DataScrapexter/internal/utils"
 )
+
+// Initialize secure random seed on package load
+func init() {
+	// Seed math/rand with cryptographically secure random data for better randomness
+	var seed int64
+	seedBytes := make([]byte, 8)
+	_, err := rand.Read(seedBytes)
+	if err != nil {
+		// Fallback to time-based seed if crypto/rand fails
+		seed = time.Now().UnixNano()
+	} else {
+		// Convert bytes to int64 for seeding
+		for i, b := range seedBytes {
+			seed |= int64(b) << (8 * i)
+		}
+	}
+	mathrand.Seed(seed)
+}
 
 var rotationLogger = utils.NewComponentLogger("proxy-rotation")
 
@@ -687,9 +707,12 @@ func (apm *AdvancedProxyManager) filterByPerformanceThresholds(candidates []*Adv
 
 func (apm *AdvancedProxyManager) getAvailableProxiesInGroup(group *ProxyGroup) []*AdvancedProxyInstance {
 	var available []*AdvancedProxyInstance
-	for _, proxy := range group.Proxies {
-		if apm.isProxyAvailable(proxy.(*AdvancedProxyInstance)) {
-			available = append(available, proxy.(*AdvancedProxyInstance))
+	for _, proxyName := range group.ProxyNames {
+		for _, proxy := range apm.advancedProviders {
+			if proxy.Provider.Name == proxyName && apm.isProxyAvailable(proxy) {
+				available = append(available, proxy)
+				break
+			}
 		}
 	}
 	return available
@@ -978,9 +1001,17 @@ func NewGeographicResolver() *GeographicResolver {
 	}
 }
 
-func (gr *GeographicResolver) ResolveLocation(url string) (*GeographicLocation, error) {
-	// Extract hostname
-	hostname := strings.Split(strings.Split(url, "://")[len(strings.Split(url, "://"))-1], "/")[0]
+func (gr *GeographicResolver) ResolveLocation(urlStr string) (*GeographicLocation, error) {
+	// Parse URL using standard library for proper hostname extraction
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse URL %s: %w", urlStr, err)
+	}
+	
+	hostname := parsedURL.Hostname()
+	if hostname == "" {
+		return nil, fmt.Errorf("could not extract hostname from URL: %s", urlStr)
+	}
 	
 	gr.cacheMu.RLock()
 	if location, exists := gr.cache[hostname]; exists {
@@ -1110,7 +1141,7 @@ func (lb *LoadBalancer) SelectProxy(candidates []*AdvancedProxyInstance) (*Advan
 	case "weighted_round_robin":
 		return lb.selectWeightedRoundRobin(candidates), nil
 	default: // round_robin
-		return candidates[rand.Intn(len(candidates))], nil
+		return candidates[mathrand.Intn(len(candidates))], nil
 	}
 }
 
@@ -1147,7 +1178,7 @@ func (lb *LoadBalancer) selectWeightedRoundRobin(candidates []*AdvancedProxyInst
 		return candidates[0]
 	}
 	
-	random := rand.Intn(totalWeight)
+	random := mathrand.Intn(totalWeight)
 	currentWeight := 0
 	
 	for _, candidate := range candidates {

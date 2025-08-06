@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -49,7 +48,7 @@ type AdvancedRetryStrategy struct {
 	RotateOnFailure      bool                              `yaml:"rotate_on_failure" json:"rotate_on_failure"`
 	RotateOnStatusCodes  []int                             `yaml:"rotate_on_status_codes,omitempty" json:"rotate_on_status_codes,omitempty"`
 	FallbackStrategy     proxy.AdvancedRotationStrategy    `yaml:"fallback_strategy" json:"fallback_strategy"`
-	CircuitBreakerConfig *proxy.CircuitBreakerConfig       `yaml:"circuit_breaker,omitempty" json:"circuit_breaker,omitempty"`
+	// CircuitBreakerConfig would be added when circuit breaker is implemented
 }
 
 // ScrapingContext contains context for a scraping operation with advanced proxy info
@@ -210,7 +209,7 @@ func (ape *AdvancedProxyEngine) Stop() error {
 func (ape *AdvancedProxyEngine) ScrapeWithAdvancedProxy(ctx context.Context, targetURL string, options *ScrapeOptions) (*Result, error) {
 	if !ape.config.Enabled {
 		// Fall back to basic scraping
-		return ape.Engine.Scrape(ctx, targetURL)
+		return ape.Engine.Scrape(ctx, targetURL, []FieldConfig{})
 	}
 
 	// Create scraping context
@@ -390,7 +389,7 @@ func (ape *AdvancedProxyEngine) executeSingleRequest(scrapeCtx *ScrapingContext)
 	}
 
 	// Execute request with timing
-	dnsStart := time.Now()
+	// DNS timing would be tracked here
 	resp, err := client.Do(req)
 	if err != nil {
 		metrics.EndTime = time.Now()
@@ -736,20 +735,55 @@ func (e *Engine) getNextUserAgent() string {
 
 // Helper methods that need to access private engine methods
 func (e *Engine) parseDocument(resp *http.Response) (interface{}, error) {
-	// This would call the existing parseDocument method from the base engine
-	// For now, return a placeholder - in a real implementation, this would
-	// properly parse the HTML document using goquery
-	return nil, fmt.Errorf("document parsing not implemented in integration layer")
+	// TODO: This is a placeholder implementation that needs to be replaced with proper HTML parsing.
+	// The real implementation should:
+	// 1. Use goquery to parse the HTTP response body into a queryable document
+	// 2. Handle encoding detection and conversion
+	// 3. Implement proper error handling for malformed HTML
+	// 4. Support both HTML and XML document types based on content-type
+	// 5. Cache parsed documents for performance optimization
+	// 
+	// Example implementation:
+	// doc, err := goquery.NewDocumentFromReader(resp.Body)
+	// if err != nil {
+	//     return nil, fmt.Errorf("failed to parse HTML document: %w", err)
+	// }
+	// return doc, nil
+	return nil, fmt.Errorf("document parsing not implemented in integration layer - TODO: implement proper HTML parsing with goquery")
 }
 
 func (e *Engine) extractData(doc interface{}, url string) (*Result, error) {
-	// This would call the existing extractData method from the base engine  
-	// For now, return a basic result - in a real implementation, this would
-	// properly extract data based on the configuration
+	// TODO: This is a placeholder implementation that needs to be replaced with proper data extraction.
+	// The real implementation should:
+	// 1. Use the configured field selectors to extract data from the parsed document
+	// 2. Apply transformation rules to the extracted data
+	// 3. Validate extracted data against field requirements
+	// 4. Handle extraction errors gracefully with fallback strategies
+	// 5. Support complex extraction patterns (nested selectors, conditional extraction)
+	// 6. Track extraction success metrics for quality assessment
+	//
+	// Example implementation:
+	// result := &Result{
+	//     Data:      make(map[string]interface{}),
+	//     Success:   true,
+	//     Timestamp: time.Now(),
+	//     Errors:    make([]string, 0),
+	// }
+	// 
+	// for _, field := range e.config.Fields {
+	//     value, err := extractFieldValue(doc, field)
+	//     if err != nil {
+	//         result.Errors = append(result.Errors, err.Error())
+	//         continue
+	//     }
+	//     result.Data[field.Name] = value
+	// }
+	// 
+	// return result, nil
 	return &Result{
-		URL:       url,
 		Data:      make(map[string]interface{}),
 		Success:   true,
 		Timestamp: time.Now(),
+		Errors:    []string{"TODO: implement proper data extraction based on field configurations"},
 	}, nil
 }

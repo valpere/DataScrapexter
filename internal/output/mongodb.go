@@ -3,9 +3,8 @@ package output
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
-	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 )
 
@@ -265,7 +265,7 @@ func (mw *MongoDBWriter) connect() error {
 	// Authentication
 	if mw.config.Authentication != nil {
 		credential := buildCredential(mw.config.Authentication)
-		clientOptions.SetAuth(credential)
+		clientOptions.SetAuth(*credential)
 	}
 
 	// Connect to MongoDB
@@ -716,22 +716,20 @@ func (mw *MongoDBWriter) GetStatistics() map[string]interface{} {
 // Helper functions
 
 func buildWriteConcern(wc *WriteConcernOptions) *writeconcern.WriteConcern {
-	var w writeconcern.WMode
+	options := []writeconcern.Option{}
 	
 	switch v := wc.W.(type) {
 	case int:
-		w = writeconcern.W(v)
+		options = append(options, writeconcern.W(v))
 	case string:
 		if v == "majority" {
-			w = writeconcern.WMajority()
+			options = append(options, writeconcern.WMajority())
 		} else {
-			w = writeconcern.WTagSet(v)
+			options = append(options, writeconcern.WTagSet(v))
 		}
 	default:
-		w = writeconcern.W(1) // Default
+		options = append(options, writeconcern.W(1)) // Default
 	}
-	
-	options := []writeconcern.Option{w}
 	
 	if wc.Journal != nil {
 		if *wc.Journal {
@@ -748,24 +746,24 @@ func buildWriteConcern(wc *WriteConcernOptions) *writeconcern.WriteConcern {
 	return writeconcern.New(options...)
 }
 
-func buildReadPreference(rp string) (*options.ReadPreference, error) {
+func buildReadPreference(rp string) (*readpref.ReadPref, error) {
 	switch strings.ToLower(rp) {
 	case "primary":
-		return options.ReadPreference().SetMode("primary"), nil
+		return readpref.Primary(), nil
 	case "primarypreferred":
-		return options.ReadPreference().SetMode("primaryPreferred"), nil
+		return readpref.PrimaryPreferred(), nil
 	case "secondary":
-		return options.ReadPreference().SetMode("secondary"), nil
+		return readpref.Secondary(), nil
 	case "secondarypreferred":
-		return options.ReadPreference().SetMode("secondaryPreferred"), nil
+		return readpref.SecondaryPreferred(), nil
 	case "nearest":
-		return options.ReadPreference().SetMode("nearest"), nil
+		return readpref.Nearest(), nil
 	default:
 		return nil, fmt.Errorf("invalid read preference: %s", rp)
 	}
 }
 
-func buildTLSConfig(tls *MongoTLSOptions) (*options.ClientEncryption, error) {
+func buildTLSConfig(tls *MongoTLSOptions) (*tls.Config, error) {
 	// This is a simplified implementation
 	// In a real implementation, you would build proper TLS configuration
 	// MongoDB driver has specific methods for TLS configuration

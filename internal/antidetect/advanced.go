@@ -4,10 +4,8 @@ package antidetect
 import (
 	"crypto/rand"
 	"fmt"
-	"math/rand"
+	mathrand "math/rand"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -38,7 +36,7 @@ func NewHTTP2Fingerprinter() *HTTP2Fingerprinter {
 
 // GetRandomProfile returns a random HTTP/2 profile
 func (h2 *HTTP2Fingerprinter) GetRandomProfile() HTTP2Fingerprint {
-	return h2.profiles[rand.Intn(len(h2.profiles))]
+	return h2.profiles[mathrand.Intn(len(h2.profiles))]
 }
 
 // TimingFingerprint represents request timing characteristics
@@ -97,18 +95,18 @@ func (bs *BehaviorSimulator) GenerateMousePath(startX, startY, endX, endY int) [
 	
 	// Calculate distance and generate realistic movement
 	distance := calculateDistance(startX, startY, endX, endY)
-	steps := int(distance / 10) + rand.Intn(5) + 3 // 3-7 extra steps
+	steps := int(distance / 10) + mathrand.Intn(5) + 3 // 3-7 extra steps
 	
 	for i := 0; i < steps; i++ {
 		progress := float64(i) / float64(steps)
 		
 		// Add some randomness to the path
-		noise := rand.Float64()*10 - 5
+		noise := mathrand.Float64()*10 - 5
 		x := int(float64(startX) + (float64(endX-startX) * progress) + noise)
 		y := int(float64(startY) + (float64(endY-startY) * progress) + noise)
 		
 		// Human-like timing with micro-pauses
-		delay := time.Duration(rand.Intn(20)+10) * time.Millisecond
+		delay := time.Duration(mathrand.Intn(20)+10) * time.Millisecond
 		
 		events = append(events, MouseEvent{
 			X:         x,
@@ -137,11 +135,11 @@ func (bs *BehaviorSimulator) GenerateTypingPattern(text string) []KeyEvent {
 	
 	for i, char := range text {
 		// Variable typing speed (150-350ms between keys)
-		delay := time.Duration(rand.Intn(200)+150) * time.Millisecond
+		delay := time.Duration(mathrand.Intn(200)+150) * time.Millisecond
 		
 		// Occasional longer pauses (thinking)
-		if rand.Float64() < 0.1 {
-			delay += time.Duration(rand.Intn(1000)+500) * time.Millisecond
+		if mathrand.Float64() < 0.1 {
+			delay += time.Duration(mathrand.Intn(1000)+500) * time.Millisecond
 		}
 		
 		timestamp := startTime.Add(delay * time.Duration(i))
@@ -155,7 +153,7 @@ func (bs *BehaviorSimulator) GenerateTypingPattern(text string) []KeyEvent {
 		// Key release slightly after press
 		events = append(events, KeyEvent{
 			Key:       string(char),
-			Timestamp: timestamp.Add(time.Duration(rand.Intn(50)+20) * time.Millisecond),
+			Timestamp: timestamp.Add(time.Duration(mathrand.Intn(50)+20) * time.Millisecond),
 			EventType: "keyup",
 		})
 	}
@@ -206,7 +204,7 @@ func (rrs *ResourceRequestSimulator) GenerateResourceLoadingPattern() RequestOrd
 		},
 	}
 	
-	return patterns[rand.Intn(len(patterns))]
+	return patterns[mathrand.Intn(len(patterns))]
 }
 
 // DNSFingerprintEvasion provides DNS fingerprinting evasion
@@ -380,10 +378,10 @@ func getHTTP2Profiles() []HTTP2Fingerprint {
 func generateBehaviorProfiles() []TimingFingerprint {
 	return []TimingFingerprint{
 		{
-			RequestDelay:      time.Duration(rand.Intn(2000)+500) * time.Millisecond,
-			IdleTime:         time.Duration(rand.Intn(30000)+5000) * time.Millisecond,
-			TabSwitchDelay:   time.Duration(rand.Intn(1000)+200) * time.Millisecond,
-			WindowResizeDelay: time.Duration(rand.Intn(500)+100) * time.Millisecond,
+			RequestDelay:      time.Duration(mathrand.Intn(2000)+500) * time.Millisecond,
+			IdleTime:         time.Duration(mathrand.Intn(30000)+5000) * time.Millisecond,
+			TabSwitchDelay:   time.Duration(mathrand.Intn(1000)+200) * time.Millisecond,
+			WindowResizeDelay: time.Duration(mathrand.Intn(500)+100) * time.Millisecond,
 		},
 	}
 }
@@ -429,15 +427,15 @@ func (aad *AdvancedAntiDetection) addCacheHeaders(req *http.Request) {
 	}
 	
 	// Add If-Modified-Since for repeat requests
-	if rand.Float64() < 0.3 {
-		pastTime := time.Now().Add(-time.Duration(rand.Intn(86400)) * time.Second)
+	if mathrand.Float64() < 0.3 {
+		pastTime := time.Now().Add(-time.Duration(mathrand.Intn(86400)) * time.Second)
 		req.Header.Set("If-Modified-Since", pastTime.Format(http.TimeFormat))
 	}
 }
 
 func (aad *AdvancedAntiDetection) addSecurityHeaders(req *http.Request) {
 	// Add DNT (Do Not Track) header occasionally
-	if rand.Float64() < 0.2 {
+	if mathrand.Float64() < 0.2 {
 		req.Header.Set("DNT", "1")
 	}
 	
@@ -460,26 +458,26 @@ func generateETag() string {
 // GetRandomDelay returns a human-like delay between requests
 func (bs *BehaviorSimulator) GetRandomDelay() time.Duration {
 	// Most requests: 0.5-3 seconds
-	if rand.Float64() < 0.8 {
-		return time.Duration(rand.Intn(2500)+500) * time.Millisecond
+	if mathrand.Float64() < 0.8 {
+		return time.Duration(mathrand.Intn(2500)+500) * time.Millisecond
 	}
 	
 	// Occasional longer delays: 3-10 seconds
-	if rand.Float64() < 0.9 {
-		return time.Duration(rand.Intn(7000)+3000) * time.Millisecond
+	if mathrand.Float64() < 0.9 {
+		return time.Duration(mathrand.Intn(7000)+3000) * time.Millisecond
 	}
 	
 	// Rare very long delays: 10-30 seconds (user distraction)
-	return time.Duration(rand.Intn(20000)+10000) * time.Millisecond
+	return time.Duration(mathrand.Intn(20000)+10000) * time.Millisecond
 }
 
 // SimulatePageInteraction simulates realistic page interaction delays
 func (bs *BehaviorSimulator) SimulatePageInteraction() time.Duration {
 	// Reading time varies by content length (estimated)
-	baseReadingTime := time.Duration(rand.Intn(5000)+2000) * time.Millisecond
+	baseReadingTime := time.Duration(mathrand.Intn(5000)+2000) * time.Millisecond
 	
 	// Add interaction time (scrolling, clicking)
-	interactionTime := time.Duration(rand.Intn(3000)+1000) * time.Millisecond
+	interactionTime := time.Duration(mathrand.Intn(3000)+1000) * time.Millisecond
 	
 	return baseReadingTime + interactionTime
 }
