@@ -1084,64 +1084,91 @@ func (cw *ConfigWatcher) notifyCallbacks(config *ScraperConfig, err error) {
 				atomic.AddInt64(&cw.totalCallbacks, 1)
 			}()
 			
-			// Try to acquire worker semaphore with context coordination
-			select {
-			case cw.callbackWorkers <- struct{}{}:
-				// Worker slot acquired, execute callback
-				defer func() { <-cw.callbackWorkers }() // Release worker slot
-				
-				// Use context.WithCancel for proper cleanup instead of WithTimeout
-				ctx, cancel := context.WithCancel(cw.ctx)
-				defer cancel() // Ensure resources are cleaned up
-				
-				// Execute legacy callback with context cancellation support
-				done := cw.executeLegacyCallbackSafely(ctx, cb, config, err)
-				
-				// Create timeout using timer instead of context timeout for better control
-				timer := time.NewTimer(cw.callbackTimeout)
-				defer timer.Stop()
-				
-				// Wait for either completion or timeout
-				select {
-				case <-done:
-					// Callback completed successfully
-				case <-timer.C:
-					// Timer expired - cancel context to signal goroutine to stop
-					cancel()
-					atomic.AddInt64(&cw.timedOutCallbacks, 1)
-					logger := utils.GetLogger("config")
-					logger.Warnf("Legacy callback timed out after %v, context cancelled to signal cleanup. Total timed out: %d", 
-						cw.callbackTimeout, atomic.LoadInt64(&cw.timedOutCallbacks))
-					
-					// Give a brief grace period for cleanup
-					select {
-					case <-done:
-						// Callback completed during grace period
-					case <-time.After(100 * time.Millisecond):
-						// Grace period expired
-						logger.Warnf("Callback did not complete during grace period, potential goroutine leak")
-					}
-				case <-cw.ctx.Done():
-					// Parent context cancelled, cancel callback context
-					cancel()
-					return
-				}
-			case <-cw.ctx.Done():
-				// Watcher context is cancelled, don't execute callback
-				return
-			default:
-				// No worker slots available, check if we should still try to execute
-				select {
-				case <-cw.ctx.Done():
-					// Watcher is stopping, don't execute callback
-					return
-				default:
-					// Skip this callback to prevent blocking and potential goroutine leak
-					// This prevents resource exhaustion when too many callbacks are queued
-					return
-				}
-			}
+			// Execute callback with proper worker management and timeout handling
+			cw.executeCallbackWithWorkerManagement(cb, config, err)
 		}(callback)
+	}
+}
+
+// executeCallbackWithWorkerManagement handles the complex worker semaphore and timeout logic
+func (cw *ConfigWatcher) executeCallbackWithWorkerManagement(cb func(*ScraperConfig, error), config *ScraperConfig, err error) {
+	// Try to acquire worker semaphore with context coordination
+	select {
+	case cw.callbackWorkers <- struct{}{}:
+		cw.executeCallbackWithTimeout(cb, config, err)
+	case <-cw.ctx.Done():
+		// Watcher context is cancelled, don't execute callback
+		return
+	default:
+		cw.handleNoWorkerSlotsAvailable()
+	}
+}
+
+// executeCallbackWithTimeout executes callback with proper timeout and cleanup handling
+func (cw *ConfigWatcher) executeCallbackWithTimeout(cb func(*ScraperConfig, error), config *ScraperConfig, err error) {
+	// Worker slot acquired, execute callback
+	defer func() { <-cw.callbackWorkers }() // Release worker slot
+	
+	// Use context.WithCancel for proper cleanup instead of WithTimeout
+	ctx, cancel := context.WithCancel(cw.ctx)
+	defer cancel() // Ensure resources are cleaned up
+	
+	// Execute legacy callback with context cancellation support
+	done := cw.executeLegacyCallbackSafely(ctx, cb, config, err)
+	
+	// Create timeout using timer instead of context timeout for better control
+	timer := time.NewTimer(cw.callbackTimeout)
+	defer timer.Stop()
+	
+	cw.handleCallbackCompletion(done, timer, cancel)
+}
+
+// handleCallbackCompletion manages the complex timeout and completion logic
+func (cw *ConfigWatcher) handleCallbackCompletion(done <-chan struct{}, timer *time.Timer, cancel context.CancelFunc) {
+	logger := utils.GetLogger("config")
+	
+	// Wait for either completion or timeout
+	select {
+	case <-done:
+		// Callback completed successfully
+	case <-timer.C:
+		cw.handleCallbackTimeout(done, cancel, logger)
+	case <-cw.ctx.Done():
+		// Parent context cancelled, cancel callback context
+		cancel()
+		return
+	}
+}
+
+// handleCallbackTimeout manages timeout scenarios with grace period
+func (cw *ConfigWatcher) handleCallbackTimeout(done <-chan struct{}, cancel context.CancelFunc, logger *utils.ComponentLogger) {
+	// Timer expired - cancel context to signal goroutine to stop
+	cancel()
+	atomic.AddInt64(&cw.timedOutCallbacks, 1)
+	logger.Warnf("Legacy callback timed out after %v, context cancelled to signal cleanup. Total timed out: %d", 
+		cw.callbackTimeout, atomic.LoadInt64(&cw.timedOutCallbacks))
+	
+	// Give a brief grace period for cleanup
+	select {
+	case <-done:
+		// Callback completed during grace period
+	case <-time.After(100 * time.Millisecond):
+		// Grace period expired
+		logger.Warnf("Callback did not complete during grace period, potential goroutine leak")
+	}
+}
+
+// handleNoWorkerSlotsAvailable manages the case when no worker slots are available
+func (cw *ConfigWatcher) handleNoWorkerSlotsAvailable() {
+	// No worker slots available, check if we should still try to execute
+	select {
+	case <-cw.ctx.Done():
+		// Watcher is stopping, don't execute callback
+		return
+	default:
+		// Skip this callback to prevent blocking and potential goroutine leak
+		logger := utils.GetLogger("config")
+		logger.Warnf("Skipping legacy callback execution due to no available worker slots (potential backpressure)")
 	}
 }
 

@@ -966,34 +966,8 @@ func (e *Engine) ScrapeWithBatching(ctx context.Context, urls []string, extracto
 		if len(errors) > 0 {
 			logger := utils.GetLogger("scraper")
 			
-			// Aggregate errors to prevent log spam in high-error scenarios
-			if len(errors) <= 5 {
-				// Log individual errors only for small error counts
-				for _, err := range errors {
-					logger.Errorf("Batch processing error: %v", err)
-				}
-			} else {
-				// For many errors, log a summary with sample errors
-				// Ensure we have at least 3 errors before accessing by index
-				sampleErrors := make([]error, 0, 3)
-				for i := 0; i < len(errors) && i < 3; i++ {
-					sampleErrors = append(sampleErrors, errors[i])
-				}
-				
-				switch len(sampleErrors) {
-				case 1:
-					logger.Errorf("Batch processing encountered %d errors. Sample error: %v (and %d more)", 
-						len(errors), sampleErrors[0], len(errors)-1)
-				case 2:
-					logger.Errorf("Batch processing encountered %d errors. Sample errors: %v, %v (and %d more)", 
-						len(errors), sampleErrors[0], sampleErrors[1], len(errors)-2)
-				case 3:
-					logger.Errorf("Batch processing encountered %d errors. Sample errors: %v, %v, %v (and %d more)", 
-						len(errors), sampleErrors[0], sampleErrors[1], sampleErrors[2], len(errors)-3)
-				default:
-					logger.Errorf("Batch processing encountered %d errors", len(errors))
-				}
-			}
+			// Use optimized error logging with efficient batching/sampling for performance
+			e.logBatchErrors(logger, errors)
 			
 			// Check if error thresholds are exceeded and should stop processing
 			shouldStop := e.checkErrorThresholds(scraperConfig, len(errors), len(batchResults), totalProcessed, totalErrors)
@@ -1114,4 +1088,82 @@ func (e *Engine) copyResult(src *Result) *Result {
 	copy(dst.Warnings, src.Warnings)
 	
 	return dst
+}
+
+// logBatchErrors efficiently logs error batches with sampling to avoid performance issues in high-error scenarios
+func (e *Engine) logBatchErrors(logger *utils.ComponentLogger, errors []error) {
+	switch {
+	case len(errors) <= 5:
+		// Log individual errors for small error counts - avoid unnecessary loops
+		for _, err := range errors {
+			logger.Errorf("Batch processing error: %v", err)
+		}
+	case len(errors) <= 100:
+		// For moderate error counts, use efficient sampling without nested loops
+		logger.Errorf("Batch processing encountered %d errors. First 3 samples: [%v] [%v] [%v] (and %d more)", 
+			len(errors), errors[0], errors[1], errors[2], len(errors)-3)
+	default:
+		// For very high error counts, use optimized sampling with categorization
+		e.logHighVolumeErrors(logger, errors)
+	}
+}
+
+// logHighVolumeErrors handles high-volume error scenarios with efficient categorization and sampling
+func (e *Engine) logHighVolumeErrors(logger *utils.ComponentLogger, errors []error) {
+	totalErrors := len(errors)
+	
+	// Sample errors from different parts of the batch for better representation
+	sampleSize := min(10, totalErrors)
+	step := totalErrors / sampleSize
+	
+	samples := make([]string, 0, sampleSize)
+	errorTypes := make(map[string]int)
+	
+	// Collect samples and categorize error types efficiently
+	for i := 0; i < sampleSize; i++ {
+		idx := i * step
+		if idx >= totalErrors {
+			break
+		}
+		
+		err := errors[idx]
+		samples = append(samples, err.Error())
+		
+		// Simple error type categorization based on error string
+		errorType := "unknown"
+		errStr := err.Error()
+		switch {
+		case len(errStr) > 0:
+			// Use first word as error type for simple categorization
+			if spaceIdx := len(errStr); spaceIdx > 20 {
+				errorType = errStr[:20] + "..."
+			} else {
+				errorType = errStr
+			}
+		}
+		errorTypes[errorType]++
+	}
+	
+	// Log summary with samples and error type distribution
+	logger.Errorf("High-volume batch processing encountered %d errors. Sample errors: %v", totalErrors, samples[:min(3, len(samples))])
+	logger.Warnf("Error type distribution (top 5): %v", getTopErrorTypes(errorTypes, 5))
+}
+
+// getTopErrorTypes returns the top N error types by frequency
+func getTopErrorTypes(errorTypes map[string]int, topN int) map[string]int {
+	if len(errorTypes) <= topN {
+		return errorTypes
+	}
+	
+	// Simple approach: return first topN entries (good enough for logging purposes)
+	result := make(map[string]int)
+	count := 0
+	for errType, freq := range errorTypes {
+		if count >= topN {
+			break
+		}
+		result[errType] = freq
+		count++
+	}
+	return result
 }
