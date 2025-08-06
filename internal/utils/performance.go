@@ -381,7 +381,7 @@ If this occurs frequently, investigate system clock stability.`, -elapsed)
 			
 			// Additional safety check to ensure tokens are valid
 			if trl.tokens < 0 {
-				trl.logger.Errorf("TokenBucketRateLimiter: tokens became negative (%d) after refill, resetting to 0", trl.tokens)
+				trl.logFunc("error", "TokenBucketRateLimiter: tokens became negative (%d) after refill, resetting to 0", trl.tokens)
 				trl.tokens = 0
 			}
 		}
@@ -393,7 +393,7 @@ If this occurs frequently, investigate system clock stability.`, -elapsed)
 		trl.tokens--
 		// Final validation to ensure tokens didn't go negative
 		if trl.tokens < 0 {
-			trl.logger.Errorf("TokenBucketRateLimiter: tokens became negative (%d) after decrement, resetting to 0", trl.tokens)
+			trl.logFunc("error", "TokenBucketRateLimiter: tokens became negative (%d) after decrement, resetting to 0", trl.tokens)
 			trl.tokens = 0
 			return false
 		}
