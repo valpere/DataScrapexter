@@ -68,7 +68,7 @@ func initRegexPatterns() {
 		attributeSelectorComponent := `(?:\[[^\]]+\])*`
 		pseudoClassComponent := `(?:\:[a-zA-Z-]+(?:\([^)]*\))?)*`
 		pseudoElementComponent := `(?:\:\:[a-zA-Z-]+)*`
-		
+
 		compoundSelectorPattern = regexp.MustCompile(
 			`^` +
 				elementSelectorComponent +
@@ -77,7 +77,7 @@ func initRegexPatterns() {
 				attributeSelectorComponent +
 				pseudoClassComponent +
 				pseudoElementComponent +
-			`$`)
+				`$`)
 
 		// Security validation patterns
 		javascriptProtocolPattern = regexp.MustCompile(`javascript:`)
@@ -92,7 +92,7 @@ func initRegexPatterns() {
 		fieldNameSanitizePattern = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 
 		// Numeric validation pattern
-		numericPattern = regexp.MustCompile(`^-?\d*\.?\d+$`)
+		numericPattern = regexp.MustCompile(`^[-+]?\d+(\.\d+)?$`)
 	})
 }
 
@@ -536,9 +536,10 @@ func isValidCompoundSelector(selector string) bool {
 
 // ValidateStruct validates a struct using field tags and optional custom validators
 // Supports comprehensive struct tag validation with rules like:
-//   `validate:"required,min=3,max=50,email"`
-//   `validate:"required,url"`
-//   `validate:"numeric,min=0,max=100"`
+//
+//	`validate:"required,min=3,max=50,email"`
+//	`validate:"required,url"`
+//	`validate:"numeric,min=0,max=100"`
 func ValidateStruct(v interface{}, validators map[string]Validator) *ValidationResult {
 	result := &ValidationResult{Valid: true}
 
@@ -567,7 +568,7 @@ func ValidateStruct(v interface{}, validators map[string]Validator) *ValidationR
 		field := typ.Field(i)
 		fieldName := field.Name
 		fieldValue := val.Field(i)
-		
+
 		// Skip unexported fields
 		if !fieldValue.CanInterface() {
 			continue
@@ -626,17 +627,17 @@ func ValidateStruct(v interface{}, validators map[string]Validator) *ValidationR
 // validateFieldByTags validates a field using struct tag rules
 func validateFieldByTags(fieldName string, fieldValue reflect.Value, tag string) []ValidationError {
 	var errors []ValidationError
-	
+
 	// Parse validation rules from tag
 	rules := parseValidationTag(tag)
-	
+
 	for _, rule := range rules {
 		err := applyValidationRule(fieldName, fieldValue, rule)
 		if err != nil {
 			errors = append(errors, *err)
 		}
 	}
-	
+
 	return errors
 }
 
@@ -650,11 +651,11 @@ type ValidationRule struct {
 // Example: "required,min=3,max=50,email" -> [{"required", ""}, {"min", "3"}, {"max", "50"}, {"email", ""}]
 func parseValidationTag(tag string) []ValidationRule {
 	var rules []ValidationRule
-	
+
 	if tag == "" {
 		return rules
 	}
-	
+
 	// Split by comma and trim spaces
 	parts := strings.Split(tag, ",")
 	for _, part := range parts {
@@ -662,7 +663,7 @@ func parseValidationTag(tag string) []ValidationRule {
 		if part == "" {
 			continue
 		}
-		
+
 		// Check if rule has parameter (e.g., "min=3")
 		if equalPos := strings.Index(part, "="); equalPos != -1 {
 			rules = append(rules, ValidationRule{
@@ -676,7 +677,7 @@ func parseValidationTag(tag string) []ValidationRule {
 			})
 		}
 	}
-	
+
 	return rules
 }
 
@@ -684,7 +685,7 @@ func parseValidationTag(tag string) []ValidationRule {
 func applyValidationRule(fieldName string, fieldValue reflect.Value, rule ValidationRule) *ValidationError {
 	// Get the actual value to validate
 	value := fieldValue.Interface()
-	
+
 	switch rule.Name {
 	case "required":
 		if isEmpty(fieldValue) {
@@ -695,7 +696,7 @@ func applyValidationRule(fieldName string, fieldValue reflect.Value, rule Valida
 				Value:   fmt.Sprintf("%v", value),
 			}
 		}
-		
+
 	case "email":
 		if str, ok := value.(string); ok && str != "" {
 			if !IsValidEmail(str) {
@@ -707,7 +708,7 @@ func applyValidationRule(fieldName string, fieldValue reflect.Value, rule Valida
 				}
 			}
 		}
-		
+
 	case "url":
 		if str, ok := value.(string); ok && str != "" {
 			if !IsValidURL(str) {
@@ -719,7 +720,7 @@ func applyValidationRule(fieldName string, fieldValue reflect.Value, rule Valida
 				}
 			}
 		}
-		
+
 	case "numeric":
 		if !isNumeric(fieldValue) {
 			return &ValidationError{
@@ -729,7 +730,7 @@ func applyValidationRule(fieldName string, fieldValue reflect.Value, rule Valida
 				Value:   fmt.Sprintf("%v", value),
 			}
 		}
-		
+
 	case "min":
 		if rule.Parameter != "" {
 			err := validateMinValue(fieldName, fieldValue, rule.Parameter)
@@ -737,7 +738,7 @@ func applyValidationRule(fieldName string, fieldValue reflect.Value, rule Valida
 				return err
 			}
 		}
-		
+
 	case "max":
 		if rule.Parameter != "" {
 			err := validateMaxValue(fieldName, fieldValue, rule.Parameter)
@@ -745,7 +746,7 @@ func applyValidationRule(fieldName string, fieldValue reflect.Value, rule Valida
 				return err
 			}
 		}
-		
+
 	case "len":
 		if rule.Parameter != "" {
 			err := validateExactLength(fieldName, fieldValue, rule.Parameter)
@@ -753,7 +754,7 @@ func applyValidationRule(fieldName string, fieldValue reflect.Value, rule Valida
 				return err
 			}
 		}
-		
+
 	case "alpha":
 		if str, ok := value.(string); ok && str != "" {
 			if !IsAlpha(str) {
@@ -765,7 +766,7 @@ func applyValidationRule(fieldName string, fieldValue reflect.Value, rule Valida
 				}
 			}
 		}
-		
+
 	case "alphanumeric":
 		if str, ok := value.(string); ok && str != "" {
 			if !IsAlphaNumeric(str) {
@@ -778,7 +779,7 @@ func applyValidationRule(fieldName string, fieldValue reflect.Value, rule Valida
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -902,7 +903,6 @@ func IsAlphaNumeric(str string) bool {
 	return alphaNumericRegex.MatchString(str)
 }
 
-
 // IsValidFieldType checks if a field type is valid
 func IsValidFieldType(fieldType string) bool {
 	validTypes := map[string]bool{
@@ -967,7 +967,7 @@ func ValidateConfigIntegrity(config interface{}) *ValidationResult {
 
 	// Use reflection to perform generic validation based on the config type
 	v := reflect.ValueOf(config)
-	
+
 	// Handle pointer types
 	if v.Kind() == reflect.Ptr {
 		if v.IsNil() {
@@ -1009,16 +1009,16 @@ func ValidateConfigIntegrity(config interface{}) *ValidationResult {
 // validateStructIntegrity performs detailed struct validation
 func validateStructIntegrity(v reflect.Value, result *ValidationResult) *ValidationResult {
 	structType := v.Type()
-	
+
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
 		fieldType := structType.Field(i)
-		
+
 		// Skip unexported fields
 		if !field.CanInterface() {
 			continue
 		}
-		
+
 		// Check for required fields that are empty
 		if tag := fieldType.Tag.Get("validate"); tag != "" {
 			if strings.Contains(tag, "required") {
@@ -1031,7 +1031,7 @@ func validateStructIntegrity(v reflect.Value, result *ValidationResult) *Validat
 				}
 			}
 		}
-		
+
 		// Recursively validate nested structs
 		if field.Kind() == reflect.Struct {
 			result = validateStructIntegrity(field, result)
@@ -1041,7 +1041,7 @@ func validateStructIntegrity(v reflect.Value, result *ValidationResult) *Validat
 			}
 		}
 	}
-	
+
 	return result
 }
 
@@ -1067,9 +1067,9 @@ func isEmptyValue(v reflect.Value) bool {
 }
 
 // countCharsOptimized counts characters in a string with fast path for ASCII-only strings.
-// 
+//
 // TODO: PERFORMANCE BENCHMARKING NEEDED
-// The current manual byte-by-byte scan may be slower than utf8.RuneCountInString 
+// The current manual byte-by-byte scan may be slower than utf8.RuneCountInString
 // for many real-world strings. Consider benchmarking this optimization against:
 // 1. utf8.RuneCountInString(s) directly (standard library is highly optimized)
 // 2. strings.ContainsAny(s, "\u0080-\uffff") for non-ASCII detection
@@ -1077,7 +1077,7 @@ func isEmptyValue(v reflect.Value) bool {
 //
 // Benchmark scenarios should include:
 // - Pure ASCII strings (current fast path should win)
-// - Mixed ASCII/Unicode strings (may be slower due to double processing)  
+// - Mixed ASCII/Unicode strings (may be slower due to double processing)
 // - Pure Unicode strings (should be similar to utf8.RuneCountInString)
 // - Very long strings (cache effects matter)
 // - Very short strings (overhead of optimization may not be worth it)
@@ -1095,7 +1095,7 @@ func countCharsOptimized(s string) int {
 		// All characters are ASCII: byte length equals character count
 		return len(s)
 	}
-	
+
 	// Invalid UTF-8: fall back to accurate UTF-8 rune counting for best effort
 	return utf8.RuneCountInString(s)
 }

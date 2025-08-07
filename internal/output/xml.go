@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"strings"
@@ -420,8 +421,12 @@ func sanitizeXMLName(name string) string {
 // evictLRUItem removes the least recently used item from the cache
 // Assumes the caller already holds a write lock on xmlNameMutex
 func evictLRUItem() {
+	if len(xmlNameCache) == 0 {
+		return // No items to evict
+	}
+
 	var oldestKey string
-	var oldestTime int64 = time.Now().UnixNano()
+	var oldestTime int64 = math.MaxInt64
 
 	// Find the least recently used item
 	for key, item := range xmlNameCache {

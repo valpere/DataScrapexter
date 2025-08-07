@@ -811,14 +811,21 @@ func (rd *RecordDeduplicator) evictOldestHashes() {
 	// Simple eviction: remove random entries when over limit
 	// In production, this should use LRU or similar strategy
 	toRemove := len(rd.seenHashes) - rd.CacheSize
-	count := 0
 	
+	// Collect keys to delete first to avoid iteration during modification
+	var keysToDelete []string
+	count := 0
 	for hash := range rd.seenHashes {
 		if count >= toRemove {
 			break
 		}
-		delete(rd.seenHashes, hash)
+		keysToDelete = append(keysToDelete, hash)
 		count++
+	}
+	
+	// Delete the collected keys in a separate loop
+	for _, hash := range keysToDelete {
+		delete(rd.seenHashes, hash)
 	}
 }
 

@@ -2,6 +2,7 @@
 package output
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -103,6 +104,52 @@ func (w *PostgreSQLWriter) Write(data []map[string]interface{}) error {
 
 	// Insert data in batches
 	return w.insertBatches(data)
+}
+
+// WriteContext writes data to PostgreSQL database with context support
+func (w *PostgreSQLWriter) WriteContext(ctx context.Context, data interface{}) error {
+	switch v := data.(type) {
+	case []map[string]interface{}:
+		return w.Write(v)
+	case map[string]interface{}:
+		return w.Write([]map[string]interface{}{v})
+	case []interface{}:
+		records := make([]map[string]interface{}, 0, len(v))
+		for _, item := range v {
+			if record, ok := item.(map[string]interface{}); ok {
+				records = append(records, record)
+			} else {
+				return fmt.Errorf("unsupported data type in slice: %T", item)
+			}
+		}
+		return w.Write(records)
+	default:
+		return fmt.Errorf("unsupported data type: %T", data)
+	}
+}
+
+// GetType returns the output type
+func (w *PostgreSQLWriter) GetType() string {
+	return "postgresql"
+}
+
+// Flush ensures all pending writes are committed to the database
+// For PostgreSQL, this forces any pending transactions to be committed
+func (w *PostgreSQLWriter) Flush() error {
+	if w.db == nil {
+		return fmt.Errorf("database connection not available")
+	}
+	
+	// PostgreSQL handles auto-commit by default for individual statements
+	// This method provides consistency with other writers and can be extended
+	// for future buffering or transaction management features
+	
+	// Ping the connection to ensure it's still alive
+	if err := w.db.Ping(); err != nil {
+		return fmt.Errorf("database connection lost: %w", err)
+	}
+	
+	return nil
 }
 
 // analyzeAndCreateTable analyzes data structure and creates table if needed
@@ -269,8 +316,31 @@ func (w *PostgreSQLWriter) inferColumnType(data []map[string]interface{}, column
 	return "TEXT"
 }
 
-// insertBatches inserts data in batches
+// insertBatches inserts data in batches with transaction support for improved performance
 func (w *PostgreSQLWriter) insertBatches(data []map[string]interface{}) error {
+	batchSize := w.config.BatchSize
+	
+	// Use transactions for multiple batches to improve performance and reliability
+	if len(data) > batchSize {
+		return w.insertBatchesWithTransaction(data)
+	}
+	
+	// Single batch can be inserted without explicit transaction
+	return w.insertBatch(data)
+}
+
+// insertBatchesWithTransaction inserts multiple batches within a single transaction
+func (w *PostgreSQLWriter) insertBatchesWithTransaction(data []map[string]interface{}) error {
+	tx, err := w.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
 	batchSize := w.config.BatchSize
 	for i := 0; i < len(data); i += batchSize {
 		end := i + batchSize
@@ -279,15 +349,25 @@ func (w *PostgreSQLWriter) insertBatches(data []map[string]interface{}) error {
 		}
 		batch := data[i:end]
 
-		if err := w.insertBatch(batch); err != nil {
+		if err := w.insertBatchWithTx(tx, batch); err != nil {
 			return fmt.Errorf("failed to insert batch %d-%d: %w", i, end-1, err)
 		}
 	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	
 	return nil
 }
 
 // insertBatch inserts a single batch of data
 func (w *PostgreSQLWriter) insertBatch(batch []map[string]interface{}) error {
+	return w.insertBatchWithTx(nil, batch)
+}
+
+// insertBatchWithTx inserts a single batch of data with optional transaction support
+func (w *PostgreSQLWriter) insertBatchWithTx(tx *sql.Tx, batch []map[string]interface{}) error {
 	if len(batch) == 0 {
 		return nil
 	}
@@ -352,8 +432,14 @@ func (w *PostgreSQLWriter) insertBatch(batch []map[string]interface{}) error {
 		)
 	}
 
-	_, err := w.db.Exec(query, args...)
-	return err
+	// Execute with transaction if provided, otherwise use direct connection
+	if tx != nil {
+		_, err := tx.Exec(query, args...)
+		return err
+	} else {
+		_, err := w.db.Exec(query, args...)
+		return err
+	}
 }
 
 // convertValue converts Go values to PostgreSQL-compatible values

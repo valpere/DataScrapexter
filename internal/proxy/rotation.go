@@ -8,6 +8,7 @@ import (
 	mathrand "math/rand"
 	"net"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -24,9 +25,16 @@ func init() {
 	seedBytes := make([]byte, 8)
 	_, err := rand.Read(seedBytes)
 	if err != nil {
+		// Check if we're in security-sensitive mode
+		if os.Getenv("DATASCRAPEXTER_SECURITY_STRICT") == "true" || os.Getenv("DATASCRAPEXTER_FAIL_ON_WEAK_RANDOM") == "true" {
+			// SECURITY: Fail fast in security-sensitive environments
+			rotationLogger.Error(fmt.Sprintf("FATAL: Cryptographically secure randomization failed in strict security mode: %v", err))
+			panic(fmt.Sprintf("SECURITY REQUIREMENT VIOLATION: crypto/rand unavailable in strict mode - proxy rotation requires cryptographically secure randomization: %v", err))
+		}
+		
 		// SECURITY: Log critical warning about reduced security
 		rotationLogger.Error(fmt.Sprintf("CRITICAL SECURITY WARNING: Cryptographically secure randomization failed, using enhanced time-based seeding with reduced security: %v", err))
-		rotationLogger.Warn("Proxy rotation patterns may be predictable - consider fixing the crypto/rand issue for security-sensitive operations")
+		rotationLogger.Warn("Proxy rotation patterns may be predictable - consider fixing the crypto/rand issue or set DATASCRAPEXTER_SECURITY_STRICT=true for fail-fast behavior")
 		
 		// Enhanced time-based seeding with multiple entropy sources to improve unpredictability
 		now := time.Now()
