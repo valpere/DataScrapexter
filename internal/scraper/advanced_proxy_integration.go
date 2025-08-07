@@ -781,12 +781,7 @@ func (e *Engine) extractData(doc interface{}, url string) (*Result, error) {
 	// 
 	// return result, nil
 	
-	// Return a proper failure result to avoid misleading behavior
-	// This makes it clear that the method is not implemented and prevents false positives
-	return &Result{
-		Data:      make(map[string]interface{}),
-		Success:   false,  // Changed to false to reflect that no actual extraction occurred
-		Timestamp: time.Now(),
-		Errors:    []string{"STUB: data extraction not implemented - placeholder method requires proper field-based extraction logic"},
-	}, fmt.Errorf("data extraction not implemented - this is a placeholder method that needs proper implementation")
+	// Return an error to indicate unimplemented functionality
+	// This prevents logical inconsistency where the method appears to succeed but doesn't extract data
+	return nil, fmt.Errorf("data extraction not implemented - this method is a placeholder that requires proper implementation with field-based extraction logic")
 }

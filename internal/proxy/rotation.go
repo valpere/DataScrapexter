@@ -23,7 +23,10 @@ func init() {
 	seedBytes := make([]byte, 8)
 	_, err := rand.Read(seedBytes)
 	if err != nil {
-		// Fallback to time-based seed if crypto/rand fails
+		// Log security-relevant fallback - this could indicate system issues
+		// Note: We can't use the logger here since it may not be initialized yet
+		// This will be logged by the system's default logger
+		fmt.Printf("WARNING: Cryptographically secure randomization failed for proxy rotation, falling back to time-based seed. This could affect security-sensitive proxy selection. Error: %v\n", err)
 		seed = time.Now().UnixNano()
 	} else {
 		// Convert bytes to int64 for seeding
@@ -149,7 +152,8 @@ type LoadBalancingConfig struct {
 	CircuitBreakerTimeout time.Duration `yaml:"circuit_breaker_timeout" json:"circuit_breaker_timeout"`
 }
 
-// MLPredictionConfig defines machine learning prediction parameters
+// MLPredictionConfig defines performance-based prediction parameters
+// Note: Currently implements heuristic selection rather than machine learning
 type MLPredictionConfig struct {
 	Enabled                bool          `yaml:"enabled" json:"enabled"`
 	ModelPath              string        `yaml:"model_path,omitempty" json:"model_path,omitempty"`
@@ -220,10 +224,12 @@ type GeographicResolver struct {
 	resolver func(string) (*GeographicLocation, error)
 }
 
-// MLPredictor implements machine learning for proxy selection
+// MLPredictor implements performance-based heuristic proxy selection
+// Note: Despite the name, this currently uses performance metrics rather than machine learning
+// TODO: Replace with actual ML implementation or rename to PerformanceBasedSelector
 type MLPredictor struct {
 	enabled    bool
-	model      interface{} // Placeholder for ML model
+	model      interface{} // Placeholder for ML model - currently unused
 	features   []string
 	history    []PredictionDataPoint
 	historyMu  sync.RWMutex
@@ -528,7 +534,8 @@ func (apm *AdvancedProxyManager) getCostOptimizedProxy() (*AdvancedProxyInstance
 	return candidates[0], nil
 }
 
-// getMLPredictiveProxy uses machine learning to select optimal proxy
+// getMLPredictiveProxy uses performance-based heuristics to select optimal proxy
+// Note: Despite the name, this uses performance metrics rather than machine learning
 func (apm *AdvancedProxyManager) getMLPredictiveProxy(targetURL string) (*AdvancedProxyInstance, error) {
 	if !apm.mlPredictor.enabled {
 		// Fall back to performance-based selection
@@ -892,33 +899,43 @@ func (apm *AdvancedProxyManager) ReportAdvancedFailure(proxy *AdvancedProxyInsta
 
 // Helper methods for metric updates
 func (apm *AdvancedProxyManager) updateSuccessRate(currentRate float64, success bool) float64 {
-	// Simple exponential moving average
+	// Exponential moving average: new_value = alpha * new_data + (1 - alpha) * old_value
+	// alpha = 0.1 means 10% weight to new data, 90% weight to historical data
 	alpha := 0.1
+	var newDataPoint float64
 	if success {
-		return currentRate*alpha + 100*(1-alpha)
+		newDataPoint = 100.0 // 100% success for this data point
+	} else {
+		newDataPoint = 0.0 // 0% success for this data point
 	}
-	return currentRate*alpha + 0*(1-alpha)
+	return alpha*newDataPoint + (1-alpha)*currentRate
 }
 
 func (apm *AdvancedProxyManager) updateAverageLatency(currentLatency, newLatency time.Duration) time.Duration {
-	// Simple exponential moving average
+	// Exponential moving average: new_value = alpha * new_data + (1 - alpha) * old_value
+	// alpha = 0.1 means 10% weight to new data, 90% weight to historical data
 	alpha := 0.1
-	return time.Duration(float64(currentLatency)*alpha + float64(newLatency)*(1-alpha))
+	return time.Duration(alpha*float64(newLatency) + (1-alpha)*float64(currentLatency))
 }
 
 func (apm *AdvancedProxyManager) updateDataQuality(currentQuality, newQuality float64) float64 {
-	// Simple exponential moving average
+	// Exponential moving average: new_value = alpha * new_data + (1 - alpha) * old_value
+	// alpha = 0.1 means 10% weight to new data, 90% weight to historical data
 	alpha := 0.1
-	return currentQuality*alpha + newQuality*(1-alpha)
+	return alpha*newQuality + (1-alpha)*currentQuality
 }
 
 func (apm *AdvancedProxyManager) updateErrorRate(currentRate float64, isError bool) float64 {
-	// Simple exponential moving average
+	// Exponential moving average: new_value = alpha * new_data + (1 - alpha) * old_value
+	// alpha = 0.1 means 10% weight to new data, 90% weight to historical data
 	alpha := 0.1
+	var newDataPoint float64
 	if isError {
-		return currentRate*alpha + 100*(1-alpha)
+		newDataPoint = 100.0 // 100% error for this data point
+	} else {
+		newDataPoint = 0.0 // 0% error for this data point
 	}
-	return currentRate*alpha + 0*(1-alpha)
+	return alpha*newDataPoint + (1-alpha)*currentRate
 }
 
 // Circuit Breaker implementation
@@ -1020,28 +1037,22 @@ func (gr *GeographicResolver) ResolveLocation(urlStr string) (*GeographicLocatio
 	}
 	gr.cacheMu.RUnlock()
 	
-	// Simple IP-based geolocation (placeholder)
-	ips, err := net.LookupIP(hostname)
-	if err != nil {
-		return nil, err
-	}
+	// Basic geolocation implementation using hostname patterns and public IP ranges
+	// For production use, consider integrating MaxMind GeoIP or similar service
+	location := gr.resolveLocationBasic(hostname)
 	
-	// For demo purposes, return a default location
-	// In real implementation, you'd use a geolocation service
-	location := &GeographicLocation{
-		Country:   "Unknown",
-		Continent: "Unknown",
-		TimeZone:  "UTC",
-	}
-	
-	// Use IP to determine basic location info
-	if len(ips) > 0 {
-		// Placeholder logic - in reality you'd use MaxMind GeoIP or similar
-		ip := ips[0].String()
-		if strings.HasPrefix(ip, "192.168.") || strings.HasPrefix(ip, "10.") {
-			location.Country = "Local"
-		} else {
-			location.Country = "Global" // Default for unknown IPs
+	// If hostname-based detection fails, try IP-based detection
+	if location.Country == "Unknown" {
+		ips, err := net.LookupIP(hostname)
+		if err != nil {
+			rotationLogger.Debug(fmt.Sprintf("Failed to resolve IP for %s: %v", hostname, err))
+		} else if len(ips) > 0 {
+			for _, ip := range ips {
+				if ipLocation := gr.resolveIPLocation(ip); ipLocation.Country != "Unknown" {
+					location = ipLocation
+					break
+				}
+			}
 		}
 	}
 	
@@ -1050,6 +1061,101 @@ func (gr *GeographicResolver) ResolveLocation(urlStr string) (*GeographicLocatio
 	gr.cacheMu.Unlock()
 	
 	return location, nil
+}
+
+// resolveLocationBasic performs basic hostname-based geolocation
+func (gr *GeographicResolver) resolveLocationBasic(hostname string) *GeographicLocation {
+	// Default unknown location
+	location := &GeographicLocation{
+		Country:   "Unknown",
+		Continent: "Unknown",  
+		TimeZone:  "UTC",
+	}
+	
+	// Extract domain patterns for common geographical indicators
+	hostname = strings.ToLower(hostname)
+	
+	// Check for country-specific TLDs and patterns
+	if strings.HasSuffix(hostname, ".uk") || strings.Contains(hostname, ".co.uk") {
+		location.Country = "United Kingdom"
+		location.Continent = "Europe"
+		location.TimeZone = "Europe/London"
+	} else if strings.HasSuffix(hostname, ".de") || strings.Contains(hostname, "germany") {
+		location.Country = "Germany" 
+		location.Continent = "Europe"
+		location.TimeZone = "Europe/Berlin"
+	} else if strings.HasSuffix(hostname, ".fr") || strings.Contains(hostname, "france") {
+		location.Country = "France"
+		location.Continent = "Europe" 
+		location.TimeZone = "Europe/Paris"
+	} else if strings.HasSuffix(hostname, ".jp") || strings.Contains(hostname, "japan") {
+		location.Country = "Japan"
+		location.Continent = "Asia"
+		location.TimeZone = "Asia/Tokyo"
+	} else if strings.HasSuffix(hostname, ".cn") || strings.Contains(hostname, "china") {
+		location.Country = "China"
+		location.Continent = "Asia"
+		location.TimeZone = "Asia/Shanghai"
+	} else if strings.HasSuffix(hostname, ".au") || strings.Contains(hostname, "australia") {
+		location.Country = "Australia"
+		location.Continent = "Oceania"
+		location.TimeZone = "Australia/Sydney"
+	} else if strings.HasSuffix(hostname, ".ca") || strings.Contains(hostname, "canada") {
+		location.Country = "Canada"
+		location.Continent = "North America"
+		location.TimeZone = "America/Toronto"
+	} else if strings.HasSuffix(hostname, ".br") || strings.Contains(hostname, "brazil") {
+		location.Country = "Brazil"
+		location.Continent = "South America"
+		location.TimeZone = "America/Sao_Paulo"
+	} else if strings.HasSuffix(hostname, ".com") || strings.HasSuffix(hostname, ".net") || strings.HasSuffix(hostname, ".org") {
+		// For generic TLDs, assume US if no other indicators
+		location.Country = "United States"
+		location.Continent = "North America"
+		location.TimeZone = "America/New_York"
+	}
+	
+	return location
+}
+
+// resolveIPLocation performs basic IP-based geolocation using public IP ranges
+func (gr *GeographicResolver) resolveIPLocation(ip net.IP) *GeographicLocation {
+	location := &GeographicLocation{
+		Country:   "Unknown",
+		Continent: "Unknown",
+		TimeZone:  "UTC",
+	}
+	
+	// Skip private/local IPs
+	if ip.IsPrivate() || ip.IsLoopback() {
+		location.Country = "Local"
+		location.Continent = "Local"
+		return location
+	}
+	
+	// Basic geographic IP range detection (simplified)
+	// In production, use MaxMind GeoLite2 or similar database
+	ipStr := ip.String()
+	
+	// Some known public IP ranges for basic detection
+	// This is a very limited implementation - real geolocation requires proper databases
+	if strings.HasPrefix(ipStr, "8.8.") || strings.HasPrefix(ipStr, "74.125.") {
+		// Google's public ranges (mostly US-based)
+		location.Country = "United States"
+		location.Continent = "North America"
+		location.TimeZone = "America/New_York"
+	} else if strings.HasPrefix(ipStr, "208.67.") {
+		// OpenDNS (US-based)
+		location.Country = "United States"
+		location.Continent = "North America"
+		location.TimeZone = "America/Los_Angeles"
+	} else {
+		// Default to global for unknown public IPs
+		location.Country = "Global"
+		location.Continent = "Unknown"
+	}
+	
+	return location
 }
 
 func NewMLPredictor(config *MLPredictionConfig) *MLPredictor {
@@ -1066,20 +1172,30 @@ func NewMLPredictor(config *MLPredictionConfig) *MLPredictor {
 
 func (mlp *MLPredictor) PredictBestProxy(candidates []*AdvancedProxyInstance, targetURL string) (*AdvancedProxyInstance, error) {
 	if !mlp.enabled || len(candidates) == 0 {
-		return nil, fmt.Errorf("ML predictor not enabled or no candidates")
+		return nil, fmt.Errorf("performance predictor not enabled or no candidates")
 	}
 	
-	// Placeholder ML implementation
-	// In a real implementation, you'd load a trained model and make predictions
+	// Performance-based selection using historical metrics
+	// This is a heuristic-based approach, not machine learning
+	// TODO: To implement actual ML prediction:
+	// 1. Collect training data (proxy performance features vs. success outcomes)
+	// 2. Train a regression or classification model (e.g., using scikit-learn via Python integration)
+	// 3. Load the trained model and use it for predictions
+	// 4. Features could include: latency history, success rate trends, geographic proximity,
+	//    time of day patterns, target domain characteristics, etc.
 	
-	// For now, just return the candidate with the best historical performance
+	// Current implementation: Select proxy with best performance score
 	best := candidates[0]
 	bestScore := 0.0
 	
 	for _, candidate := range candidates {
 		if candidate.Performance != nil {
-			score := candidate.Performance.SuccessRate + 
-				(100 - float64(candidate.Performance.AverageLatency.Milliseconds())/10)
+			// Weighted score: success rate (0-100) + latency penalty (lower is better)
+			latencyPenalty := float64(candidate.Performance.AverageLatency.Milliseconds()) / 10.0
+			if latencyPenalty > 100 {
+				latencyPenalty = 100 // Cap penalty at 100 points
+			}
+			score := candidate.Performance.SuccessRate + (100 - latencyPenalty)
 			if score > bestScore {
 				bestScore = score
 				best = candidate

@@ -7,6 +7,7 @@ require (
 	github.com/chromedp/chromedp v0.14.0
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/gorilla/mux v1.8.1
+	github.com/jung-kurt/gofpdf/v2 v2.17.3
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.30
 	github.com/prometheus/client_golang v1.23.0
