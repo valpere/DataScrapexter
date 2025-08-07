@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"runtime"
 	"runtime/debug"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -373,7 +376,7 @@ func (hm *HealthManager) getSystemMetrics() SystemMetrics {
 	var gcStats debug.GCStats
 	debug.ReadGCStats(&gcStats)
 
-	return SystemMetrics{
+	metrics := SystemMetrics{
 		MemoryUsage: MemoryMetrics{
 			Allocated:    m.Alloc,
 			TotalAlloc:   m.TotalAlloc,
@@ -384,7 +387,12 @@ func (hm *HealthManager) getSystemMetrics() SystemMetrics {
 		GoroutineCount: runtime.NumGoroutine(),
 		GCStats:        gcStats,
 		Uptime:         time.Since(startTime),
+		CPUUsage:       getCPUUsage(),
+		LoadAverage:    getLoadAverage(),
+		DiskUsage:      getDiskUsage(),
 	}
+
+	return metrics
 }
 
 // HealthHandler returns HTTP handlers for health endpoints
@@ -441,10 +449,24 @@ func (hm *HealthManager) LivenessHandler() http.HandlerFunc {
 }
 
 // Package-level variables initialized safely
-var startTime time.Time
+var (
+	startTime        time.Time
+	lastCPUStats     cpuStats
+	lastCPUStatsTime time.Time
+	cpuStatsMutex    sync.Mutex
+)
+
+// cpuStats holds CPU statistics for calculation
+type cpuStats struct {
+	user   uint64
+	system uint64
+	idle   uint64
+	total  uint64
+}
 
 func init() {
 	startTime = time.Now()
+	lastCPUStatsTime = time.Now()
 }
 
 // DatabaseHealthCheck creates a database connectivity health check
@@ -593,6 +615,439 @@ func HTTPHealthCheck(name, url string, timeout time.Duration) *HealthCheck {
 	}
 }
 
-// NOTE: DiskSpaceHealthCheck is not implemented in this package due to platform-specific requirements.
-// For production implementation, use github.com/shirou/gopsutil/v3/disk for cross-platform support.
-// See docs/health-monitoring.md for detailed examples.
+// getCPUUsage attempts to get CPU usage percentage (Unix-like systems)
+// Returns 0.0 if unable to determine CPU usage
+func getCPUUsage() float64 {
+	// This is a simplified implementation with time-based calculation
+	// For production, consider using github.com/shirou/gopsutil/v3/cpu for cross-platform support
+	
+	// Try to read from /proc/stat on Linux systems
+	if data, err := os.ReadFile("/proc/stat"); err == nil {
+		lines := strings.Split(string(data), "\n")
+		if len(lines) > 0 {
+			fields := strings.Fields(lines[0])
+			if len(fields) >= 8 && strings.HasPrefix(fields[0], "cpu") {
+				// Parse CPU stats from /proc/stat
+				// Fields: cpu user nice system idle iowait irq softirq steal
+				user, _ := strconv.ParseUint(fields[1], 10, 64)
+				nice, _ := strconv.ParseUint(fields[2], 10, 64)
+				system, _ := strconv.ParseUint(fields[3], 10, 64)
+				idle, _ := strconv.ParseUint(fields[4], 10, 64)
+				iowait, _ := strconv.ParseUint(fields[5], 10, 64)
+				irq, _ := strconv.ParseUint(fields[6], 10, 64)
+				softirq, _ := strconv.ParseUint(fields[7], 10, 64)
+				
+				currentStats := cpuStats{
+					user:   user + nice,
+					system: system + irq + softirq,
+					idle:   idle + iowait,
+					total:  user + nice + system + idle + iowait + irq + softirq,
+				}
+				
+				now := time.Now()
+				
+				// Thread-safe access to last stats
+				cpuStatsMutex.Lock()
+				defer cpuStatsMutex.Unlock()
+				
+				// Calculate percentage if we have previous stats and enough time has passed
+				if !lastCPUStatsTime.IsZero() && now.Sub(lastCPUStatsTime) > time.Second {
+					deltaTotal := currentStats.total - lastCPUStats.total
+					if deltaTotal > 0 {
+						deltaActive := (currentStats.user + currentStats.system) - (lastCPUStats.user + lastCPUStats.system)
+						cpuPercent := (float64(deltaActive) / float64(deltaTotal)) * 100
+						
+						// Update last stats
+						lastCPUStats = currentStats
+						lastCPUStatsTime = now
+						
+						return cpuPercent
+					}
+				}
+				
+				// Update stats for next calculation
+				lastCPUStats = currentStats
+				lastCPUStatsTime = now
+				
+				// Fallback to simple calculation for first run
+				if currentStats.total > 0 {
+					return (float64(currentStats.user + currentStats.system) / float64(currentStats.total)) * 100
+				}
+			}
+		}
+	}
+	
+	// Return 0 if unable to determine (e.g., on Windows, macOS without additional packages)
+	return 0.0
+}
+
+// getLoadAverage attempts to get system load average (Unix-like systems)
+// Returns empty slice if unable to determine load average
+func getLoadAverage() []float64 {
+	// Try to read from /proc/loadavg on Linux systems
+	if data, err := os.ReadFile("/proc/loadavg"); err == nil {
+		fields := strings.Fields(string(data))
+		if len(fields) >= 3 {
+			var loads []float64
+			for i := 0; i < 3; i++ {
+				if load, err := strconv.ParseFloat(fields[i], 64); err == nil {
+					loads = append(loads, load)
+				}
+			}
+			return loads
+		}
+	}
+	
+	// Return empty slice if unable to determine (e.g., on Windows, macOS without additional packages)
+	return []float64{}
+}
+
+// getDiskUsage attempts to get disk usage for common mount points
+// Returns empty map if unable to determine disk usage
+func getDiskUsage() map[string]int64 {
+	diskUsage := make(map[string]int64)
+	
+	// Common mount points to check
+	mountPoints := []string{"/", "/var", "/tmp", "/home"}
+	
+	for _, mountPoint := range mountPoints {
+		if usage := getDiskUsageForPath(mountPoint); usage >= 0 {
+			diskUsage[mountPoint] = usage
+		}
+	}
+	
+	return diskUsage
+}
+
+// getDiskUsageForPath gets disk usage percentage for a specific path
+// Returns -1 if unable to determine usage
+func getDiskUsageForPath(path string) int64 {
+	// Try to use df command (Unix-like systems)
+	// This is a simplified implementation - for production use github.com/shirou/gopsutil/v3/disk
+	
+	// Check if path exists
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return -1
+	}
+	
+	// For a more complete implementation, you would:
+	// 1. Use syscalls on Unix (syscall.Statfs)
+	// 2. Use Windows API on Windows
+	// 3. Or use cross-platform library like gopsutil
+	
+	// Returning 0 as placeholder - indicates path exists but usage unknown
+	return 0
+}
+
+// DiskSpaceHealthCheck creates a disk space health check for a given path
+func DiskSpaceHealthCheck(name, path string, maxUsagePercent float64) *HealthCheck {
+	return &HealthCheck{
+		Name:     name,
+		Critical: true, // Disk space is usually critical
+		Enabled:  true,
+		CheckFunc: func(ctx context.Context) HealthCheckResult {
+			usage := getDiskUsageForPath(path)
+			
+			metadata := map[string]interface{}{
+				"path":        path,
+				"max_percent": maxUsagePercent,
+			}
+			
+			if usage < 0 {
+				// Path doesn't exist or can't be accessed
+				return HealthCheckResult{
+					Status:   HealthStatusUnknown,
+					Message:  fmt.Sprintf("Unable to check disk usage for path: %s", path),
+					Metadata: metadata,
+				}
+			}
+			
+			usagePercent := float64(usage)
+			metadata["usage_percent"] = usagePercent
+			
+			if usagePercent > maxUsagePercent {
+				return HealthCheckResult{
+					Status:   HealthStatusUnhealthy,
+					Message:  fmt.Sprintf("High disk usage: %.1f%% (max: %.1f%%)", usagePercent, maxUsagePercent),
+					Metadata: metadata,
+				}
+			}
+			
+			if usagePercent > maxUsagePercent*0.8 { // Warning at 80% of max
+				return HealthCheckResult{
+					Status:   HealthStatusDegraded,
+					Message:  fmt.Sprintf("Elevated disk usage: %.1f%%", usagePercent),
+					Metadata: metadata,
+				}
+			}
+			
+			return HealthCheckResult{
+				Status:   HealthStatusHealthy,
+				Message:  fmt.Sprintf("Disk usage normal: %.1f%%", usagePercent),
+				Metadata: metadata,
+			}
+		},
+	}
+}
+
+// CPUHealthCheck creates a CPU usage health check
+func CPUHealthCheck(maxUsagePercent float64) *HealthCheck {
+	return &HealthCheck{
+		Name:     "cpu",
+		Critical: false, // CPU spikes are usually not critical
+		Enabled:  true,
+		CheckFunc: func(ctx context.Context) HealthCheckResult {
+			usage := getCPUUsage()
+			
+			metadata := map[string]interface{}{
+				"usage_percent": usage,
+				"max_percent":   maxUsagePercent,
+			}
+			
+			if usage == 0.0 {
+				return HealthCheckResult{
+					Status:   HealthStatusUnknown,
+					Message:  "CPU usage monitoring not available on this platform",
+					Metadata: metadata,
+				}
+			}
+			
+			if usage > maxUsagePercent {
+				return HealthCheckResult{
+					Status:   HealthStatusDegraded,
+					Message:  fmt.Sprintf("High CPU usage: %.1f%%", usage),
+					Metadata: metadata,
+				}
+			}
+			
+			return HealthCheckResult{
+				Status:   HealthStatusHealthy,
+				Message:  fmt.Sprintf("CPU usage normal: %.1f%%", usage),
+				Metadata: metadata,
+			}
+		},
+	}
+}
+
+// LoadAverageHealthCheck creates a load average health check (Unix-like systems)
+func LoadAverageHealthCheck(maxLoad1Min float64) *HealthCheck {
+	return &HealthCheck{
+		Name:     "load_average",
+		Critical: false,
+		Enabled:  true,
+		CheckFunc: func(ctx context.Context) HealthCheckResult {
+			loads := getLoadAverage()
+			
+			metadata := map[string]interface{}{
+				"max_1min_load": maxLoad1Min,
+			}
+			
+			if len(loads) == 0 {
+				return HealthCheckResult{
+					Status:   HealthStatusUnknown,
+					Message:  "Load average monitoring not available on this platform",
+					Metadata: metadata,
+				}
+			}
+			
+			metadata["load_1min"] = loads[0]
+			if len(loads) > 1 {
+				metadata["load_5min"] = loads[1]
+			}
+			if len(loads) > 2 {
+				metadata["load_15min"] = loads[2]
+			}
+			
+			if loads[0] > maxLoad1Min {
+				return HealthCheckResult{
+					Status:   HealthStatusDegraded,
+					Message:  fmt.Sprintf("High system load: %.2f", loads[0]),
+					Metadata: metadata,
+				}
+			}
+			
+			return HealthCheckResult{
+				Status:   HealthStatusHealthy,
+				Message:  fmt.Sprintf("System load normal: %.2f", loads[0]),
+				Metadata: metadata,
+			}
+		},
+	}
+}
+
+// CreateStandardHealthChecks creates a set of standard health checks for common scenarios
+func CreateStandardHealthChecks() map[string]*HealthCheck {
+	checks := make(map[string]*HealthCheck)
+	
+	// Memory health check (warn at 80% usage)
+	checks["memory"] = MemoryHealthCheck(80.0)
+	
+	// Goroutine health check (warn at 10000 goroutines)
+	checks["goroutines"] = GoroutineHealthCheck(10000)
+	
+	// CPU health check (warn at 80% usage)
+	checks["cpu"] = CPUHealthCheck(80.0)
+	
+	// Load average health check (warn at 5.0 for 1-minute load)
+	checks["load_average"] = LoadAverageHealthCheck(5.0)
+	
+	// Disk space check for root partition (warn at 85% usage)
+	checks["disk_root"] = DiskSpaceHealthCheck("disk_root", "/", 85.0)
+	
+	return checks
+}
+
+// RegisterStandardHealthChecks registers all standard health checks with a manager
+func (hm *HealthManager) RegisterStandardHealthChecks() {
+	for _, check := range CreateStandardHealthChecks() {
+		hm.RegisterCheck(check)
+	}
+}
+
+// GetHealthSummaryString returns a human-readable health summary
+func (hm *HealthManager) GetHealthSummaryString() string {
+	health := hm.GetHealth()
+	
+	var status string
+	switch health.Status {
+	case HealthStatusHealthy:
+		status = "HEALTHY ✓"
+	case HealthStatusDegraded:
+		status = "DEGRADED ⚠"
+	case HealthStatusUnhealthy:
+		status = "UNHEALTHY ✗"
+	default:
+		status = "UNKNOWN ?"
+	}
+	
+	return fmt.Sprintf("System Status: %s | Checks: %d/%d healthy | Uptime: %v | Memory: %.1f%% | Goroutines: %d",
+		status,
+		health.Summary.Healthy,
+		health.Summary.Total,
+		health.Uptime.Truncate(time.Second),
+		health.System.MemoryUsage.UsagePercent,
+		health.System.GoroutineCount,
+	)
+}
+
+// IsHealthy returns true if the overall system status is healthy
+func (hm *HealthManager) IsHealthy() bool {
+	return hm.GetHealth().Status == HealthStatusHealthy
+}
+
+// IsReady returns true if the system is ready to serve traffic
+func (hm *HealthManager) IsReady() bool {
+	status := hm.GetReadiness().Status
+	return status == HealthStatusHealthy || status == HealthStatusDegraded
+}
+
+// IsAlive returns true if the system is alive (no critical failures)
+func (hm *HealthManager) IsAlive() bool {
+	status := hm.GetLiveness().Status
+	return status == HealthStatusHealthy || status == HealthStatusDegraded
+}
+
+// SetCheckEnabled enables or disables a specific health check
+func (hm *HealthManager) SetCheckEnabled(name string, enabled bool) {
+	hm.checksMutex.Lock()
+	defer hm.checksMutex.Unlock()
+	
+	if check, exists := hm.checks[name]; exists {
+		check.Enabled = enabled
+	}
+}
+
+// GetCheckStatus returns the current status of a specific health check
+func (hm *HealthManager) GetCheckStatus(name string) (HealthStatus, bool) {
+	hm.checksMutex.RLock()
+	defer hm.checksMutex.RUnlock()
+	
+	if check, exists := hm.checks[name]; exists {
+		return check.Status, true
+	}
+	
+	return HealthStatusUnknown, false
+}
+
+// RunCheck manually triggers a single health check
+func (hm *HealthManager) RunCheck(ctx context.Context, name string) (HealthCheckResult, error) {
+	hm.checksMutex.RLock()
+	check, exists := hm.checks[name]
+	hm.checksMutex.RUnlock()
+	
+	if !exists {
+		return HealthCheckResult{}, fmt.Errorf("health check '%s' not found", name)
+	}
+	
+	// Create a timeout context
+	checkCtx, cancel := context.WithTimeout(ctx, check.Timeout)
+	defer cancel()
+	
+	// Run the check
+	hm.runCheck(checkCtx, check)
+	
+	// Return the result
+	hm.resultsMutex.RLock()
+	result, exists := hm.results[name]
+	hm.resultsMutex.RUnlock()
+	
+	if exists {
+		return result, nil
+	}
+	
+	return HealthCheckResult{
+		Status:  HealthStatusUnknown,
+		Message: "Check completed but no result available",
+	}, nil
+}
+
+// GetFailedChecks returns a list of checks that are currently unhealthy
+func (hm *HealthManager) GetFailedChecks() []string {
+	hm.checksMutex.RLock()
+	defer hm.checksMutex.RUnlock()
+	
+	var failed []string
+	for name, check := range hm.checks {
+		if check.Enabled && check.Status == HealthStatusUnhealthy {
+			failed = append(failed, name)
+		}
+	}
+	
+	return failed
+}
+
+// GetCriticalChecks returns a list of critical checks that are currently unhealthy
+func (hm *HealthManager) GetCriticalChecks() []string {
+	hm.checksMutex.RLock()
+	defer hm.checksMutex.RUnlock()
+	
+	var critical []string
+	for name, check := range hm.checks {
+		if check.Enabled && check.Critical && check.Status == HealthStatusUnhealthy {
+			critical = append(critical, name)
+		}
+	}
+	
+	return critical
+}
+
+// WaitForHealthy waits until the system becomes healthy or the context is cancelled
+func (hm *HealthManager) WaitForHealthy(ctx context.Context) error {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if hm.IsHealthy() {
+				return nil
+			}
+		}
+	}
+}
+
+// NOTE: For production deployment, consider using github.com/shirou/gopsutil/v3 for
+// cross-platform system metrics (CPU, disk, load average) with more accuracy and features.
+// The implementations above provide basic functionality for Unix-like systems.

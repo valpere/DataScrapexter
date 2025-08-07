@@ -39,6 +39,9 @@ var (
 	// Field name sanitization pattern
 	fieldNameSanitizePattern *regexp.Regexp
 
+	// Numeric validation pattern
+	numericPattern *regexp.Regexp
+
 	// Sync.Once for thread-safe initialization
 	regexInitOnce sync.Once
 )
@@ -87,6 +90,9 @@ func initRegexPatterns() {
 
 		// Field name sanitization pattern
 		fieldNameSanitizePattern = regexp.MustCompile(`[^a-zA-Z0-9_]`)
+
+		// Numeric validation pattern
+		numericPattern = regexp.MustCompile(`^-?\d*\.?\d+$`)
 	})
 }
 
@@ -810,9 +816,10 @@ func isNumeric(v reflect.Value) bool {
 		if str == "" {
 			return true // Empty string is considered valid for optional numeric fields
 		}
-		// Try parsing as float64 to cover both int and float
-		_, err := regexp.MatchString(`^-?\d*\.?\d+$`, str)
-		return err == nil
+		// Initialize regex patterns if not already done
+		initRegexPatterns()
+		// Use pre-compiled regex for better performance
+		return numericPattern.MatchString(str)
 	default:
 		return false
 	}

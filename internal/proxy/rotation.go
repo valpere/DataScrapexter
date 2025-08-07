@@ -8,7 +8,6 @@ import (
 	mathrand "math/rand"
 	"net"
 	"net/url"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -24,16 +23,16 @@ func init() {
 	seedBytes := make([]byte, 8)
 	_, err := rand.Read(seedBytes)
 	if err != nil {
-		// SECURITY: Fail fast when cryptographic randomness is unavailable
-		// Fallback to time-based seeding creates a security vulnerability in proxy selection
-		// This could allow attackers to predict proxy rotation patterns
-		fmt.Fprintf(os.Stderr, "CRITICAL: Cryptographically secure randomization failed for proxy rotation. This is required for security-sensitive proxy selection. Error: %v\n", err)
-		panic(fmt.Sprintf("crypto/rand unavailable: %v - proxy rotation requires secure randomization", err))
-	}
-	
-	// Convert cryptographically secure bytes to int64 for seeding
-	for i, b := range seedBytes {
-		seed |= int64(b) << (8 * i)
+		// SECURITY: Log error but gracefully degrade to time-based seeding
+		// This prevents DoS attacks via panic while maintaining functionality
+		rotationLogger.Error(fmt.Sprintf("Cryptographically secure randomization failed, falling back to time-based seeding: %v", err))
+		// Use time-based seeding as fallback
+		seed = time.Now().UnixNano()
+	} else {
+		// Convert cryptographically secure bytes to int64 for seeding
+		for i, b := range seedBytes {
+			seed |= int64(b) << (8 * i)
+		}
 	}
 	mathrand.Seed(seed)
 }
@@ -1160,30 +1159,10 @@ func (gr *GeographicResolver) resolveIPLocation(ip net.IP) *GeographicLocation {
 }
 
 // isPrivateIP checks if an IP address is in a private range
-// This provides compatibility and explicit private IP checking
+// Uses Go 1.24's built-in IsPrivate() method
 func isPrivateIP(ip net.IP) bool {
-	// Use built-in method if available (Go 1.17+)
-	if ip.IsPrivate() {
-		return true
-	}
-	
-	// Fallback implementation for comprehensive private IP detection
-	// (though not needed for Go 1.24, kept for documentation)
-	private := []net.IPNet{
-		{IP: net.IPv4(10, 0, 0, 0), Mask: net.CIDRMask(8, 32)},       // 10.0.0.0/8
-		{IP: net.IPv4(172, 16, 0, 0), Mask: net.CIDRMask(12, 32)},    // 172.16.0.0/12
-		{IP: net.IPv4(192, 168, 0, 0), Mask: net.CIDRMask(16, 32)},   // 192.168.0.0/16
-		{IP: net.IPv4(169, 254, 0, 0), Mask: net.CIDRMask(16, 32)},   // 169.254.0.0/16 (link-local)
-		{IP: net.IPv4(127, 0, 0, 0), Mask: net.CIDRMask(8, 32)},      // 127.0.0.0/8 (loopback)
-	}
-	
-	for _, privateCIDR := range private {
-		if privateCIDR.Contains(ip) {
-			return true
-		}
-	}
-	
-	return false
+	// Go 1.24+ has reliable IsPrivate() method
+	return ip.IsPrivate()
 }
 
 func NewMLPredictor(config *MLPredictionConfig) *MLPredictor {
