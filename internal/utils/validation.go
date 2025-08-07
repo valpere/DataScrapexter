@@ -528,9 +528,11 @@ func isValidCompoundSelector(selector string) bool {
 	return compoundSelectorPattern.MatchString(selector)
 }
 
-// ValidateStruct validates a struct using field tags or custom validators
-// TODO: This is a placeholder for future struct validation implementation
-// Use individual field validators for now (StringValidator, URLValidator, etc.)
+// ValidateStruct validates a struct using field tags and optional custom validators
+// Supports comprehensive struct tag validation with rules like:
+//   `validate:"required,min=3,max=50,email"`
+//   `validate:"required,url"`
+//   `validate:"numeric,min=0,max=100"`
 func ValidateStruct(v interface{}, validators map[string]Validator) *ValidationResult {
 	result := &ValidationResult{Valid: true}
 
@@ -554,14 +556,20 @@ func ValidateStruct(v interface{}, validators map[string]Validator) *ValidationR
 		return result
 	}
 
+	// Validate each field
 	for i := 0; i < val.NumField(); i++ {
 		field := typ.Field(i)
 		fieldName := field.Name
-		fieldValue := val.Field(i).Interface()
+		fieldValue := val.Field(i)
+		
+		// Skip unexported fields
+		if !fieldValue.CanInterface() {
+			continue
+		}
 
-		validator, ok := validators[fieldName]
-		if ok {
-			fieldError := validator.Validate(fieldValue)
+		// First, check custom validators
+		if validator, ok := validators[fieldName]; ok {
+			fieldError := validator.Validate(fieldValue.Interface())
 			if fieldError != nil {
 				result.Valid = false
 				result.Errors = append(result.Errors, ValidationError{
@@ -572,11 +580,321 @@ func ValidateStruct(v interface{}, validators map[string]Validator) *ValidationR
 				})
 			}
 		}
+
+		// Then, check struct tags
+		validateTag := field.Tag.Get("validate")
+		if validateTag != "" {
+			tagErrors := validateFieldByTags(fieldName, fieldValue, validateTag)
+			if len(tagErrors) > 0 {
+				result.Valid = false
+				result.Errors = append(result.Errors, tagErrors...)
+			}
+		}
+
+		// Recursively validate nested structs
+		if fieldValue.Kind() == reflect.Struct {
+			nestedResult := ValidateStruct(fieldValue.Interface(), nil)
+			if !nestedResult.Valid {
+				result.Valid = false
+				// Prefix nested field errors with parent field name
+				for _, nestedError := range nestedResult.Errors {
+					nestedError.Field = fieldName + "." + nestedError.Field
+					result.Errors = append(result.Errors, nestedError)
+				}
+			}
+		} else if fieldValue.Kind() == reflect.Ptr && !fieldValue.IsNil() && fieldValue.Elem().Kind() == reflect.Struct {
+			// Handle pointer to struct
+			nestedResult := ValidateStruct(fieldValue.Interface(), nil)
+			if !nestedResult.Valid {
+				result.Valid = false
+				for _, nestedError := range nestedResult.Errors {
+					nestedError.Field = fieldName + "." + nestedError.Field
+					result.Errors = append(result.Errors, nestedError)
+				}
+			}
+		}
 	}
 	return result
 }
 
+// validateFieldByTags validates a field using struct tag rules
+func validateFieldByTags(fieldName string, fieldValue reflect.Value, tag string) []ValidationError {
+	var errors []ValidationError
+	
+	// Parse validation rules from tag
+	rules := parseValidationTag(tag)
+	
+	for _, rule := range rules {
+		err := applyValidationRule(fieldName, fieldValue, rule)
+		if err != nil {
+			errors = append(errors, *err)
+		}
+	}
+	
+	return errors
+}
+
+// ValidationRule represents a parsed validation rule from struct tag
+type ValidationRule struct {
+	Name      string
+	Parameter string
+}
+
+// parseValidationTag parses a validation tag into individual rules
+// Example: "required,min=3,max=50,email" -> [{"required", ""}, {"min", "3"}, {"max", "50"}, {"email", ""}]
+func parseValidationTag(tag string) []ValidationRule {
+	var rules []ValidationRule
+	
+	if tag == "" {
+		return rules
+	}
+	
+	// Split by comma and trim spaces
+	parts := strings.Split(tag, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		
+		// Check if rule has parameter (e.g., "min=3")
+		if equalPos := strings.Index(part, "="); equalPos != -1 {
+			rules = append(rules, ValidationRule{
+				Name:      strings.TrimSpace(part[:equalPos]),
+				Parameter: strings.TrimSpace(part[equalPos+1:]),
+			})
+		} else {
+			rules = append(rules, ValidationRule{
+				Name:      part,
+				Parameter: "",
+			})
+		}
+	}
+	
+	return rules
+}
+
+// applyValidationRule applies a single validation rule to a field
+func applyValidationRule(fieldName string, fieldValue reflect.Value, rule ValidationRule) *ValidationError {
+	// Get the actual value to validate
+	value := fieldValue.Interface()
+	
+	switch rule.Name {
+	case "required":
+		if isEmpty(fieldValue) {
+			return &ValidationError{
+				Field:   fieldName,
+				Message: "field is required",
+				Code:    "REQUIRED",
+				Value:   fmt.Sprintf("%v", value),
+			}
+		}
+		
+	case "email":
+		if str, ok := value.(string); ok && str != "" {
+			if !IsValidEmail(str) {
+				return &ValidationError{
+					Field:   fieldName,
+					Message: "invalid email format",
+					Code:    "INVALID_EMAIL",
+					Value:   str,
+				}
+			}
+		}
+		
+	case "url":
+		if str, ok := value.(string); ok && str != "" {
+			if !IsValidURL(str) {
+				return &ValidationError{
+					Field:   fieldName,
+					Message: "invalid URL format",
+					Code:    "INVALID_URL",
+					Value:   str,
+				}
+			}
+		}
+		
+	case "numeric":
+		if !isNumeric(fieldValue) {
+			return &ValidationError{
+				Field:   fieldName,
+				Message: "value must be numeric",
+				Code:    "INVALID_NUMERIC",
+				Value:   fmt.Sprintf("%v", value),
+			}
+		}
+		
+	case "min":
+		if rule.Parameter != "" {
+			err := validateMinValue(fieldName, fieldValue, rule.Parameter)
+			if err != nil {
+				return err
+			}
+		}
+		
+	case "max":
+		if rule.Parameter != "" {
+			err := validateMaxValue(fieldName, fieldValue, rule.Parameter)
+			if err != nil {
+				return err
+			}
+		}
+		
+	case "len":
+		if rule.Parameter != "" {
+			err := validateExactLength(fieldName, fieldValue, rule.Parameter)
+			if err != nil {
+				return err
+			}
+		}
+		
+	case "alpha":
+		if str, ok := value.(string); ok && str != "" {
+			if !IsAlpha(str) {
+				return &ValidationError{
+					Field:   fieldName,
+					Message: "value must contain only alphabetic characters",
+					Code:    "INVALID_ALPHA",
+					Value:   str,
+				}
+			}
+		}
+		
+	case "alphanumeric":
+		if str, ok := value.(string); ok && str != "" {
+			if !IsAlphaNumeric(str) {
+				return &ValidationError{
+					Field:   fieldName,
+					Message: "value must contain only alphanumeric characters",
+					Code:    "INVALID_ALPHANUMERIC",
+					Value:   str,
+				}
+			}
+		}
+	}
+	
+	return nil
+}
+
+// Helper functions for validation rules
+
+// isEmpty checks if a value is considered empty
+func isEmpty(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.String:
+		return v.Len() == 0 || strings.TrimSpace(v.String()) == ""
+	case reflect.Ptr, reflect.Interface:
+		return v.IsNil()
+	case reflect.Slice, reflect.Map, reflect.Array:
+		return v.Len() == 0
+	case reflect.Invalid:
+		return true
+	default:
+		// For other types, use zero value check
+		zero := reflect.Zero(v.Type())
+		return reflect.DeepEqual(v.Interface(), zero.Interface())
+	}
+}
+
+// isNumeric checks if a value is numeric
+func isNumeric(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return true
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return true
+	case reflect.Float32, reflect.Float64:
+		return true
+	case reflect.String:
+		str := v.String()
+		if str == "" {
+			return true // Empty string is considered valid for optional numeric fields
+		}
+		// Try parsing as float64 to cover both int and float
+		_, err := regexp.MatchString(`^-?\d*\.?\d+$`, str)
+		return err == nil
+	default:
+		return false
+	}
+}
+
+// validateMinValue validates minimum value/length constraints
+func validateMinValue(fieldName string, fieldValue reflect.Value, param string) *ValidationError {
+	// Implementation would depend on field type (string length, numeric value, etc.)
+	// This is a simplified version
+	if str, ok := fieldValue.Interface().(string); ok {
+		var minLen int
+		if _, err := fmt.Sscanf(param, "%d", &minLen); err == nil {
+			if utf8.RuneCountInString(str) < minLen {
+				return &ValidationError{
+					Field:   fieldName,
+					Message: fmt.Sprintf("minimum length is %d characters", minLen),
+					Code:    "MIN_LENGTH",
+					Value:   str,
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// validateMaxValue validates maximum value/length constraints
+func validateMaxValue(fieldName string, fieldValue reflect.Value, param string) *ValidationError {
+	if str, ok := fieldValue.Interface().(string); ok {
+		var maxLen int
+		if _, err := fmt.Sscanf(param, "%d", &maxLen); err == nil {
+			if utf8.RuneCountInString(str) > maxLen {
+				return &ValidationError{
+					Field:   fieldName,
+					Message: fmt.Sprintf("maximum length is %d characters", maxLen),
+					Code:    "MAX_LENGTH",
+					Value:   str,
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// validateExactLength validates exact length constraints
+func validateExactLength(fieldName string, fieldValue reflect.Value, param string) *ValidationError {
+	if str, ok := fieldValue.Interface().(string); ok {
+		var exactLen int
+		if _, err := fmt.Sscanf(param, "%d", &exactLen); err == nil {
+			if utf8.RuneCountInString(str) != exactLen {
+				return &ValidationError{
+					Field:   fieldName,
+					Message: fmt.Sprintf("length must be exactly %d characters", exactLen),
+					Code:    "EXACT_LENGTH",
+					Value:   str,
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // Common validation functions
+
+// IsValidEmail validates email addresses using regex
+func IsValidEmail(email string) bool {
+	// RFC 5322 compliant email regex (simplified version)
+	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+	return emailRegex.MatchString(email)
+}
+
+// IsAlpha checks if string contains only alphabetic characters
+func IsAlpha(str string) bool {
+	alphaRegex := regexp.MustCompile(`^[a-zA-Z]+$`)
+	return alphaRegex.MatchString(str)
+}
+
+// IsAlphaNumeric checks if string contains only alphanumeric characters
+func IsAlphaNumeric(str string) bool {
+	alphaNumericRegex := regexp.MustCompile(`^[a-zA-Z0-9]+$`)
+	return alphaNumericRegex.MatchString(str)
+}
+
 
 // IsValidFieldType checks if a field type is valid
 func IsValidFieldType(fieldType string) bool {

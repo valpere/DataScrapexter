@@ -24,17 +24,16 @@ func init() {
 	seedBytes := make([]byte, 8)
 	_, err := rand.Read(seedBytes)
 	if err != nil {
-		// Log security-relevant fallback - this could indicate system issues
-		// Note: We can't use the logger here since it may not be initialized yet
-		// This will be logged by the system's default logger
-		// Use stderr for initialization warnings to avoid polluting stdout
-		fmt.Fprintf(os.Stderr, "WARNING: Cryptographically secure randomization failed for proxy rotation, falling back to time-based seed. This could affect security-sensitive proxy selection. Error: %v\n", err)
-		seed = time.Now().UnixNano()
-	} else {
-		// Convert bytes to int64 for seeding
-		for i, b := range seedBytes {
-			seed |= int64(b) << (8 * i)
-		}
+		// SECURITY: Fail fast when cryptographic randomness is unavailable
+		// Fallback to time-based seeding creates a security vulnerability in proxy selection
+		// This could allow attackers to predict proxy rotation patterns
+		fmt.Fprintf(os.Stderr, "CRITICAL: Cryptographically secure randomization failed for proxy rotation. This is required for security-sensitive proxy selection. Error: %v\n", err)
+		panic(fmt.Sprintf("crypto/rand unavailable: %v - proxy rotation requires secure randomization", err))
+	}
+	
+	// Convert cryptographically secure bytes to int64 for seeding
+	for i, b := range seedBytes {
+		seed |= int64(b) << (8 * i)
 	}
 	mathrand.Seed(seed)
 }
@@ -1128,8 +1127,8 @@ func (gr *GeographicResolver) resolveIPLocation(ip net.IP) *GeographicLocation {
 		TimeZone:  "UTC",
 	}
 	
-	// Skip private/local IPs
-	if ip.IsPrivate() || ip.IsLoopback() {
+	// Skip private/local IPs (IsPrivate() requires Go 1.17+, project uses Go 1.24)
+	if isPrivateIP(ip) || ip.IsLoopback() {
 		location.Country = "Local"
 		location.Continent = "Local"
 		return location
@@ -1158,6 +1157,33 @@ func (gr *GeographicResolver) resolveIPLocation(ip net.IP) *GeographicLocation {
 	}
 	
 	return location
+}
+
+// isPrivateIP checks if an IP address is in a private range
+// This provides compatibility and explicit private IP checking
+func isPrivateIP(ip net.IP) bool {
+	// Use built-in method if available (Go 1.17+)
+	if ip.IsPrivate() {
+		return true
+	}
+	
+	// Fallback implementation for comprehensive private IP detection
+	// (though not needed for Go 1.24, kept for documentation)
+	private := []net.IPNet{
+		{IP: net.IPv4(10, 0, 0, 0), Mask: net.CIDRMask(8, 32)},       // 10.0.0.0/8
+		{IP: net.IPv4(172, 16, 0, 0), Mask: net.CIDRMask(12, 32)},    // 172.16.0.0/12
+		{IP: net.IPv4(192, 168, 0, 0), Mask: net.CIDRMask(16, 32)},   // 192.168.0.0/16
+		{IP: net.IPv4(169, 254, 0, 0), Mask: net.CIDRMask(16, 32)},   // 169.254.0.0/16 (link-local)
+		{IP: net.IPv4(127, 0, 0, 0), Mask: net.CIDRMask(8, 32)},      // 127.0.0.0/8 (loopback)
+	}
+	
+	for _, privateCIDR := range private {
+		if privateCIDR.Contains(ip) {
+			return true
+		}
+	}
+	
+	return false
 }
 
 func NewMLPredictor(config *MLPredictionConfig) *MLPredictor {
