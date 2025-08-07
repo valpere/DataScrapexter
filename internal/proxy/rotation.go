@@ -18,6 +18,19 @@ import (
 	"github.com/valpere/DataScrapexter/internal/utils"
 )
 
+// securityError represents a security-related initialization error
+type securityError struct {
+	message string
+	cause   error
+}
+
+func (e *securityError) Error() string {
+	return fmt.Sprintf("security error: %s: %v", e.message, e.cause)
+}
+
+// initializationError tracks initialization errors for graceful handling
+var initializationError error
+
 // Initialize secure random seed on package load
 func init() {
 	// Seed math/rand with cryptographically secure random data for better randomness
@@ -27,9 +40,14 @@ func init() {
 	if err != nil {
 		// Check if we're in security-sensitive mode
 		if os.Getenv("DATASCRAPEXTER_SECURITY_STRICT") == "true" || os.Getenv("DATASCRAPEXTER_FAIL_ON_WEAK_RANDOM") == "true" {
-			// SECURITY: Fail fast in security-sensitive environments
+			// SECURITY: Store error for graceful handling instead of panicking
+			initializationError = &securityError{
+				message: "cryptographically secure randomization failed in strict security mode - proxy rotation requires secure randomization",
+				cause:   err,
+			}
 			rotationLogger.Error(fmt.Sprintf("FATAL: Cryptographically secure randomization failed in strict security mode: %v", err))
-			panic(fmt.Sprintf("SECURITY REQUIREMENT VIOLATION: crypto/rand unavailable in strict mode - proxy rotation requires cryptographically secure randomization: %v", err))
+			rotationLogger.Error("SECURITY REQUIREMENT VIOLATION: Application will fail proxy rotation operations until this is resolved")
+			return
 		}
 		
 		// SECURITY: Log critical warning about reduced security
@@ -310,6 +328,11 @@ func NewAdvancedProxyManager(config *AdvancedProxyConfig) *AdvancedProxyManager 
 
 // GetAdvancedProxy returns a proxy using advanced rotation strategies
 func (apm *AdvancedProxyManager) GetAdvancedProxy(targetURL string) (*AdvancedProxyInstance, error) {
+	// Check for initialization errors first
+	if initializationError != nil {
+		return nil, fmt.Errorf("proxy rotation failed due to initialization error: %w", initializationError)
+	}
+	
 	if !apm.advancedConfig.Enabled || len(apm.advancedProviders) == 0 {
 		return nil, nil
 	}
@@ -1268,6 +1291,11 @@ func NewLoadBalancer(config *LoadBalancingConfig) *LoadBalancer {
 }
 
 func (lb *LoadBalancer) SelectProxy(candidates []*AdvancedProxyInstance) (*AdvancedProxyInstance, error) {
+	// Check for initialization errors first
+	if initializationError != nil {
+		return nil, fmt.Errorf("proxy selection failed due to initialization error: %w", initializationError)
+	}
+	
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("no candidates for load balancing")
 	}

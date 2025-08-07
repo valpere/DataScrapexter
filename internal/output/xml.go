@@ -407,7 +407,7 @@ func sanitizeXMLName(name string) string {
 	// Cache the result with LRU eviction policy
 	xmlNameMutex.Lock()
 	if len(xmlNameCache) >= cacheMaxSize {
-		evictLRUItem()
+		evictLRUItemUnsafe()
 	}
 	xmlNameCache[name] = &LRUCacheItem{
 		value:    result,
@@ -418,9 +418,9 @@ func sanitizeXMLName(name string) string {
 	return result
 }
 
-// evictLRUItem removes the least recently used item from the cache
-// Assumes the caller already holds a write lock on xmlNameMutex
-func evictLRUItem() {
+// evictLRUItemUnsafe removes the least recently used item from the cache
+// REQUIRES: caller must hold xmlNameMutex write lock
+func evictLRUItemUnsafe() {
 	if len(xmlNameCache) == 0 {
 		return // No items to evict
 	}
@@ -442,6 +442,14 @@ func evictLRUItem() {
 	}
 }
 
+// evictLRUItem removes the least recently used item from the cache
+// This function acquires its own write lock for thread safety
+func evictLRUItem() {
+	xmlNameMutex.Lock()
+	defer xmlNameMutex.Unlock()
+	evictLRUItemUnsafe()
+}
+
 // SetXMLNameCacheSize configures the maximum size of the XML name cache
 // This allows tuning cache performance for different workloads
 func SetXMLNameCacheSize(size int) {
@@ -454,7 +462,7 @@ func SetXMLNameCacheSize(size int) {
 	
 	// Evict excess items if current cache is larger than new size
 	for len(xmlNameCache) > cacheMaxSize {
-		evictLRUItem()
+		evictLRUItemUnsafe()
 	}
 	xmlNameMutex.Unlock()
 }

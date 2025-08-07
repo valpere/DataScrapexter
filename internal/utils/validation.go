@@ -92,7 +92,7 @@ func initRegexPatterns() {
 		fieldNameSanitizePattern = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 
 		// Numeric validation pattern
-		numericPattern = regexp.MustCompile(`^[-+]?\d+(\.\d+)?$`)
+		numericPattern = regexp.MustCompile(`^\s*[-+]?(?:\d+(\.\d*)?|\.\d+)([eE][-+]?\d+)?\s*$`)
 	})
 }
 

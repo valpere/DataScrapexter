@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -452,8 +453,39 @@ func (pm *ProxyMonitor) checkHealthyProxiesAlert(metrics *CurrentMetrics) {
 }
 
 func (pm *ProxyMonitor) checkBudgetAlert(metrics *CurrentMetrics) {
-	// This would check against budget thresholds if cost tracking is enabled
-	// Implementation would depend on budget configuration
+	if pm.config.AlertThresholds == nil || pm.config.AlertThresholds.BudgetThreshold == 0 {
+		return
+	}
+
+	// Calculate budget usage percentage
+	// This assumes there's a configured budget - in production this would come from configuration
+	assumedBudget := 1000.0 // This should come from configuration
+	budgetUsagePercent := (metrics.TotalCost / assumedBudget) * 100
+
+	if budgetUsagePercent >= pm.config.AlertThresholds.BudgetThreshold {
+		severity := "medium"
+		if budgetUsagePercent >= 90 {
+			severity = "high"
+		}
+		if budgetUsagePercent >= 95 {
+			severity = "critical"
+		}
+
+		alert := Alert{
+			ID:        fmt.Sprintf("budget_%d", time.Now().Unix()),
+			Type:      "budget_threshold",
+			Severity:  severity,
+			Message:   fmt.Sprintf("Budget usage at %.2f%% (threshold: %.2f%%, cost: $%.2f)", budgetUsagePercent, pm.config.AlertThresholds.BudgetThreshold, metrics.TotalCost),
+			Timestamp: time.Now(),
+			Metadata: map[string]interface{}{
+				"budget_usage_percent": budgetUsagePercent,
+				"current_cost":         metrics.TotalCost,
+				"assumed_budget":       assumedBudget,
+				"threshold":            pm.config.AlertThresholds.BudgetThreshold,
+			},
+		}
+		pm.alerts.TriggerAlert(alert)
+	}
 }
 
 func (pm *ProxyMonitor) setupHTTPServer() {
@@ -505,16 +537,80 @@ func (pm *ProxyMonitor) handleCurrentMetrics(w http.ResponseWriter, r *http.Requ
 }
 
 func (pm *ProxyMonitor) handleProxyMetrics(w http.ResponseWriter, r *http.Request) {
-	// Extract proxy name from URL path
-	// Implementation would parse URL and get specific proxy metrics
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract proxy name from URL path (e.g., /metrics/proxy/proxy_name)
+	path := r.URL.Path
+	parts := strings.Split(path, "/")
+	if len(parts) < 4 {
+		http.Error(w, "Proxy name required in path", http.StatusBadRequest)
+		return
+	}
+	
+	proxyName := parts[3]
+	if proxyName == "" {
+		http.Error(w, "Invalid proxy name", http.StatusBadRequest)
+		return
+	}
+
+	metrics := pm.GetProxyMetrics(proxyName)
+	if metrics == nil {
+		http.Error(w, "Proxy not found or monitoring disabled", http.StatusNotFound)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "not implemented"})
+	json.NewEncoder(w).Encode(metrics)
 }
 
 func (pm *ProxyMonitor) handleHistoricalMetrics(w http.ResponseWriter, r *http.Request) {
-	// Implementation would return historical metrics
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract proxy name from URL path (e.g., /metrics/historical/proxy_name)
+	path := r.URL.Path
+	parts := strings.Split(path, "/")
+	if len(parts) < 4 {
+		http.Error(w, "Proxy name required in path", http.StatusBadRequest)
+		return
+	}
+	
+	proxyName := parts[3]
+	if proxyName == "" {
+		http.Error(w, "Invalid proxy name", http.StatusBadRequest)
+		return
+	}
+
+	// Parse period parameter from query string (default to 24 hours)
+	period := 24 * time.Hour
+	if periodStr := r.URL.Query().Get("period"); periodStr != "" {
+		if parsedPeriod, err := time.ParseDuration(periodStr); err == nil {
+			period = parsedPeriod
+		} else {
+			http.Error(w, "Invalid period format (use duration format like '24h', '1h30m')", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Limit maximum period to prevent excessive memory usage
+	maxPeriod := 7 * 24 * time.Hour // 7 days
+	if period > maxPeriod {
+		period = maxPeriod
+	}
+
+	metrics := pm.GetHistoricalMetrics(proxyName, period)
+	if metrics == nil {
+		http.Error(w, "No historical data found for proxy or monitoring disabled", http.StatusNotFound)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "not implemented"})
+	json.NewEncoder(w).Encode(metrics)
 }
 
 func (pm *ProxyMonitor) handleAlerts(w http.ResponseWriter, r *http.Request) {
@@ -608,11 +704,99 @@ func (mc *MetricsCollector) GetProxyMetrics(proxyName string) *ProxyMetricsSumma
 	defer mc.mu.RUnlock()
 	
 	if historical, exists := mc.historical[proxyName]; exists {
-		// Calculate summary from historical data
+		// Calculate comprehensive summary from historical data
+		now := time.Now()
+		oneHourAgo := now.Add(-time.Hour)
+		oneDayAgo := now.Add(-24 * time.Hour)
+		
+		var requests1h, requests24h, successful1h, successful24h int64
+		var totalLatency1h, totalLatency24h time.Duration
+		var cost1h, cost24h, qualitySum1h, qualitySum24h float64
+		var latencyCount1h, latencyCount24h, qualityCount1h, qualityCount24h int
+		
+		// Analyze historical data points
+		for _, dp := range historical.DataPoints {
+			if dp.Timestamp.After(oneDayAgo) {
+				requests24h++
+				if dp.Success {
+					successful24h++
+				}
+				totalLatency24h += dp.Latency
+				latencyCount24h++
+				cost24h += dp.Cost
+				if dp.DataQuality > 0 {
+					qualitySum24h += dp.DataQuality
+					qualityCount24h++
+				}
+				
+				if dp.Timestamp.After(oneHourAgo) {
+					requests1h++
+					if dp.Success {
+						successful1h++
+					}
+					totalLatency1h += dp.Latency
+					latencyCount1h++
+					cost1h += dp.Cost
+					if dp.DataQuality > 0 {
+						qualitySum1h += dp.DataQuality
+						qualityCount1h++
+					}
+				}
+			}
+		}
+		
+		// Calculate success rates
+		var successRate1h, successRate24h float64
+		if requests1h > 0 {
+			successRate1h = float64(successful1h) / float64(requests1h) * 100
+		}
+		if requests24h > 0 {
+			successRate24h = float64(successful24h) / float64(requests24h) * 100
+		}
+		
+		// Calculate average latencies
+		var avgLatency1h, avgLatency24h time.Duration
+		if latencyCount1h > 0 {
+			avgLatency1h = totalLatency1h / time.Duration(latencyCount1h)
+		}
+		if latencyCount24h > 0 {
+			avgLatency24h = totalLatency24h / time.Duration(latencyCount24h)
+		}
+		
+		// Calculate average data quality
+		var avgQuality1h, avgQuality24h float64
+		if qualityCount1h > 0 {
+			avgQuality1h = qualitySum1h / float64(qualityCount1h)
+		}
+		if qualityCount24h > 0 {
+			avgQuality24h = qualitySum24h / float64(qualityCount24h)
+		}
+		
+		// Determine status based on recent performance
+		status := "healthy"
+		if successRate1h < 80 {
+			status = "unhealthy"
+		} else if successRate1h < 95 {
+			status = "degraded"
+		}
+		if requests1h == 0 && requests24h == 0 {
+			status = "unknown"
+		}
+		
 		return &ProxyMetricsSummary{
-			ProxyName: proxyName,
-			Status:    "healthy", // Would be calculated from recent data
-			LastSeen:  historical.LastUpdated,
+			ProxyName:         proxyName,
+			Status:            status,
+			LastSeen:          historical.LastUpdated,
+			RequestsLast1h:    requests1h,
+			RequestsLast24h:   requests24h,
+			SuccessRate1h:     successRate1h,
+			SuccessRate24h:    successRate24h,
+			AverageLatency1h:  avgLatency1h,
+			AverageLatency24h: avgLatency24h,
+			CostLast1h:        cost1h,
+			CostLast24h:       cost24h,
+			DataQuality1h:     avgQuality1h,
+			DataQuality24h:    avgQuality24h,
 		}
 	}
 	
@@ -741,21 +925,164 @@ func (hm *HistoryManager) GetHistoricalMetrics(proxyName string, period time.Dur
 // Report generation methods (simplified implementations)
 
 func (pm *ProxyMonitor) generatePerformanceReport(period time.Duration) *PerformanceReport {
+	current := pm.metrics.current
+	
+	// Calculate success rate safely
+	successRate := 0.0
+	if current.TotalRequests > 0 {
+		successRate = float64(current.SuccessfulRequests) / float64(current.TotalRequests) * 100
+	}
+	
+	// Generate proxy performance rankings
+	var topPerformers, worstPerformers []ProxyPerformanceRanking
+	proxyScores := make(map[string]float64)
+	
+	// Calculate performance scores for each proxy
+	for proxyName := range pm.metrics.historical {
+		metrics := pm.metrics.GetProxyMetrics(proxyName)
+		if metrics != nil {
+			// Simple performance score: success rate weighted by request volume
+			score := metrics.SuccessRate24h * (float64(metrics.RequestsLast24h) / 100.0)
+			proxyScores[proxyName] = score
+		}
+	}
+	
+	// Sort and create rankings
+	rank := 1
+	for proxyName, score := range proxyScores {
+		ranking := ProxyPerformanceRanking{
+			ProxyName: proxyName,
+			Score:     score,
+			Rank:      rank,
+		}
+		
+		if len(topPerformers) < 5 {
+			topPerformers = append(topPerformers, ranking)
+		}
+		if len(worstPerformers) < 5 && score < 80 {
+			worstPerformers = append(worstPerformers, ranking)
+		}
+		rank++
+	}
+	
+	// Generate recommendations based on current metrics
+	var recommendations []PerformanceRecommendation
+	if successRate < 95 {
+		recommendations = append(recommendations, PerformanceRecommendation{
+			Type:        "success_rate",
+			Priority:    "high",
+			Description: fmt.Sprintf("Overall success rate is %.2f%%, below optimal threshold", successRate),
+			Action:      "Review failing proxies and consider adding more reliable proxy sources",
+		})
+	}
+	
+	if current.AverageLatency > 5*time.Second {
+		recommendations = append(recommendations, PerformanceRecommendation{
+			Type:        "latency",
+			Priority:    "medium",
+			Description: fmt.Sprintf("Average latency is %v, which may impact performance", current.AverageLatency),
+			Action:      "Consider using geographically closer proxies or faster proxy tiers",
+		})
+	}
+	
 	return &PerformanceReport{
 		Period:      period.String(),
 		GeneratedAt: time.Now(),
 		Summary: &PerformanceSummary{
-			TotalRequests: pm.metrics.current.TotalRequests,
-			SuccessRate:   float64(pm.metrics.current.SuccessfulRequests) / float64(pm.metrics.current.TotalRequests) * 100,
+			TotalRequests:  current.TotalRequests,
+			SuccessRate:    successRate,
+			AverageLatency: current.AverageLatency,
+		},
+		TopPerformers:   topPerformers,
+		WorstPerformers: worstPerformers,
+		Recommendations: recommendations,
+		Trends: &PerformanceTrends{
+			LatencyTrend:    "stable", // Would be calculated from historical data
+			SuccessTrend:    "stable", // Would be calculated from historical data
+			ThroughputTrend: "stable", // Would be calculated from historical data
 		},
 	}
 }
 
 func (pm *ProxyMonitor) generateCostReport(period time.Duration) *CostReport {
+	current := pm.metrics.current
+	
+	// Calculate cost by proxy
+	costByProxy := make(map[string]float64)
+	costByGeography := make(map[string]float64)
+	
+	for proxyName := range pm.metrics.historical {
+		metrics := pm.metrics.GetProxyMetrics(proxyName)
+		if metrics != nil {
+			costByProxy[proxyName] = metrics.CostLast24h
+			
+			// Geographic cost aggregation (simplified)
+			if metrics.Geographic != nil && metrics.Geographic.Country != "" {
+				costByGeography[metrics.Geographic.Country] += metrics.CostLast24h
+			} else {
+				costByGeography["Unknown"] += metrics.CostLast24h
+			}
+		}
+	}
+	
+	// Generate cost optimizations recommendations
+	var optimizations []CostOptimization
+	
+	// Find expensive proxies with low success rates
+	for proxyName, cost := range costByProxy {
+		if cost > 10.0 { // Threshold for expensive proxies
+			metrics := pm.metrics.GetProxyMetrics(proxyName)
+			if metrics != nil && metrics.SuccessRate24h < 90 {
+				optimizations = append(optimizations, CostOptimization{
+					Type:             "expensive_low_performance",
+					PotentialSavings: cost * 0.5, // Estimated savings
+					Description:      fmt.Sprintf("Proxy %s has high cost ($%.2f) but low success rate (%.1f%%)", proxyName, cost, metrics.SuccessRate24h),
+				})
+			}
+		}
+	}
+	
+	// Budget analysis (using assumed budget from alert checking)
+	assumedBudget := 1000.0
+	budgetUsed := current.TotalCost
+	budgetRemaining := assumedBudget - budgetUsed
+	
+	// Simple projection based on current rate
+	hoursInPeriod := period.Hours()
+	if hoursInPeriod > 0 {
+		dailyRate := current.TotalCost / (hoursInPeriod / 24)
+		projectedSpend := dailyRate * 30 // 30-day projection
+		
+		return &CostReport{
+			Period:          period.String(),
+			GeneratedAt:     time.Now(),
+			TotalCost:       current.TotalCost,
+			CostByProxy:     costByProxy,
+			CostByGeography: costByGeography,
+			CostTrends: &CostTrends{
+				Trend:         "stable", // Would be calculated from historical data
+				ChangePercent: 0,        // Would be calculated from historical data
+			},
+			BudgetAnalysis: &BudgetAnalysis{
+				BudgetUsed:      budgetUsed,
+				BudgetRemaining: budgetRemaining,
+				ProjectedSpend:  projectedSpend,
+			},
+			CostOptimizations: optimizations,
+		}
+	}
+	
 	return &CostReport{
-		Period:      period.String(),
-		GeneratedAt: time.Now(),
-		TotalCost:   pm.metrics.current.TotalCost,
+		Period:          period.String(),
+		GeneratedAt:     time.Now(),
+		TotalCost:       current.TotalCost,
+		CostByProxy:     costByProxy,
+		CostByGeography: costByGeography,
+		BudgetAnalysis: &BudgetAnalysis{
+			BudgetUsed:      budgetUsed,
+			BudgetRemaining: budgetRemaining,
+		},
+		CostOptimizations: optimizations,
 	}
 }
 
