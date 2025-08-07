@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/valpere/DataScrapexter/internal/proxy"
 	"github.com/valpere/DataScrapexter/internal/utils"
 )
@@ -67,6 +68,7 @@ type ScrapingContext struct {
 	GeographicHint     *proxy.GeographicLocation
 	PerformanceHint    *proxy.PerformanceMetrics
 	RetryDelay         time.Duration
+	Options            *ScrapeOptions
 }
 
 // RequestMetrics contains detailed metrics for a scraping request
@@ -218,6 +220,7 @@ func (ape *AdvancedProxyEngine) ScrapeWithAdvancedProxy(ctx context.Context, tar
 		TargetURL:    targetURL,
 		StartTime:    time.Now(),
 		AttemptCount: 1,
+		Options:      options,
 	}
 
 	// Apply options if provided
@@ -242,6 +245,7 @@ type ScrapeOptions struct {
 	Headers         map[string]string           `json:"headers,omitempty"`
 	UserAgent       string                      `json:"user_agent,omitempty"`
 	MaxRetries      int                         `json:"max_retries,omitempty"`
+	Extractors      []FieldConfig               `json:"extractors,omitempty"`
 	GeographicHint  *proxy.GeographicLocation   `json:"geographic_hint,omitempty"`
 	PerformanceHint *proxy.PerformanceMetrics   `json:"performance_hint,omitempty"`
 	Strategy        *proxy.AdvancedRotationStrategy `json:"strategy,omitempty"`
@@ -415,7 +419,12 @@ func (ape *AdvancedProxyEngine) executeSingleRequest(scrapeCtx *ScrapingContext)
 	}
 
 	// Parse response and extract data
-	result, dataQuality, err := ape.parseResponseWithQuality(resp, scrapeCtx.TargetURL)
+	// Use extractors from options or empty slice as fallback
+	extractors := []FieldConfig{}
+	if scrapeCtx.Options != nil && len(scrapeCtx.Options.Extractors) > 0 {
+		extractors = scrapeCtx.Options.Extractors
+	}
+	result, dataQuality, err := ape.parseResponseWithQuality(resp, scrapeCtx.TargetURL, extractors)
 	metrics.DataQuality = dataQuality
 	
 	if err != nil {
@@ -462,7 +471,7 @@ func (ape *AdvancedProxyEngine) createProxyClient(proxyInstance *proxy.AdvancedP
 }
 
 // parseResponseWithQuality parses HTTP response and calculates data quality score
-func (ape *AdvancedProxyEngine) parseResponseWithQuality(resp *http.Response, targetURL string) (*Result, float64, error) {
+func (ape *AdvancedProxyEngine) parseResponseWithQuality(resp *http.Response, targetURL string, extractors []FieldConfig) (*Result, float64, error) {
 	// Use the base engine's parsing logic
 	doc, err := ape.Engine.parseDocument(resp)
 	if err != nil {
@@ -470,7 +479,7 @@ func (ape *AdvancedProxyEngine) parseResponseWithQuality(resp *http.Response, ta
 	}
 
 	// Extract data using base engine
-	result, err := ape.Engine.extractData(doc, targetURL)
+	result, err := ape.Engine.extractData(doc, targetURL, extractors)
 	if err != nil {
 		return result, 0, err
 	}
@@ -735,53 +744,94 @@ func (e *Engine) getNextUserAgent() string {
 
 // Helper methods that need to access private engine methods
 func (e *Engine) parseDocument(resp *http.Response) (interface{}, error) {
-	// TODO: This is a placeholder implementation that needs to be replaced with proper HTML parsing.
-	// The real implementation should:
-	// 1. Use goquery to parse the HTTP response body into a queryable document
-	// 2. Handle encoding detection and conversion
-	// 3. Implement proper error handling for malformed HTML
-	// 4. Support both HTML and XML document types based on content-type
-	// 5. Cache parsed documents for performance optimization
-	// 
-	// Example implementation:
-	// doc, err := goquery.NewDocumentFromReader(resp.Body)
-	// if err != nil {
-	//     return nil, fmt.Errorf("failed to parse HTML document: %w", err)
-	// }
-	// return doc, nil
-	return nil, fmt.Errorf("document parsing not implemented in integration layer - TODO: implement proper HTML parsing with goquery")
+	// Ensure response body is closed after parsing
+	defer func() {
+		if resp.Body != nil {
+			resp.Body.Close()
+		}
+	}()
+	
+	// Check content type to determine parsing strategy
+	contentType := resp.Header.Get("Content-Type")
+	advancedProxyLogger.Debugf("Parsing document with content type: %s", contentType)
+	
+	// Parse the response body into a goquery document
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		advancedProxyLogger.Errorf("Failed to parse HTML document: %v", err)
+		return nil, fmt.Errorf("failed to parse HTML document: %w", err)
+	}
+	
+	// Log parsing success
+	advancedProxyLogger.Debugf("Successfully parsed document with %d elements", doc.Find("*").Length())
+	
+	return doc, nil
 }
 
-func (e *Engine) extractData(doc interface{}, url string) (*Result, error) {
-	// TODO: This is a placeholder implementation that needs to be replaced with proper data extraction.
-	// The real implementation should:
-	// 1. Use the configured field selectors to extract data from the parsed document
-	// 2. Apply transformation rules to the extracted data
-	// 3. Validate extracted data against field requirements
-	// 4. Handle extraction errors gracefully with fallback strategies
-	// 5. Support complex extraction patterns (nested selectors, conditional extraction)
-	// 6. Track extraction success metrics for quality assessment
-	//
-	// Example implementation:
-	// result := &Result{
-	//     Data:      make(map[string]interface{}),
-	//     Success:   true,
-	//     Timestamp: time.Now(),
-	//     Errors:    make([]string, 0),
-	// }
-	// 
-	// for _, field := range e.config.Fields {
-	//     value, err := extractFieldValue(doc, field)
-	//     if err != nil {
-	//         result.Errors = append(result.Errors, err.Error())
-	//         continue
-	//     }
-	//     result.Data[field.Name] = value
-	// }
-	// 
-	// return result, nil
+func (e *Engine) extractData(doc interface{}, url string, extractors []FieldConfig) (*Result, error) {
+	// Type assertion to ensure we have a goquery document
+	goqueryDoc, ok := doc.(*goquery.Document)
+	if !ok {
+		return nil, fmt.Errorf("expected *goquery.Document, got %T", doc)
+	}
 	
-	// Return an error to indicate unimplemented functionality
-	// This prevents logical inconsistency where the method appears to succeed but doesn't extract data
-	return nil, fmt.Errorf("data extraction not implemented - this method is a placeholder that requires proper implementation with field-based extraction logic")
+	// Initialize result structure
+	result := &Result{
+		Data:      make(map[string]interface{}),
+		Success:   true,
+		Timestamp: time.Now(),
+		Errors:    make([]string, 0),
+		Warnings:  make([]string, 0),
+	}
+	
+	// Track extraction statistics
+	extractedCount := 0
+	failedCount := 0
+	requiredFieldsOK := true
+	
+	// Extract data for each configured field
+	for _, field := range extractors {
+		value, err := e.extractField(goqueryDoc, field)
+		if err != nil {
+			error := fmt.Sprintf("Field '%s': %v", field.Name, err)
+			result.Errors = append(result.Errors, error)
+			failedCount++
+			
+			// Check if this was a required field
+			if field.Required {
+				requiredFieldsOK = false
+				advancedProxyLogger.Errorf("Required field extraction failed: %s", error)
+			} else {
+				advancedProxyLogger.Warnf("Optional field extraction failed: %s", error)
+				
+				// Use default value if available
+				if field.Default != nil {
+					result.Data[field.Name] = field.Default
+					result.Warnings = append(result.Warnings, fmt.Sprintf("Using default value for field '%s'", field.Name))
+					extractedCount++
+				}
+			}
+			continue
+		}
+		
+		// Successfully extracted field
+		result.Data[field.Name] = value
+		extractedCount++
+		advancedProxyLogger.Debugf("Successfully extracted field '%s': %v", field.Name, value)
+	}
+	
+	// Calculate success based on required fields and error tolerance
+	totalFields := len(extractors)
+	result.Success = requiredFieldsOK && (extractedCount > 0 || totalFields == 0)
+	
+	// Note: Metadata field doesn't exist in Result struct, so we'll skip this
+	
+	if totalFields > 0 {
+		result.ErrorRate = float64(failedCount) / float64(totalFields)
+	}
+	
+	advancedProxyLogger.Infof("Data extraction completed: %d/%d fields extracted, success=%v", 
+		extractedCount, totalFields, result.Success)
+	
+	return result, nil
 }

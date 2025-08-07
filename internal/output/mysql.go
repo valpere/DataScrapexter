@@ -344,12 +344,16 @@ func (mw *MySQLWriter) buildConnectionString() string {
 		params = append(params, fmt.Sprintf("writeTimeout=%v", mw.config.WriteTimeout))
 	}
 
-	// Add TLS configuration
+	// Add TLS configuration with security considerations
 	if mw.config.TLS != nil && mw.config.TLS.Enabled && !strings.Contains(connStr, "tls=") {
-		params = append(params, "tls=true")
-		
+		// Choose TLS mode based on security requirements
 		if mw.config.TLS.InsecureSkipVerify {
+			// Log security warning when using insecure TLS
+			mysqlLogger.Warnf("Using insecure TLS configuration (skip-verify) for MySQL connection - certificate validation disabled")
 			params = append(params, "tls=skip-verify")
+		} else {
+			// Use secure TLS with certificate verification
+			params = append(params, "tls=true")
 		}
 	}
 
@@ -543,9 +547,15 @@ func (mw *MySQLWriter) inferMySQLType(kind reflect.Kind, maxSize int) string {
 		if maxSize == 0 {
 			maxSize = 255
 		}
-		// Determine appropriate string type
+		// Determine appropriate string type with bounds checking
 		if maxSize <= 255 {
-			return fmt.Sprintf("VARCHAR(%d)", maxSize*VarcharLengthMultiplier)
+			// Calculate VARCHAR length with bounds checking to prevent exceeding MySQL's 65535 byte limit
+			varcharLength := maxSize * VarcharLengthMultiplier
+			if varcharLength > 65535 {
+				// If calculated length exceeds MySQL VARCHAR limit, use TEXT instead
+				return "TEXT"
+			}
+			return fmt.Sprintf("VARCHAR(%d)", varcharLength)
 		} else if maxSize <= 65535 {
 			return "TEXT"
 		} else if maxSize <= 16777215 {

@@ -8,6 +8,7 @@ import (
 	mathrand "math/rand"
 	"net"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -26,7 +27,8 @@ func init() {
 		// Log security-relevant fallback - this could indicate system issues
 		// Note: We can't use the logger here since it may not be initialized yet
 		// This will be logged by the system's default logger
-		fmt.Printf("WARNING: Cryptographically secure randomization failed for proxy rotation, falling back to time-based seed. This could affect security-sensitive proxy selection. Error: %v\n", err)
+		// Use stderr for initialization warnings to avoid polluting stdout
+		fmt.Fprintf(os.Stderr, "WARNING: Cryptographically secure randomization failed for proxy rotation, falling back to time-based seed. This could affect security-sensitive proxy selection. Error: %v\n", err)
 		seed = time.Now().UnixNano()
 	} else {
 		// Convert bytes to int64 for seeding

@@ -270,8 +270,25 @@ func (rt *ReportTemplate) GetTemplateDescription() string {
 }
 
 func (rt *ReportTemplate) GenerateDocument(data []map[string]interface{}, options *PDFOptions) ([]byte, error) {
-	// Create new PDF document using gofpdf library
-	pdf := gofpdf.New("P", "mm", "A4", "")
+	// Determine page size and orientation from options
+	pageSize := "A4"
+	orientation := "P" // Portrait
+	
+	if options != nil {
+		if options.PageSize != "" {
+			pageSize = options.PageSize
+		}
+		if options.Orientation != "" {
+			if strings.ToLower(options.Orientation) == "landscape" {
+				orientation = "L"
+			} else {
+				orientation = "P"
+			}
+		}
+	}
+	
+	// Create new PDF document using configuration from options
+	pdf := gofpdf.New(orientation, "mm", pageSize, "")
 	
 	// Set document properties
 	rt.setDocumentProperties(pdf, options)
