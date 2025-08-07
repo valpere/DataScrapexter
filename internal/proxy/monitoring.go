@@ -92,8 +92,8 @@ type MetricDataPoint struct {
 	Cost         float64       `json:"cost"`
 	DataQuality  float64       `json:"data_quality"`
 	ErrorType    string        `json:"error_type,omitempty"`
-	RequestSize  int64         `json:"request_size"`
-	ResponseSize int64         `json:"response_size"`
+	RequestSize  int64         `json:"request_size,omitempty"`
+	ResponseSize int64         `json:"response_size,omitempty"`
 	TargetURL    string        `json:"target_url"`
 	UserAgent    string        `json:"user_agent,omitempty"`
 }
