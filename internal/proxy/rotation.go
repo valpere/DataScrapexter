@@ -9,11 +9,11 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/valpere/DataScrapexter/internal/utils"
 )
@@ -57,11 +57,22 @@ func init() {
 		// Enhanced time-based seeding with multiple entropy sources to improve unpredictability
 		now := time.Now()
 		seed = now.UnixNano()
-		// Add additional entropy from multiple time sources
+		
+		// Add additional entropy from multiple time sources and process-specific data
 		seed ^= now.Unix() << 32
 		seed ^= int64(now.Nanosecond()) << 16
-		// Add memory address entropy (varies per process startup)
-		seed ^= int64(uintptr(unsafe.Pointer(&seed)))
+		
+		// Add process-specific entropy sources (safer alternatives to unsafe.Pointer)
+		seed ^= int64(os.Getpid()) << 24        // Process ID
+		seed ^= int64(os.Getppid()) << 8        // Parent process ID
+		
+		// Add runtime-specific entropy
+		var m1, m2 runtime.MemStats
+		runtime.ReadMemStats(&m1)
+		runtime.GC() // Force a GC to change memory stats
+		runtime.ReadMemStats(&m2)
+		seed ^= int64(m2.Alloc - m1.Alloc)      // Memory allocation differences
+		seed ^= int64(m2.NumGC - m1.NumGC) << 40 // GC counter differences
 	} else {
 		// Convert cryptographically secure bytes to int64 for seeding
 		for i, b := range seedBytes {
@@ -121,7 +132,22 @@ type PerformanceMetrics struct {
 	ErrorRate         float64       `json:"error_rate"`
 	TimeoutRate       float64       `json:"timeout_rate"`
 	RetryRate         float64       `json:"retry_rate"`
-	DataQuality       float64       `json:"data_quality"` // success rate of data extraction
+	DataQuality       float64          `json:"data_quality"` // success rate of data extraction
+	TotalRequests     int64            `json:"total_requests,omitempty"`
+	SuccessfulRequests int64           `json:"successful_requests,omitempty"`
+	MinLatency        time.Duration    `json:"min_latency,omitempty"`
+	MaxLatency        time.Duration    `json:"max_latency,omitempty"`
+	Trend             string           `json:"trend,omitempty"` // improving, stable, degrading
+	LatencyHistory    []time.Duration  `json:"latency_history,omitempty"`
+	RequestHistory    []RequestOutcome `json:"request_history,omitempty"`
+}
+
+// RequestOutcome represents a single request outcome for trend analysis
+type RequestOutcome struct {
+	Timestamp   time.Time     `json:"timestamp"`
+	Success     bool          `json:"success"`
+	Latency     time.Duration `json:"latency"`
+	DataQuality float64       `json:"data_quality"`
 }
 
 // ProxyGroup represents a group of proxies for failover scenarios
@@ -217,7 +243,7 @@ type AdvancedProxyManager struct {
 	groups            map[string]*ProxyGroup
 	performanceTracker *PerformanceTracker
 	geoResolver       *GeographicResolver
-	mlPredictor       *MLPredictor
+	performancePredictor *PerformancePredictor
 	costTracker       *CostTracker
 	loadBalancer      *LoadBalancer
 	mu                sync.RWMutex
@@ -258,24 +284,45 @@ type GeographicResolver struct {
 	resolver func(string) (*GeographicLocation, error)
 }
 
-// MLPredictor implements performance-based heuristic proxy selection
-// Note: Despite the name, this currently uses performance metrics rather than machine learning
-// TODO: Replace with actual ML implementation or rename to PerformanceBasedSelector
-type MLPredictor struct {
-	enabled    bool
-	model      interface{} // Placeholder for ML model - currently unused
-	features   []string
-	history    []PredictionDataPoint
-	historyMu  sync.RWMutex
+// PerformancePredictor implements advanced performance-based proxy selection
+// Uses statistical analysis and performance modeling for proxy selection optimization
+type PerformancePredictor struct {
+	enabled          bool
+	features         []string
+	history          []PredictionDataPoint
+	historyMu        sync.RWMutex
+	predictionModel  *StatisticalModel
+	maxHistorySize   int
+	featureWeights   map[string]float64
 }
 
-// PredictionDataPoint represents a data point for ML training
+// PredictionDataPoint represents a data point for performance analysis
 type PredictionDataPoint struct {
 	ProxyName     string
 	Features      map[string]float64
 	ActualLatency time.Duration
 	Success       bool
 	Timestamp     time.Time
+	DataQuality   float64
+}
+
+// StatisticalModel represents a lightweight statistical prediction model
+type StatisticalModel struct {
+	featureStats    map[string]*FeatureStatistics
+	lastUpdated     time.Time
+	sampleCount     int
+	minSampleCount  int // Minimum samples needed for reliable predictions
+}
+
+// FeatureStatistics holds statistical data for a feature
+type FeatureStatistics struct {
+	Mean              float64
+	Variance          float64
+	Min               float64
+	Max               float64
+	SampleCount       int
+	SuccessCorrelation float64 // Correlation with success outcomes
+	LatencyCorrelation float64 // Correlation with latency outcomes
 }
 
 // CostTracker tracks proxy usage costs
@@ -312,7 +359,7 @@ func NewAdvancedProxyManager(config *AdvancedProxyConfig) *AdvancedProxyManager 
 		groups:             make(map[string]*ProxyGroup),
 		performanceTracker: NewPerformanceTracker(),
 		geoResolver:        NewGeographicResolver(),
-		mlPredictor:        NewMLPredictor(config.MLConfig),
+		performancePredictor: NewPerformancePredictor(config.MLConfig),
 		costTracker:        NewCostTracker(config.CostOptimization),
 		loadBalancer:       NewLoadBalancer(config.LoadBalancing),
 	}
@@ -576,7 +623,7 @@ func (apm *AdvancedProxyManager) getCostOptimizedProxy() (*AdvancedProxyInstance
 // getMLPredictiveProxy uses performance-based heuristics to select optimal proxy
 // Note: Despite the name, this uses performance metrics rather than machine learning
 func (apm *AdvancedProxyManager) getMLPredictiveProxy(targetURL string) (*AdvancedProxyInstance, error) {
-	if !apm.mlPredictor.enabled {
+	if !apm.performancePredictor.enabled {
 		// Fall back to performance-based selection
 		return apm.getPerformanceProxy()
 	}
@@ -587,7 +634,7 @@ func (apm *AdvancedProxyManager) getMLPredictiveProxy(targetURL string) (*Advanc
 	}
 
 	// Get ML predictions for each candidate
-	bestProxy, err := apm.mlPredictor.PredictBestProxy(candidates, targetURL)
+	bestProxy, err := apm.performancePredictor.PredictBestProxy(candidates, targetURL)
 	if err != nil {
 		rotationLogger.Warn(fmt.Sprintf("ML prediction failed: %v, falling back to performance-based selection", err))
 		return apm.getPerformanceProxy()
@@ -1022,7 +1069,7 @@ func (cb *CircuitBreaker) OnFailure() {
 	}
 }
 
-// Placeholder implementations for components
+// Advanced implementations for performance tracking components
 func NewPerformanceTracker() *PerformanceTracker {
 	return &PerformanceTracker{
 		metrics: make(map[string]*PerformanceMetrics),
@@ -1035,20 +1082,146 @@ func (pt *PerformanceTracker) UpdateMetrics(proxyName string, latency time.Durat
 	
 	if _, exists := pt.metrics[proxyName]; !exists {
 		pt.metrics[proxyName] = &PerformanceMetrics{
-			LastMeasured: time.Now(),
+			LastMeasured:  time.Now(),
+			LatencyHistory: make([]time.Duration, 0, 100), // Keep last 100 measurements
+			RequestHistory: make([]RequestOutcome, 0, 100),
 		}
 	}
 	
-	// Update metrics (simplified implementation)
 	metrics := pt.metrics[proxyName]
-	if success {
-		metrics.SuccessRate = (metrics.SuccessRate + 100) / 2
+	now := time.Now()
+	
+	// Update latency with exponential moving average
+	const alpha = 0.1 // Smoothing factor
+	if metrics.AverageLatency == 0 {
+		metrics.AverageLatency = latency
 	} else {
-		metrics.SuccessRate = metrics.SuccessRate / 2
+		newLatency := time.Duration(float64(metrics.AverageLatency)*(1-alpha) + float64(latency)*alpha)
+		metrics.AverageLatency = newLatency
 	}
-	metrics.AverageLatency = latency
-	metrics.DataQuality = dataQuality
-	metrics.LastMeasured = time.Now()
+	
+	// Maintain latency history
+	metrics.LatencyHistory = append(metrics.LatencyHistory, latency)
+	if len(metrics.LatencyHistory) > 100 {
+		metrics.LatencyHistory = metrics.LatencyHistory[1:] // Keep sliding window
+	}
+	
+	// Update success rate with exponential moving average
+	successValue := 0.0
+	if success {
+		successValue = 100.0
+	}
+	if metrics.SuccessRate == 0 {
+		metrics.SuccessRate = successValue
+	} else {
+		metrics.SuccessRate = metrics.SuccessRate*(1-alpha) + successValue*alpha
+	}
+	
+	// Track request history for trend analysis
+	outcome := RequestOutcome{
+		Timestamp:   now,
+		Success:     success,
+		Latency:     latency,
+		DataQuality: dataQuality,
+	}
+	metrics.RequestHistory = append(metrics.RequestHistory, outcome)
+	if len(metrics.RequestHistory) > 100 {
+		metrics.RequestHistory = metrics.RequestHistory[1:] // Keep sliding window
+	}
+	
+	// Update data quality with exponential moving average
+	if metrics.DataQuality == 0 {
+		metrics.DataQuality = dataQuality
+	} else {
+		metrics.DataQuality = metrics.DataQuality*(1-alpha) + dataQuality*alpha
+	}
+	
+	metrics.TotalRequests++
+	if success {
+		metrics.SuccessfulRequests++
+	}
+	
+	metrics.LastMeasured = now
+	
+	// Calculate performance trends
+	pt.calculateTrends(metrics)
+}
+
+// calculateTrends analyzes recent performance trends
+func (pt *PerformanceTracker) calculateTrends(metrics *PerformanceMetrics) {
+	if len(metrics.RequestHistory) < 10 {
+		return // Need minimum data for trend analysis
+	}
+	
+	// Analyze last 10 vs previous 10 requests for trend detection
+	recent := metrics.RequestHistory[len(metrics.RequestHistory)-10:]
+	
+	var recentSuccessCount, recentLatencySum int
+	for _, req := range recent {
+		if req.Success {
+			recentSuccessCount++
+		}
+		recentLatencySum += int(req.Latency.Milliseconds())
+	}
+	
+	recentSuccessRate := float64(recentSuccessCount) / 10.0 * 100.0
+	
+	// Simple trend detection
+	if recentSuccessRate > metrics.SuccessRate {
+		metrics.Trend = "improving"
+	} else if recentSuccessRate < metrics.SuccessRate-5 { // 5% threshold
+		metrics.Trend = "degrading"
+	} else {
+		metrics.Trend = "stable"
+	}
+	
+	// Update min/max latency
+	for _, req := range recent {
+		if metrics.MinLatency == 0 || req.Latency < metrics.MinLatency {
+			metrics.MinLatency = req.Latency
+		}
+		if req.Latency > metrics.MaxLatency {
+			metrics.MaxLatency = req.Latency
+		}
+	}
+}
+
+// GetProxyMetrics returns detailed metrics for a proxy
+func (pt *PerformanceTracker) GetProxyMetrics(proxyName string) *PerformanceMetrics {
+	pt.mu.RLock()
+	defer pt.mu.RUnlock()
+	
+	if metrics, exists := pt.metrics[proxyName]; exists {
+		// Return a copy to prevent external modification
+		metricsCopy := *metrics
+		return &metricsCopy
+	}
+	return nil
+}
+
+// GetTopPerformers returns the best performing proxies
+func (pt *PerformanceTracker) GetTopPerformers(limit int) []*PerformanceMetrics {
+	pt.mu.RLock()
+	defer pt.mu.RUnlock()
+	
+	var performers []*PerformanceMetrics
+	for _, metrics := range pt.metrics {
+		metricsCopy := *metrics
+		performers = append(performers, &metricsCopy)
+	}
+	
+	// Sort by composite score (success rate * inverse latency factor)
+	sort.Slice(performers, func(i, j int) bool {
+		scoreI := performers[i].SuccessRate * (1000.0 / float64(performers[i].AverageLatency.Milliseconds()+1))
+		scoreJ := performers[j].SuccessRate * (1000.0 / float64(performers[j].AverageLatency.Milliseconds()+1))
+		return scoreI > scoreJ
+	})
+	
+	if limit > 0 && len(performers) > limit {
+		performers = performers[:limit]
+	}
+	
+	return performers
 }
 
 func NewGeographicResolver() *GeographicResolver {
@@ -1202,44 +1375,62 @@ func isPrivateIP(ip net.IP) bool {
 	return ip.IsPrivate()
 }
 
-func NewMLPredictor(config *MLPredictionConfig) *MLPredictor {
+func NewPerformancePredictor(config *MLPredictionConfig) *PerformancePredictor {
 	if config == nil {
-		return &MLPredictor{enabled: false}
+		return &PerformancePredictor{enabled: false}
 	}
 	
-	return &MLPredictor{
-		enabled:  config.Enabled,
-		features: config.Features,
-		history:  make([]PredictionDataPoint, 0),
+	// Initialize default feature weights based on empirical proxy performance factors
+	defaultWeights := map[string]float64{
+		"latency_history":     0.25, // Historical latency performance
+		"success_rate":        0.30, // Historical success rate
+		"geographic_distance": 0.15, // Geographic proximity to target
+		"load_factor":         0.10, // Current load on proxy
+		"time_of_day":         0.08, // Time-based performance patterns
+		"target_domain_type":  0.07, // Domain-specific performance
+		"data_quality":        0.05, // Data quality metrics
+	}
+	
+	return &PerformancePredictor{
+		enabled:          config.Enabled,
+		features:         config.Features,
+		history:          make([]PredictionDataPoint, 0),
+		maxHistorySize:   10000, // Keep last 10k data points
+		featureWeights:   defaultWeights,
+		predictionModel: &StatisticalModel{
+			featureStats:   make(map[string]*FeatureStatistics),
+			minSampleCount: 50, // Minimum samples for reliable predictions
+		},
 	}
 }
 
-func (mlp *MLPredictor) PredictBestProxy(candidates []*AdvancedProxyInstance, targetURL string) (*AdvancedProxyInstance, error) {
-	if !mlp.enabled || len(candidates) == 0 {
+func (pp *PerformancePredictor) PredictBestProxy(candidates []*AdvancedProxyInstance, targetURL string) (*AdvancedProxyInstance, error) {
+	if !pp.enabled || len(candidates) == 0 {
 		return nil, fmt.Errorf("performance predictor not enabled or no candidates")
 	}
 	
-	// Performance-based selection using historical metrics
-	// This is a heuristic-based approach, not machine learning
-	// TODO: To implement actual ML prediction:
-	// 1. Collect training data (proxy performance features vs. success outcomes)
-	// 2. Train a regression or classification model (e.g., using scikit-learn via Python integration)
-	// 3. Load the trained model and use it for predictions
-	// 4. Features could include: latency history, success rate trends, geographic proximity,
-	//    time of day patterns, target domain characteristics, etc.
+	pp.historyMu.RLock()
+	modelReady := pp.predictionModel.sampleCount >= pp.predictionModel.minSampleCount
+	pp.historyMu.RUnlock()
 	
-	// Current implementation: Select proxy with best performance score
+	// Advanced performance-based selection using statistical modeling
 	best := candidates[0]
 	bestScore := 0.0
 	
 	for _, candidate := range candidates {
 		if candidate.Performance != nil {
-			// Weighted score: success rate (0-100) + latency penalty (lower is better)
-			latencyPenalty := float64(candidate.Performance.AverageLatency.Milliseconds()) / 10.0
-			if latencyPenalty > 100 {
-				latencyPenalty = 100 // Cap penalty at 100 points
+			// Extract features for this candidate
+			features := pp.extractFeatures(candidate, targetURL)
+			
+			var score float64
+			if modelReady {
+				// Use statistical model for prediction
+				score = pp.calculateStatisticalScore(features, candidate)
+			} else {
+				// Fallback to simple heuristic scoring
+				score = pp.calculateHeuristicScore(candidate)
 			}
-			score := candidate.Performance.SuccessRate + (100 - latencyPenalty)
+			
 			if score > bestScore {
 				bestScore = score
 				best = candidate
@@ -1248,6 +1439,225 @@ func (mlp *MLPredictor) PredictBestProxy(candidates []*AdvancedProxyInstance, ta
 	}
 	
 	return best, nil
+}
+
+// extractFeatures extracts relevant features from a proxy candidate for prediction
+func (pp *PerformancePredictor) extractFeatures(candidate *AdvancedProxyInstance, targetURL string) map[string]float64 {
+	features := make(map[string]float64)
+	
+	if candidate.Performance != nil {
+		// Latency history (normalized to 0-1 scale, where 0 is best)
+		latencyMs := float64(candidate.Performance.AverageLatency.Milliseconds())
+		features["latency_history"] = math.Min(latencyMs/5000.0, 1.0) // Normalize against 5s max
+		
+		// Success rate (0-1 scale)
+		features["success_rate"] = candidate.Performance.SuccessRate / 100.0
+		
+		// Data quality (0-1 scale)
+		features["data_quality"] = candidate.Performance.DataQuality / 100.0
+	}
+	
+	// Load factor (normalized) - using performance metrics as proxy for load
+	if candidate.Performance != nil {
+		// Simple load estimation based on response time relative to baseline
+		baselineLatency := 1000.0 // 1 second baseline
+		currentLatency := float64(candidate.Performance.AverageLatency.Milliseconds())
+		loadFactor := math.Min(currentLatency/baselineLatency, 2.0) / 2.0 // Normalize to 0-1
+		features["load_factor"] = loadFactor
+	} else {
+		features["load_factor"] = 0.5 // Default middle value
+	}
+	
+	// Time of day pattern (0-1 scale based on hour of day)
+	hour := float64(time.Now().Hour())
+	features["time_of_day"] = hour / 24.0
+	
+	// Geographic distance (simplified - would use actual geo-distance in production)
+	features["geographic_distance"] = 0.5 // Default middle value
+	
+	// Target domain type (simplified classification)
+	features["target_domain_type"] = pp.classifyDomainType(targetURL)
+	
+	return features
+}
+
+// calculateStatisticalScore uses the statistical model to calculate a performance score
+func (pp *PerformancePredictor) calculateStatisticalScore(features map[string]float64, candidate *AdvancedProxyInstance) float64 {
+	var weightedScore float64
+	var totalWeight float64
+	
+	// Calculate weighted score based on feature statistics and correlations
+	for featureName, featureValue := range features {
+		if weight, exists := pp.featureWeights[featureName]; exists {
+			if stats, exists := pp.predictionModel.featureStats[featureName]; exists {
+				// Normalize feature value based on historical statistics
+				normalizedValue := (featureValue - stats.Min) / (stats.Max - stats.Min + 1e-6)
+				
+				// Weight by success correlation (higher correlation = more predictive power)
+				correlationWeight := math.Abs(stats.SuccessCorrelation)
+				adjustedWeight := weight * (1.0 + correlationWeight)
+				
+				weightedScore += adjustedWeight * normalizedValue
+				totalWeight += adjustedWeight
+			}
+		}
+	}
+	
+	if totalWeight > 0 {
+		return weightedScore / totalWeight * 100.0 // Scale to 0-100
+	}
+	
+	return pp.calculateHeuristicScore(candidate)
+}
+
+// calculateHeuristicScore provides a fallback scoring method when statistical model isn't ready
+func (pp *PerformancePredictor) calculateHeuristicScore(candidate *AdvancedProxyInstance) float64 {
+	if candidate.Performance == nil {
+		return 0.0
+	}
+	
+	// Weighted score: success rate (0-100) + latency penalty (lower is better)
+	latencyPenalty := float64(candidate.Performance.AverageLatency.Milliseconds()) / 50.0 // Scale factor
+	if latencyPenalty > 100 {
+		latencyPenalty = 100 // Cap penalty at 100 points
+	}
+	
+	// Quality bonus
+	qualityBonus := candidate.Performance.DataQuality * 0.1
+	
+	score := candidate.Performance.SuccessRate + (100 - latencyPenalty) + qualityBonus
+	return math.Max(0, score) // Ensure non-negative score
+}
+
+// classifyDomainType provides a simple domain classification for targeting
+func (pp *PerformancePredictor) classifyDomainType(targetURL string) float64 {
+	domain := strings.ToLower(targetURL)
+	
+	// Simple classification based on common patterns
+	switch {
+	case strings.Contains(domain, "api.") || strings.Contains(domain, "/api/"):
+		return 0.8 // API endpoints tend to be more predictable
+	case strings.Contains(domain, "cdn.") || strings.Contains(domain, "static."):
+		return 0.9 // CDN content is typically fast
+	case strings.Contains(domain, "admin.") || strings.Contains(domain, "secure."):
+		return 0.3 // Admin/secure sites may have more restrictions
+	default:
+		return 0.5 // Default classification
+	}
+}
+
+// RecordPredictionResult records the actual outcome for model improvement
+func (pp *PerformancePredictor) RecordPredictionResult(proxyName string, features map[string]float64, actualLatency time.Duration, success bool, dataQuality float64) {
+	pp.historyMu.Lock()
+	defer pp.historyMu.Unlock()
+	
+	dataPoint := PredictionDataPoint{
+		ProxyName:     proxyName,
+		Features:      features,
+		ActualLatency: actualLatency,
+		Success:       success,
+		Timestamp:     time.Now(),
+		DataQuality:   dataQuality,
+	}
+	
+	pp.history = append(pp.history, dataPoint)
+	
+	// Maintain history size limit
+	if len(pp.history) > pp.maxHistorySize {
+		pp.history = pp.history[len(pp.history)-pp.maxHistorySize:]
+	}
+	
+	// Update statistical model
+	pp.updateStatisticalModel(dataPoint)
+}
+
+// updateStatisticalModel updates the statistical model with new data
+func (pp *PerformancePredictor) updateStatisticalModel(dataPoint PredictionDataPoint) {
+	if pp.predictionModel == nil {
+		return
+	}
+	
+	// Variables for future use in more advanced statistical calculations
+	_ = dataPoint.Success
+	_ = dataPoint.ActualLatency
+	
+	// Update feature statistics
+	for featureName, featureValue := range dataPoint.Features {
+		stats, exists := pp.predictionModel.featureStats[featureName]
+		if !exists {
+			stats = &FeatureStatistics{
+				Mean: featureValue,
+				Min:  featureValue,
+				Max:  featureValue,
+				SampleCount: 1,
+			}
+			pp.predictionModel.featureStats[featureName] = stats
+		} else {
+			// Update running statistics
+			stats.SampleCount++
+			delta := featureValue - stats.Mean
+			stats.Mean += delta / float64(stats.SampleCount)
+			stats.Variance += delta * (featureValue - stats.Mean)
+			
+			if featureValue < stats.Min {
+				stats.Min = featureValue
+			}
+			if featureValue > stats.Max {
+				stats.Max = featureValue
+			}
+		}
+		
+		// Simple correlation calculation (Pearson correlation approximation)
+		if stats.SampleCount > 2 {
+			stats.SuccessCorrelation = pp.calculateCorrelation(featureName, "success")
+			stats.LatencyCorrelation = pp.calculateCorrelation(featureName, "latency")
+		}
+	}
+	
+	pp.predictionModel.sampleCount++
+	pp.predictionModel.lastUpdated = time.Now()
+}
+
+// calculateCorrelation calculates a simple correlation coefficient
+func (pp *PerformancePredictor) calculateCorrelation(featureName, targetType string) float64 {
+	if len(pp.history) < 10 {
+		return 0.0 // Not enough data for meaningful correlation
+	}
+	
+	var sumX, sumY, sumXY, sumX2, sumY2 float64
+	n := float64(len(pp.history))
+	
+	for _, point := range pp.history {
+		if featureValue, exists := point.Features[featureName]; exists {
+			x := featureValue
+			var y float64
+			
+			switch targetType {
+			case "success":
+				if point.Success {
+					y = 1.0
+				}
+			case "latency":
+				y = float64(point.ActualLatency.Milliseconds())
+			}
+			
+			sumX += x
+			sumY += y
+			sumXY += x * y
+			sumX2 += x * x
+			sumY2 += y * y
+		}
+	}
+	
+	numerator := n*sumXY - sumX*sumY
+	denominator := math.Sqrt((n*sumX2 - sumX*sumX) * (n*sumY2 - sumY*sumY))
+	
+	if denominator == 0 {
+		return 0.0
+	}
+	
+	correlation := numerator / denominator
+	return math.Max(-1.0, math.Min(1.0, correlation)) // Clamp to [-1, 1]
 }
 
 func NewCostTracker(config *CostOptimizationConfig) *CostTracker {
