@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -734,7 +735,7 @@ func (rd *RecordDeduplicator) generateFieldKey(data map[string]interface{}) (str
 	}
 	
 	// Join field values with separator
-	compositeKey := fmt.Sprintf("%s", keyParts)
+	compositeKey := strings.Join(keyParts, "|")
 	
 	// Generate hash of composite key for consistent length
 	hash := sha256.Sum256([]byte(compositeKey))

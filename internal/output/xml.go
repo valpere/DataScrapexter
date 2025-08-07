@@ -12,10 +12,17 @@ import (
 	"time"
 )
 
+// LRUCacheItem represents an item in the LRU cache
+type LRUCacheItem struct {
+	value    string
+	accessed int64 // Unix nano timestamp for access tracking
+}
+
 // Cache for sanitized XML names to improve performance in high-throughput scenarios
 var (
-	xmlNameCache = make(map[string]string)
+	xmlNameCache = make(map[string]*LRUCacheItem)
 	xmlNameMutex sync.RWMutex
+	cacheMaxSize = 1000
 )
 
 // XMLWriter implements the Writer interface for XML output
@@ -385,25 +392,78 @@ func sanitizeXMLName(name string) string {
 	// Check cache first for performance optimization
 	xmlNameMutex.RLock()
 	if cached, exists := xmlNameCache[name]; exists {
+		// Update access time for LRU tracking
+		cached.accessed = time.Now().UnixNano()
+		value := cached.value
 		xmlNameMutex.RUnlock()
-		return cached
+		return value
 	}
 	xmlNameMutex.RUnlock()
 
 	// Perform sanitization
 	result := sanitizeXMLNameUncached(name)
 
-	// Cache the result (with size limit to prevent memory bloat)
+	// Cache the result with LRU eviction policy
 	xmlNameMutex.Lock()
-	if len(xmlNameCache) < 1000 { // Limit cache size to prevent memory issues
-		xmlNameCache[name] = result
+	if len(xmlNameCache) >= cacheMaxSize {
+		evictLRUItem()
 	}
-	// TODO: Consider implementing an LRU eviction policy instead of a simple size check
-	// to maintain better cache efficiency under varying workloads. This would ensure
-	// frequently used names remain cached while evicting least recently used entries.
+	xmlNameCache[name] = &LRUCacheItem{
+		value:    result,
+		accessed: time.Now().UnixNano(),
+	}
 	xmlNameMutex.Unlock()
 
 	return result
+}
+
+// evictLRUItem removes the least recently used item from the cache
+// Assumes the caller already holds a write lock on xmlNameMutex
+func evictLRUItem() {
+	var oldestKey string
+	var oldestTime int64 = time.Now().UnixNano()
+
+	// Find the least recently used item
+	for key, item := range xmlNameCache {
+		if item.accessed < oldestTime {
+			oldestTime = item.accessed
+			oldestKey = key
+		}
+	}
+
+	// Remove the oldest item if found
+	if oldestKey != "" {
+		delete(xmlNameCache, oldestKey)
+	}
+}
+
+// SetXMLNameCacheSize configures the maximum size of the XML name cache
+// This allows tuning cache performance for different workloads
+func SetXMLNameCacheSize(size int) {
+	if size < 10 {
+		size = 10 // Minimum cache size for effectiveness
+	}
+	
+	xmlNameMutex.Lock()
+	cacheMaxSize = size
+	
+	// Evict excess items if current cache is larger than new size
+	for len(xmlNameCache) > cacheMaxSize {
+		evictLRUItem()
+	}
+	xmlNameMutex.Unlock()
+}
+
+// GetXMLNameCacheStats returns statistics about the XML name cache
+func GetXMLNameCacheStats() map[string]interface{} {
+	xmlNameMutex.RLock()
+	defer xmlNameMutex.RUnlock()
+	
+	return map[string]interface{}{
+		"size":     len(xmlNameCache),
+		"max_size": cacheMaxSize,
+		"usage":    float64(len(xmlNameCache)) / float64(cacheMaxSize) * 100,
+	}
 }
 
 // sanitizeXMLNameUncached performs the actual sanitization without caching

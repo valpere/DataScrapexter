@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/valpere/DataScrapexter/internal/utils"
 )
@@ -23,11 +24,18 @@ func init() {
 	seedBytes := make([]byte, 8)
 	_, err := rand.Read(seedBytes)
 	if err != nil {
-		// SECURITY: Log error but gracefully degrade to time-based seeding
-		// This prevents DoS attacks via panic while maintaining functionality
-		rotationLogger.Error(fmt.Sprintf("Cryptographically secure randomization failed, falling back to time-based seeding: %v", err))
-		// Use time-based seeding as fallback
-		seed = time.Now().UnixNano()
+		// SECURITY: Log critical warning about reduced security
+		rotationLogger.Error(fmt.Sprintf("CRITICAL SECURITY WARNING: Cryptographically secure randomization failed, using enhanced time-based seeding with reduced security: %v", err))
+		rotationLogger.Warn("Proxy rotation patterns may be predictable - consider fixing the crypto/rand issue for security-sensitive operations")
+		
+		// Enhanced time-based seeding with multiple entropy sources to improve unpredictability
+		now := time.Now()
+		seed = now.UnixNano()
+		// Add additional entropy from multiple time sources
+		seed ^= now.Unix() << 32
+		seed ^= int64(now.Nanosecond()) << 16
+		// Add memory address entropy (varies per process startup)
+		seed ^= int64(uintptr(unsafe.Pointer(&seed)))
 	} else {
 		// Convert cryptographically secure bytes to int64 for seeding
 		for i, b := range seedBytes {
@@ -1159,9 +1167,7 @@ func (gr *GeographicResolver) resolveIPLocation(ip net.IP) *GeographicLocation {
 }
 
 // isPrivateIP checks if an IP address is in a private range
-// Uses Go 1.24's built-in IsPrivate() method
 func isPrivateIP(ip net.IP) bool {
-	// Go 1.24+ has reliable IsPrivate() method
 	return ip.IsPrivate()
 }
 
