@@ -17,17 +17,40 @@ var monitoringLogger = utils.NewComponentLogger("proxy-monitoring")
 
 // MonitoringConfig defines monitoring configuration
 type MonitoringConfig struct {
-	Enabled              bool          `yaml:"enabled" json:"enabled"`
-	MetricsPort          int           `yaml:"metrics_port" json:"metrics_port"`
-	DetailedMetrics      bool          `yaml:"detailed_metrics" json:"detailed_metrics"`
-	HistoryRetention     time.Duration `yaml:"history_retention" json:"history_retention"`
-	AlertingEnabled      bool          `yaml:"alerting_enabled" json:"alerting_enabled"`
+	Enabled              bool             `yaml:"enabled" json:"enabled"`
+	MetricsPort          int              `yaml:"metrics_port" json:"metrics_port"`
+	DetailedMetrics      bool             `yaml:"detailed_metrics" json:"detailed_metrics"`
+	HistoryRetention     time.Duration    `yaml:"history_retention" json:"history_retention"`
+	AlertingEnabled      bool             `yaml:"alerting_enabled" json:"alerting_enabled"`
 	AlertThresholds      *AlertThresholds `yaml:"alert_thresholds,omitempty" json:"alert_thresholds,omitempty"`
-	RealTimeUpdates      bool          `yaml:"realtime_updates" json:"realtime_updates"`
-	ExportPrometheus     bool          `yaml:"export_prometheus" json:"export_prometheus"`
-	ExportInfluxDB       bool          `yaml:"export_influxdb" json:"export_influxdb"`
-	ExportInterval       time.Duration `yaml:"export_interval" json:"export_interval"`
-	HealthCheckEndpoints []string      `yaml:"health_check_endpoints,omitempty" json:"health_check_endpoints,omitempty"`
+	BudgetConfig         *BudgetConfig    `yaml:"budget_config,omitempty" json:"budget_config,omitempty"`
+	RealTimeUpdates      bool             `yaml:"realtime_updates" json:"realtime_updates"`
+	ExportPrometheus     bool             `yaml:"export_prometheus" json:"export_prometheus"`
+	ExportInfluxDB       bool             `yaml:"export_influxdb" json:"export_influxdb"`
+	ExportInterval       time.Duration    `yaml:"export_interval" json:"export_interval"`
+	HealthCheckEndpoints []string         `yaml:"health_check_endpoints,omitempty" json:"health_check_endpoints,omitempty"`
+}
+
+// BudgetConfig defines budget monitoring configuration
+type BudgetConfig struct {
+	// DailyBudget is the maximum amount to spend per day
+	DailyBudget float64 `yaml:"daily_budget" json:"daily_budget"`
+	
+	// HourlyBudget is the maximum amount to spend per hour
+	HourlyBudget float64 `yaml:"hourly_budget" json:"hourly_budget"`
+	
+	// MonthlyBudget is the maximum amount to spend per month
+	MonthlyBudget float64 `yaml:"monthly_budget" json:"monthly_budget"`
+	
+	// Currency specifies the currency for budget amounts (e.g., "USD", "EUR")
+	Currency string `yaml:"currency" json:"currency"`
+	
+	// AlertThresholds for budget usage (percentages)
+	WarnThreshold  float64 `yaml:"warn_threshold" json:"warn_threshold"`   // Default: 80%
+	CritThreshold  float64 `yaml:"crit_threshold" json:"crit_threshold"`   // Default: 90%
+	
+	// BudgetPeriod specifies the budget tracking period ("hourly", "daily", "monthly")
+	BudgetPeriod string `yaml:"budget_period" json:"budget_period"`
 }
 
 // AlertThresholds defines alerting thresholds
@@ -453,14 +476,19 @@ func (pm *ProxyMonitor) checkHealthyProxiesAlert(metrics *CurrentMetrics) {
 }
 
 func (pm *ProxyMonitor) checkBudgetAlert(metrics *CurrentMetrics) {
-	if pm.config.AlertThresholds == nil || pm.config.AlertThresholds.BudgetThreshold == 0 {
+	if pm.config.AlertThresholds == nil || pm.config.AlertThresholds.BudgetThreshold == 0 || pm.config.BudgetConfig == nil {
+		return
+	}
+
+	// Get the appropriate budget based on the configured period
+	budget := pm.getEffectiveBudget()
+	if budget <= 0 {
+		monitoringLogger.Warn("Budget alert check skipped: no valid budget configured")
 		return
 	}
 
 	// Calculate budget usage percentage
-	// This assumes there's a configured budget - in production this would come from configuration
-	assumedBudget := 1000.0 // This should come from configuration
-	budgetUsagePercent := (metrics.TotalCost / assumedBudget) * 100
+	budgetUsagePercent := (metrics.TotalCost / budget) * 100
 
 	if budgetUsagePercent >= pm.config.AlertThresholds.BudgetThreshold {
 		severity := "medium"
@@ -480,7 +508,7 @@ func (pm *ProxyMonitor) checkBudgetAlert(metrics *CurrentMetrics) {
 			Metadata: map[string]interface{}{
 				"budget_usage_percent": budgetUsagePercent,
 				"current_cost":         metrics.TotalCost,
-				"assumed_budget":       assumedBudget,
+				"configured_budget":    budget,
 				"threshold":            pm.config.AlertThresholds.BudgetThreshold,
 			},
 		}
@@ -1042,10 +1070,13 @@ func (pm *ProxyMonitor) generateCostReport(period time.Duration) *CostReport {
 		}
 	}
 	
-	// Budget analysis (using assumed budget from alert checking)
-	assumedBudget := 1000.0
+	// Budget analysis using configured budget
+	configuredBudget := pm.getEffectiveBudget()
+	if configuredBudget <= 0 {
+		configuredBudget = 1000.0 // fallback budget for reporting
+	}
 	budgetUsed := current.TotalCost
-	budgetRemaining := assumedBudget - budgetUsed
+	budgetRemaining := configuredBudget - budgetUsed
 	
 	// Simple projection based on current rate
 	hoursInPeriod := period.Hours()
@@ -1133,4 +1164,77 @@ type CostOptimization struct {
 	Type            string  `json:"type"`
 	PotentialSavings float64 `json:"potential_savings"`
 	Description     string  `json:"description"`
+}
+
+// getEffectiveBudget returns the effective budget amount based on the configured period
+func (pm *ProxyMonitor) getEffectiveBudget() float64 {
+	if pm.config.BudgetConfig == nil {
+		return 0
+	}
+
+	budgetConfig := pm.config.BudgetConfig
+	
+	// Determine budget based on configured period
+	switch strings.ToLower(budgetConfig.BudgetPeriod) {
+	case "hourly":
+		return budgetConfig.HourlyBudget
+	case "daily":
+		return budgetConfig.DailyBudget
+	case "monthly":
+		return budgetConfig.MonthlyBudget
+	default:
+		// Default to daily budget if no period specified
+		if budgetConfig.DailyBudget > 0 {
+			return budgetConfig.DailyBudget
+		}
+		if budgetConfig.HourlyBudget > 0 {
+			return budgetConfig.HourlyBudget
+		}
+		if budgetConfig.MonthlyBudget > 0 {
+			return budgetConfig.MonthlyBudget
+		}
+	}
+	
+	return 0
+}
+
+// ValidateBudgetConfig validates budget configuration settings
+func ValidateBudgetConfig(config *BudgetConfig) error {
+	if config == nil {
+		return nil // Budget monitoring is optional
+	}
+	
+	// At least one budget must be configured
+	if config.DailyBudget <= 0 && config.HourlyBudget <= 0 && config.MonthlyBudget <= 0 {
+		return fmt.Errorf("at least one budget amount (daily, hourly, or monthly) must be configured")
+	}
+	
+	// Validate thresholds
+	if config.WarnThreshold < 0 || config.WarnThreshold > 100 {
+		return fmt.Errorf("warn_threshold must be between 0 and 100")
+	}
+	if config.CritThreshold < 0 || config.CritThreshold > 100 {
+		return fmt.Errorf("crit_threshold must be between 0 and 100")
+	}
+	if config.WarnThreshold >= config.CritThreshold {
+		return fmt.Errorf("warn_threshold must be less than crit_threshold")
+	}
+	
+	// Validate budget period
+	validPeriods := []string{"hourly", "daily", "monthly"}
+	if config.BudgetPeriod != "" {
+		period := strings.ToLower(config.BudgetPeriod)
+		valid := false
+		for _, validPeriod := range validPeriods {
+			if period == validPeriod {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return fmt.Errorf("budget_period must be one of: %v", validPeriods)
+		}
+	}
+	
+	return nil
 }

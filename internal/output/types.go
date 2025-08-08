@@ -593,13 +593,14 @@ type PDFSecurity struct {
 
 // PostgreSQLOptions defines PostgreSQL-specific options
 type PostgreSQLOptions struct {
-	ConnectionString string            `yaml:"connection_string" json:"connection_string"`
-	Table            string            `yaml:"table" json:"table"`
-	Schema           string            `yaml:"schema,omitempty" json:"schema,omitempty"`
-	BatchSize        int               `yaml:"batch_size,omitempty" json:"batch_size,omitempty"`
-	CreateTable      bool              `yaml:"create_table,omitempty" json:"create_table,omitempty"`
-	OnConflict       ConflictStrategy  `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // PostgreSQL: ConflictIgnore, ConflictError
-	ColumnTypes      map[string]string `yaml:"column_types,omitempty" json:"column_types,omitempty"`
+	ConnectionString     string            `yaml:"connection_string" json:"connection_string"`
+	Table                string            `yaml:"table" json:"table"`
+	Schema               string            `yaml:"schema,omitempty" json:"schema,omitempty"`
+	BatchSize            int               `yaml:"batch_size,omitempty" json:"batch_size,omitempty"`
+	TransactionThreshold int               `yaml:"transaction_threshold,omitempty" json:"transaction_threshold,omitempty"`
+	CreateTable          bool              `yaml:"create_table,omitempty" json:"create_table,omitempty"`
+	OnConflict           ConflictStrategy  `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // PostgreSQL: ConflictIgnore, ConflictError
+	ColumnTypes          map[string]string `yaml:"column_types,omitempty" json:"column_types,omitempty"`
 }
 
 // SQLiteOptions defines SQLite-specific options

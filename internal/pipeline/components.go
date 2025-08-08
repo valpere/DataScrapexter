@@ -430,22 +430,30 @@ type RecordDeduplicator struct {
 	Threshold float64  `yaml:"threshold,omitempty" json:"threshold,omitempty"` // Similarity threshold
 	CacheSize int      `yaml:"cache_size" json:"cache_size"`                   // Size of deduplication cache
 
-	seenHashes  map[string]bool
-	seenRecords []map[string]interface{}
+	// Separate storage to prevent collisions between different deduplication methods
+	seenHashes  map[string]bool                 // For SHA256 hash-based deduplication
+	seenFields  map[string]bool                 // For field-based composite key deduplication  
+	seenRecords []map[string]interface{}        // For similarity-based deduplication
 }
 
 // Deduplicate removes or marks duplicate records
 func (rd *RecordDeduplicator) Deduplicate(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
-	if rd.seenHashes == nil {
-		rd.seenHashes = make(map[string]bool)
-	}
-
+	// Initialize appropriate storage maps based on method
 	switch rd.Method {
 	case "hash":
+		if rd.seenHashes == nil {
+			rd.seenHashes = make(map[string]bool)
+		}
 		return rd.deduplicateByHash(data)
 	case "field":
+		if rd.seenFields == nil {
+			rd.seenFields = make(map[string]bool)
+		}
 		return rd.deduplicateByField(data)
 	case "similarity":
+		if rd.seenRecords == nil {
+			rd.seenRecords = make([]map[string]interface{}, 0)
+		}
 		return rd.deduplicateBySimilarity(data)
 	default:
 		return data, nil // No deduplication
@@ -498,18 +506,18 @@ func (rd *RecordDeduplicator) deduplicateByField(data map[string]interface{}) (m
 	}
 	
 	// Check if we've seen this field combination before
-	if rd.seenHashes[key] {
+	if rd.seenFields[key] {
 		// Duplicate found - in a real implementation this could return nil
 		// For now, return original data to match test expectations
 		return data, nil
 	}
 	
 	// Mark this field combination as seen
-	rd.seenHashes[key] = true
+	rd.seenFields[key] = true
 	
 	// Manage cache size to prevent memory issues
-	if len(rd.seenHashes) > rd.CacheSize && rd.CacheSize > 0 {
-		rd.evictOldestHashes()
+	if len(rd.seenFields) > rd.CacheSize && rd.CacheSize > 0 {
+		rd.evictOldestFields()
 	}
 	
 	return data, nil
@@ -826,6 +834,33 @@ func (rd *RecordDeduplicator) evictOldestHashes() {
 	// Delete the collected keys in a separate loop
 	for _, hash := range keysToDelete {
 		delete(rd.seenHashes, hash)
+	}
+}
+
+// evictOldestFields removes oldest field entries to manage memory
+func (rd *RecordDeduplicator) evictOldestFields() {
+	if len(rd.seenFields) <= rd.CacheSize {
+		return
+	}
+	
+	// Simple eviction: remove random entries when over limit
+	// In production, this should use LRU or similar strategy
+	toRemove := len(rd.seenFields) - rd.CacheSize
+	
+	// Collect keys to delete first to avoid iteration during modification
+	var keysToDelete []string
+	count := 0
+	for fieldKey := range rd.seenFields {
+		if count >= toRemove {
+			break
+		}
+		keysToDelete = append(keysToDelete, fieldKey)
+		count++
+	}
+	
+	// Delete the collected keys in a separate loop
+	for _, fieldKey := range keysToDelete {
+		delete(rd.seenFields, fieldKey)
 	}
 }
 

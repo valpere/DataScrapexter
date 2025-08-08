@@ -13,6 +13,11 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL driver
 )
 
+const (
+	// TransactionThreshold defines the minimum number of records that benefit from explicit transaction management
+	TransactionThreshold = 100
+)
+
 // PostgreSQL column type inference constants moved to types.go for shared use
 
 // PostgreSQLWriter provides methods for writing data to a PostgreSQL database.
@@ -39,6 +44,9 @@ func NewPostgreSQLWriter(options PostgreSQLOptions) (*PostgreSQLWriter, error) {
 	// Set defaults
 	if options.BatchSize == 0 {
 		options.BatchSize = 1000
+	}
+	if options.TransactionThreshold == 0 {
+		options.TransactionThreshold = TransactionThreshold
 	}
 	if options.Schema == "" {
 		options.Schema = "public"
@@ -320,12 +328,18 @@ func (w *PostgreSQLWriter) inferColumnType(data []map[string]interface{}, column
 func (w *PostgreSQLWriter) insertBatches(data []map[string]interface{}) error {
 	batchSize := w.config.BatchSize
 	
-	// Use transactions for multiple batches to improve performance and reliability
-	if len(data) > batchSize {
+	// Use transactions only when beneficial for performance:
+	// - Multiple batches (data > batchSize) always benefit from transactions
+	// - Single batches benefit from transactions only when they exceed the threshold
+	threshold := w.config.TransactionThreshold
+	needsTransaction := len(data) > batchSize || 
+		(len(data) >= threshold && len(data) <= batchSize)
+	
+	if needsTransaction {
 		return w.insertBatchesWithTransaction(data)
 	}
 	
-	// Single batch can be inserted without explicit transaction
+	// Small datasets can be inserted without explicit transaction overhead
 	return w.insertBatch(data)
 }
 

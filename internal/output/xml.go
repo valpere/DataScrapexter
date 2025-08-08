@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+const (
+	// MinLRUCacheSize defines the minimum effective cache size
+	MinLRUCacheSize = 10
+)
+
 // LRUCacheNode represents a node in the doubly-linked list
 type LRUCacheNode struct {
 	key   string
@@ -135,8 +140,8 @@ func (lru *LRUCache) Size() int {
 
 // SetCapacity updates the cache capacity and evicts items if necessary
 func (lru *LRUCache) SetCapacity(capacity int) {
-	if capacity < 10 {
-		capacity = 10 // Minimum cache size for effectiveness
+	if capacity < MinLRUCacheSize {
+		capacity = MinLRUCacheSize // Minimum cache size for effectiveness
 	}
 	
 	lru.mutex.Lock()

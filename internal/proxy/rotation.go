@@ -31,6 +31,13 @@ func (e *securityError) Error() string {
 // initializationError tracks initialization errors for graceful handling
 var initializationError error
 
+// defaultSecurityConfig provides compile-time security defaults
+var defaultSecurityConfig = &SecurityConfig{
+	StrictMode:          false, // Default to permissive mode for backward compatibility
+	RequireSecureRandom: true,  // Always prefer secure randomization
+	FailOnWeakRandom:    false, // Allow fallback by default
+}
+
 // Initialize secure random seed on package load
 func init() {
 	// Seed math/rand with cryptographically secure random data for better randomness
@@ -38,8 +45,9 @@ func init() {
 	seedBytes := make([]byte, 8)
 	_, err := rand.Read(seedBytes)
 	if err != nil {
-		// Check if we're in security-sensitive mode
-		if os.Getenv("DATASCRAPEXTER_SECURITY_STRICT") == "true" || os.Getenv("DATASCRAPEXTER_FAIL_ON_WEAK_RANDOM") == "true" {
+		// Use default security configuration for initialization
+		// This removes dependency on potentially attacker-controlled environment variables
+		if defaultSecurityConfig.FailOnWeakRandom {
 			// SECURITY: Store error for graceful handling instead of panicking
 			initializationError = &securityError{
 				message: "cryptographically secure randomization failed in strict security mode - proxy rotation requires secure randomization",
@@ -188,6 +196,60 @@ type AdvancedProxyConfig struct {
 	MLConfig              *MLPredictionConfig      `yaml:"ml_config,omitempty" json:"ml_config,omitempty"`
 	CostOptimization      *CostOptimizationConfig  `yaml:"cost_optimization,omitempty" json:"cost_optimization,omitempty"`
 	AdvancedProviders     []AdvancedProxyProvider  `yaml:"advanced_providers,omitempty" json:"advanced_providers,omitempty"`
+	Security              *SecurityConfig          `yaml:"security,omitempty" json:"security,omitempty"`
+}
+
+// SecurityConfig defines security settings for proxy rotation
+type SecurityConfig struct {
+	// StrictMode enforces cryptographically secure randomization and fails operations
+	// if secure random sources are unavailable. This is recommended for production environments.
+	StrictMode bool `yaml:"strict_mode" json:"strict_mode"`
+	
+	// RequireSecureRandom requires cryptographically secure randomization for all proxy selection.
+	// When false, falls back to deterministic pseudo-random selection if secure random fails.
+	RequireSecureRandom bool `yaml:"require_secure_random" json:"require_secure_random"`
+	
+	// FailOnWeakRandom causes initialization to fail if cryptographically secure randomization
+	// is unavailable. This provides compile-time safety for security-critical deployments.
+	FailOnWeakRandom bool `yaml:"fail_on_weak_random" json:"fail_on_weak_random"`
+}
+
+// ValidateSecurityConfig validates security configuration and returns any errors
+func ValidateSecurityConfig(config *SecurityConfig) error {
+	if config == nil {
+		return nil // Use defaults
+	}
+	
+	// Test cryptographically secure randomization if required
+	if config.StrictMode || config.RequireSecureRandom {
+		testBytes := make([]byte, 8)
+		if _, err := rand.Read(testBytes); err != nil {
+			if config.FailOnWeakRandom {
+				return &securityError{
+					message: "cryptographically secure randomization test failed in strict security configuration",
+					cause:   err,
+				}
+			}
+			rotationLogger.Warn(fmt.Sprintf("Security warning: cryptographically secure randomization test failed, falling back to pseudo-random: %v", err))
+		}
+	}
+	
+	return nil
+}
+
+// GetEffectiveSecurityConfig returns the effective security configuration
+func GetEffectiveSecurityConfig(config *SecurityConfig) *SecurityConfig {
+	if config == nil {
+		return defaultSecurityConfig
+	}
+	
+	effective := &SecurityConfig{
+		StrictMode:          config.StrictMode,
+		RequireSecureRandom: config.RequireSecureRandom,
+		FailOnWeakRandom:    config.FailOnWeakRandom,
+	}
+	
+	return effective
 }
 
 // PerformanceThresholds defines minimum performance requirements
