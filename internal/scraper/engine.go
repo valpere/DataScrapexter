@@ -1210,3 +1210,73 @@ func (e *Engine) parseDocument(resp *http.Response) (interface{}, error) {
 	
 	return doc, nil
 }
+
+// extractData processes a goquery document and extracts data according to field configurations
+// This is a core Engine method for data extraction functionality
+func (e *Engine) extractData(doc interface{}, url string, extractors []FieldConfig) (*Result, error) {
+	logger := utils.GetLogger("scraper")
+	
+	// Type assertion to ensure we have a goquery document
+	goqueryDoc, ok := doc.(*goquery.Document)
+	if !ok {
+		return nil, fmt.Errorf("expected *goquery.Document, got %T", doc)
+	}
+	
+	// Initialize result structure
+	result := &Result{
+		Data:      make(map[string]interface{}),
+		Success:   true,
+		Timestamp: time.Now(),
+		Errors:    make([]string, 0),
+		Warnings:  make([]string, 0),
+	}
+	
+	// Track extraction statistics
+	extractedCount := 0
+	failedCount := 0
+	requiredFieldsOK := true
+	
+	// Extract data for each configured field
+	for _, field := range extractors {
+		value, err := e.extractField(goqueryDoc, field)
+		if err != nil {
+			error := fmt.Sprintf("Field '%s': %v", field.Name, err)
+			result.Errors = append(result.Errors, error)
+			failedCount++
+			
+			// Check if this was a required field
+			if field.Required {
+				requiredFieldsOK = false
+				logger.Errorf("Required field extraction failed: %s", error)
+			} else {
+				logger.Warnf("Optional field extraction failed: %s", error)
+				
+				// Use default value if available
+				if field.Default != nil {
+					result.Data[field.Name] = field.Default
+					result.Warnings = append(result.Warnings, fmt.Sprintf("Using default value for field '%s'", field.Name))
+					extractedCount++
+				}
+			}
+			continue
+		}
+		
+		// Successfully extracted field
+		result.Data[field.Name] = value
+		extractedCount++
+		logger.Debugf("Successfully extracted field '%s': %v", field.Name, value)
+	}
+	
+	// Calculate success based on required fields and error tolerance
+	totalFields := len(extractors)
+	result.Success = requiredFieldsOK && (extractedCount > 0 || totalFields == 0)
+	
+	if totalFields > 0 {
+		result.ErrorRate = float64(failedCount) / float64(totalFields)
+	}
+	
+	logger.Infof("Data extraction completed: %d/%d fields extracted, success=%v", 
+		extractedCount, totalFields, result.Success)
+	
+	return result, nil
+}

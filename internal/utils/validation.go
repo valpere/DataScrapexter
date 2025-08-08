@@ -899,6 +899,14 @@ func validateExactLength(fieldName string, fieldValue reflect.Value, param strin
 //   - Some valid email addresses may still be rejected by real-world email providers due to
 //     provider-specific rules.
 //
+// Edge cases that ParseAddress accepts but providers might reject:
+//   - Quoted strings: "user@domain"@example.com
+//   - Comments: user(comment)@example.com  
+//   - Plus addressing beyond limits: user+very+long+tag@example.com
+//   - Consecutive dots: user..name@example.com (technically valid but often rejected)
+//   - Special characters in local part: user#$%@example.com
+//   - Very long local parts (>64 chars) or domains (>253 chars)
+//
 // For stricter validation, consider additional checks or using a dedicated email validation library.
 func IsValidEmail(email string) bool {
 	_, err := mail.ParseAddress(email)

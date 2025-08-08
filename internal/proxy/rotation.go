@@ -28,6 +28,35 @@ func (e *securityError) Error() string {
 	return fmt.Sprintf("security error: %s: %v", e.message, e.cause)
 }
 
+// secureRandomInt returns a cryptographically secure random integer in range [0, max)
+func secureRandomInt(max int) (int, error) {
+	if max <= 0 {
+		return 0, fmt.Errorf("max must be positive")
+	}
+	
+	// Calculate the number of bytes needed
+	bits := 0
+	for n := max - 1; n > 0; n >>= 1 {
+		bits++
+	}
+	bytes := (bits + 7) / 8
+	
+	// Generate random bytes
+	randomBytes := make([]byte, bytes)
+	_, err := rand.Read(randomBytes)
+	if err != nil {
+		return 0, fmt.Errorf("failed to generate secure random: %w", err)
+	}
+	
+	// Convert to integer and reduce modulo max
+	var result int
+	for i, b := range randomBytes {
+		result += int(b) << (8 * i)
+	}
+	
+	return result % max, nil
+}
+
 // initializationError tracks initialization errors for graceful handling
 var initializationError error
 
@@ -45,9 +74,14 @@ func init() {
 	seedBytes := make([]byte, 8)
 	_, err := rand.Read(seedBytes)
 	if err != nil {
+		// Check for production environment to fail fast
+		isProduction := os.Getenv("ENVIRONMENT") == "production" || 
+			os.Getenv("ENV") == "production" ||
+			os.Getenv("GO_ENV") == "production"
+		
 		// Use default security configuration for initialization
 		// This removes dependency on potentially attacker-controlled environment variables
-		if defaultSecurityConfig.FailOnWeakRandom {
+		if defaultSecurityConfig.FailOnWeakRandom || isProduction {
 			// SECURITY: Store error for graceful handling instead of panicking
 			initializationError = &securityError{
 				message: "cryptographically secure randomization failed in strict security mode - proxy rotation requires secure randomization",
@@ -1787,8 +1821,14 @@ func (lb *LoadBalancer) SelectProxy(candidates []*AdvancedProxyInstance) (*Advan
 		return lb.selectLeastConnections(candidates), nil
 	case "weighted_round_robin":
 		return lb.selectWeightedRoundRobin(candidates), nil
-	default: // round_robin
-		return candidates[mathrand.Intn(len(candidates))], nil
+	default: // round_robin with secure randomization
+		index, err := secureRandomInt(len(candidates))
+		if err != nil {
+			// Fallback to math/rand with warning for proxy rotation
+			rotationLogger.Warn("Secure randomization failed for proxy selection, falling back to math/rand - proxy rotation may be predictable")
+			return candidates[mathrand.Intn(len(candidates))], nil
+		}
+		return candidates[index], nil
 	}
 }
 

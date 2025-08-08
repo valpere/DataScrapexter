@@ -24,6 +24,55 @@ const (
 	HashLength = 20 // Use 20 characters for better collision resistance
 )
 
+// Pre-compiled regular expressions for performance optimization
+var (
+	// JSON-LD patterns
+	jsonLDRegex = regexp.MustCompile(`<script[^>]*type=["']application/ld\+json["'][^>]*>(.*?)</script>`)
+	
+	// Microdata patterns
+	itemScopeRegex = regexp.MustCompile(`<[^>]*\sitemscope[^>]*>`)
+	itemTypeRegex  = regexp.MustCompile(`itemtype=["']([^"']+)["']`)
+	itemIdRegex    = regexp.MustCompile(`itemid=["']([^"']+)["']`)
+	itemPropRegex  = regexp.MustCompile(`<[^>]*\sitemprop=["']([^"']+)["'][^>]*>([^<]*)</[^>]+>`)
+	
+	// RDFa patterns
+	rdfaRegex     = regexp.MustCompile(`<[^>]*\s(?:typeof|property|resource|about|vocab|prefix)=[^>]*>`)
+	typeofRegex   = regexp.MustCompile(`typeof=["']([^"']+)["']`)
+	aboutRegex    = regexp.MustCompile(`about=["']([^"']+)["']`)
+	resourceRegex = regexp.MustCompile(`resource=["']([^"']+)["']`)
+	vocabRegex    = regexp.MustCompile(`vocab=["']([^"']+)["']`)
+	prefixRegex   = regexp.MustCompile(`prefix=["']([^"']+)["']`)
+	propertyRegex = regexp.MustCompile(`<[^>]*\sproperty=["']([^"']+)["'][^>]*>([^<]*)</[^>]+>`)
+	
+	// Image patterns
+	imgRegex       = regexp.MustCompile(`<img[^>]*>`)
+	srcRegex       = regexp.MustCompile(`src=["']([^"']+)["']`)
+	altRegex       = regexp.MustCompile(`alt=["']([^"']*?)["']`)
+	titleRegex     = regexp.MustCompile(`title=["']([^"']*?)["']`)
+	widthRegex     = regexp.MustCompile(`width=["']?([0-9]+)["']?`)
+	heightRegex    = regexp.MustCompile(`height=["']?([0-9]+)["']?`)
+	srcsetRegex    = regexp.MustCompile(`srcset=["']([^"']+)["']`)
+	loadingRegex   = regexp.MustCompile(`loading=["']([^"']+)["']`)
+	bgImageRegex   = regexp.MustCompile(`background-image:\s*url\(["']?([^"')]+)["']?\)`)
+	ogImageRegex   = regexp.MustCompile(`<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["'][^>]*>`)
+	
+	// Video patterns
+	videoRegex      = regexp.MustCompile(`<video[^>]*>`)
+	posterRegex     = regexp.MustCompile(`poster=["']([^"']+)["']`)
+	youtubeRegex    = regexp.MustCompile(`<iframe[^>]*src=["'](?:https?:)?//(?:www\.)?(?:youtube\.com/embed/|youtu\.be/)([^"'&?]+)[^"']*["'][^>]*>`)
+	vimeoRegex      = regexp.MustCompile(`<iframe[^>]*src=["'](?:https?:)?//(?:www\.)?vimeo\.com/video/([0-9]+)[^"']*["'][^>]*>`)
+	dailymotionRegex = regexp.MustCompile(`<iframe[^>]*src=["'](?:https?:)?//(?:www\.)?dailymotion\.com/embed/video/([^"'&?]+)[^"']*["'][^>]*>`)
+	ogVideoRegex    = regexp.MustCompile(`<meta[^>]*property=["']og:video(?::url)?["'][^>]*content=["']([^"']+)["'][^>]*>`)
+	
+	// Audio patterns
+	audioRegex       = regexp.MustCompile(`<audio[^>]*>`)
+	preloadRegex     = regexp.MustCompile(`preload=["']([^"']+)["']`)
+	spotifyRegex     = regexp.MustCompile(`<iframe[^>]*src=["'](?:https?:)?//(?:open\.)?spotify\.com/embed/([^"'&?]+)[^"']*["'][^>]*>`)
+	soundcloudRegex  = regexp.MustCompile(`<iframe[^>]*src=["'](?:https?:)?//w\.soundcloud\.com/player/\?url=([^"'&]+)[^"']*["'][^>]*>`)
+	appleMusicRegex  = regexp.MustCompile(`<iframe[^>]*src=["'](?:https?:)?//embed\.music\.apple\.com/([^"']+)["'][^>]*>`)
+	audioFileRegex   = regexp.MustCompile(`href=["']([^"']*\.(?:mp3|wav|ogg|m4a|aac|flac)[^"']*)["']`)
+)
+
 // DataExtractor handles data extraction from raw content
 type DataExtractor struct {
 	SelectorEngines   map[string]SelectorEngine
@@ -187,7 +236,11 @@ func (de *DataExtractor) processContent(ctx context.Context, data map[string]int
 		for key, value := range processed {
 			if str, ok := value.(string); ok {
 				if processedStr, err := processor.Process(ctx, str); err == nil {
-					fieldName := generateProcessedFieldName(key, processor.GetName())
+					fieldName, err := generateProcessedFieldName(key, processor.GetName())
+					if err != nil {
+						// Skip this processing step if secure field name generation fails
+						continue
+					}
 					processed[fieldName] = processedStr
 				}
 			}
@@ -234,9 +287,8 @@ func (de *DataExtractor) applySelectorEngines(ctx context.Context, rawData map[s
 func (de *DataExtractor) extractJSONLD(htmlContent string) []map[string]interface{} {
 	var jsonLD []map[string]interface{}
 	
-	// Regular expression to find JSON-LD script tags
-	jsonLDPattern := regexp.MustCompile(`<script[^>]*type=["']application/ld\+json["'][^>]*>(.*?)</script>`)
-	matches := jsonLDPattern.FindAllStringSubmatch(htmlContent, -1)
+	// Use pre-compiled regex for better performance
+	matches := jsonLDRegex.FindAllStringSubmatch(htmlContent, -1)
 	
 	for _, match := range matches {
 		if len(match) > 1 {
@@ -276,28 +328,28 @@ func (de *DataExtractor) extractMicrodata(htmlContent string) []map[string]inter
 	var microdata []map[string]interface{}
 	
 	// Find all elements with itemscope attribute (indicates a microdata item)
-	itemScopePattern := regexp.MustCompile(`<[^>]*\sitemscope[^>]*>`)
-	scopeMatches := itemScopePattern.FindAllString(htmlContent, -1)
+	// Use pre-compiled regex
+	scopeMatches := itemScopeRegex.FindAllString(htmlContent, -1)
 	
 	for _, scopeMatch := range scopeMatches {
 		item := make(map[string]interface{})
 		
 		// Extract itemtype if present
-		itemTypePattern := regexp.MustCompile(`itemtype=["']([^"']+)["']`)
-		if typeMatch := itemTypePattern.FindStringSubmatch(scopeMatch); len(typeMatch) > 1 {
+		// Use pre-compiled regex
+		if typeMatch := itemTypeRegex.FindStringSubmatch(scopeMatch); len(typeMatch) > 1 {
 			item["@type"] = typeMatch[1]
 		}
 		
 		// Extract itemid if present  
-		itemIdPattern := regexp.MustCompile(`itemid=["']([^"']+)["']`)
-		if idMatch := itemIdPattern.FindStringSubmatch(scopeMatch); len(idMatch) > 1 {
+		// Use pre-compiled regex
+		if idMatch := itemIdRegex.FindStringSubmatch(scopeMatch); len(idMatch) > 1 {
 			item["@id"] = idMatch[1]
 		}
 		
 		// Look for itemprop attributes in the surrounding context
 		// This is a basic implementation - in practice, you'd need proper HTML parsing
-		propPattern := regexp.MustCompile(`<[^>]*\sitemprop=["']([^"']+)["'][^>]*>([^<]*)</[^>]+>`)
-		propMatches := propPattern.FindAllStringSubmatch(htmlContent, -1)
+		// Use pre-compiled regex
+		propMatches := itemPropRegex.FindAllStringSubmatch(htmlContent, -1)
 		
 		properties := make(map[string]interface{})
 		for _, propMatch := range propMatches {
@@ -333,8 +385,8 @@ func (de *DataExtractor) extractRDFa(htmlContent string) []map[string]interface{
 	var rdfa []map[string]interface{}
 	
 	// Find elements with RDFa attributes (typeof, property, resource, etc.)
-	rdfaPattern := regexp.MustCompile(`<[^>]*\s(?:typeof|property|resource|about|vocab|prefix)=[^>]*>`)
-	rdfaMatches := rdfaPattern.FindAllString(htmlContent, -1)
+	// Use pre-compiled regex
+	rdfaMatches := rdfaRegex.FindAllString(htmlContent, -1)
 	
 	for _, match := range rdfaMatches {
 		item := make(map[string]interface{})
@@ -376,9 +428,8 @@ func (de *DataExtractor) extractRDFa(htmlContent string) []map[string]interface{
 		}
 		
 		if hasRDFaData {
-			// Look for property attributes in the broader context
-			propPattern := regexp.MustCompile(`<[^>]*\sproperty=["']([^"']+)["'][^>]*>([^<]*)</[^>]+>`)
-			propMatches := propPattern.FindAllStringSubmatch(htmlContent, -1)
+			// Look for property attributes in the broader context using pre-compiled regex
+			propMatches := propertyRegex.FindAllStringSubmatch(htmlContent, -1)
 			
 			properties := make(map[string]interface{})
 			for _, propMatch := range propMatches {
@@ -407,16 +458,16 @@ func (de *DataExtractor) extractImages(htmlContent string) []map[string]interfac
 	var images []map[string]interface{}
 	
 	// Extract <img> tags with comprehensive attribute extraction
-	imgPattern := regexp.MustCompile(`<img[^>]*>`)
-	imgMatches := imgPattern.FindAllString(htmlContent, -1)
+	// Use pre-compiled regex
+	imgMatches := imgRegex.FindAllString(htmlContent, -1)
 	
 	for _, imgTag := range imgMatches {
 		image := make(map[string]interface{})
 		image["type"] = "img"
 		
 		// Extract src attribute
-		srcPattern := regexp.MustCompile(`src=["']([^"']+)["']`)
-		if srcMatch := srcPattern.FindStringSubmatch(imgTag); len(srcMatch) > 1 {
+		// Use pre-compiled regex
+		if srcMatch := srcRegex.FindStringSubmatch(imgTag); len(srcMatch) > 1 {
 			image["src"] = srcMatch[1]
 		}
 		
@@ -506,8 +557,8 @@ func (de *DataExtractor) extractVideos(htmlContent string) []map[string]interfac
 		video["type"] = "video"
 		
 		// Extract src attribute
-		srcPattern := regexp.MustCompile(`src=["']([^"']+)["']`)
-		if srcMatch := srcPattern.FindStringSubmatch(videoTag); len(srcMatch) > 1 {
+		// Use pre-compiled regex
+		if srcMatch := srcRegex.FindStringSubmatch(videoTag); len(srcMatch) > 1 {
 			video["src"] = srcMatch[1]
 		}
 		
@@ -630,8 +681,8 @@ func (de *DataExtractor) extractAudio(htmlContent string) []map[string]interface
 		audioItem["type"] = "audio"
 		
 		// Extract src attribute
-		srcPattern := regexp.MustCompile(`src=["']([^"']+)["']`)
-		if srcMatch := srcPattern.FindStringSubmatch(audioTag); len(srcMatch) > 1 {
+		// Use pre-compiled regex
+		if srcMatch := srcRegex.FindStringSubmatch(audioTag); len(srcMatch) > 1 {
 			audioItem["src"] = srcMatch[1]
 		}
 		
@@ -846,13 +897,13 @@ var processedFieldNameCache = make(map[string]string)
 var fieldNameMutex sync.RWMutex
 
 // generateProcessedFieldName creates a safe, unique field name for processed content
-func generateProcessedFieldName(originalKey, processorName string) string {
+func generateProcessedFieldName(originalKey, processorName string) (string, error) {
 	// Create a base name with structured naming
 	baseName := originalKey + FieldSeparator + "processed" + FieldSeparator + processorName
 	
 	// If the field name is within limits, use it directly
 	if len(baseName) <= MaxFieldNameLength {
-		return ensureUniqueFieldName(baseName)
+		return ensureUniqueFieldName(baseName), nil
 	}
 	
 	// For long names, create a shorter version with a hash suffix
@@ -867,18 +918,18 @@ func generateProcessedFieldName(originalKey, processorName string) string {
 	// Include cryptographically secure random bytes for uniqueness
 	randomBytes := make([]byte, 16) // 128-bit UUID-like uniqueness
 	if _, err := rand.Read(randomBytes); err != nil {
-		// Fallback to time-based uniqueness if crypto/rand fails
-		hasher.Write([]byte(fmt.Sprintf("%d", time.Now().UnixNano())))
-	} else {
-		hasher.Write(randomBytes)
+		// SECURITY: Fail the operation instead of degrading to predictable field names
+		// Predictable field names could lead to data corruption or security issues
+		return "", fmt.Errorf("failed to generate secure field name: cryptographically secure randomization failed: %w", err)
 	}
+	hasher.Write(randomBytes)
 	hashHex := hex.EncodeToString(hasher.Sum(nil))[:HashLength]
 	
 	// Truncate the base name and add hash
 	truncated := baseName[:maxPrefixLen]
 	hashedName := truncated + FieldSeparator + hashHex
 	
-	return ensureUniqueFieldName(hashedName)
+	return ensureUniqueFieldName(hashedName), nil
 }
 
 // ensureUniqueFieldName checks for collisions and resolves them

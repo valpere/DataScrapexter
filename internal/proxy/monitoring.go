@@ -483,7 +483,18 @@ func (pm *ProxyMonitor) checkBudgetAlert(metrics *CurrentMetrics) {
 	// Get the appropriate budget based on the configured period
 	budget := pm.getEffectiveBudget()
 	if budget <= 0 {
-		monitoringLogger.Warn("Budget alert check skipped: no valid budget configured")
+		// Budget alerting is enabled but budget is not properly configured - this is a configuration error
+		monitoringLogger.Error("Budget alert configuration error: budget alerting is enabled but no valid budget is configured. This indicates a misconfiguration that could lead to uncontrolled spending.")
+		monitoringLogger.Error("To fix: either disable budget alerting (set BudgetThreshold to 0) or configure a valid budget amount")
+		
+		// Consider this a critical configuration error - don't silently skip
+		pm.alerts.TriggerAlert(Alert{
+			ID:        fmt.Sprintf("budget_config_%d", time.Now().Unix()),
+			Type:      "budget_configuration_error", 
+			Message:   "Budget alerting enabled but no valid budget configured - potential uncontrolled spending risk",
+			Severity:  "critical",
+			Timestamp: time.Now(),
+		})
 		return
 	}
 
