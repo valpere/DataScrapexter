@@ -15,6 +15,8 @@ import (
 const (
 	// MinLRUCacheSize defines the minimum effective cache size
 	MinLRUCacheSize = 10
+	// DefaultLRUCacheSize defines the default cache size for optimal performance
+	DefaultLRUCacheSize = 1000
 )
 
 // LRUCacheNode represents a node in the doubly-linked list
@@ -43,8 +45,8 @@ func (lru *LRUCache) Capacity() int {
 
 // NewLRUCache creates a new LRU cache with the specified capacity
 func NewLRUCache(capacity int) *LRUCache {
-	if capacity < 1 {
-		capacity = 1000 // Default capacity
+	if capacity < MinLRUCacheSize {
+		capacity = DefaultLRUCacheSize // Use consistent default capacity
 	}
 	
 	lru := &LRUCache{

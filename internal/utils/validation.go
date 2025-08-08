@@ -4,6 +4,7 @@ package utils
 
 import (
 	"fmt"
+	"net/mail"
 	"net/url"
 	"reflect"
 	"regexp"

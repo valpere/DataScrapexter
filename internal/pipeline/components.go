@@ -4,11 +4,19 @@ package pipeline
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
+)
+
+const (
+	// MaxFieldNameLength prevents excessively long field names
+	MaxFieldNameLength = 100
+	// FieldSeparator used for structured field naming
+	FieldSeparator = "__"
 )
 
 // DataExtractor handles data extraction from raw content
@@ -174,7 +182,8 @@ func (de *DataExtractor) processContent(ctx context.Context, data map[string]int
 		for key, value := range processed {
 			if str, ok := value.(string); ok {
 				if processedStr, err := processor.Process(ctx, str); err == nil {
-					processed[key+"_processed_"+processor.GetName()] = processedStr
+					fieldName := generateProcessedFieldName(key, processor.GetName())
+					processed[fieldName] = processedStr
 				}
 			}
 		}
@@ -377,6 +386,32 @@ func (dv *DataValidator) Validate(ctx context.Context, data map[string]interface
 	}
 
 	return validated, nil
+}
+
+// generateProcessedFieldName creates a safe, unique field name for processed content
+func generateProcessedFieldName(originalKey, processorName string) string {
+	// Create a base name with structured naming
+	baseName := originalKey + FieldSeparator + "processed" + FieldSeparator + processorName
+	
+	// If the field name is within limits, use it directly
+	if len(baseName) <= MaxFieldNameLength {
+		return baseName
+	}
+	
+	// For long names, create a shorter version with a hash suffix
+	maxPrefixLen := MaxFieldNameLength - 16 // Reserve space for hash and separator
+	if maxPrefixLen < 10 {
+		maxPrefixLen = 10 // Ensure minimum readable prefix
+	}
+	
+	// Create hash of the full intended name
+	hasher := sha256.New()
+	hasher.Write([]byte(baseName))
+	hashHex := hex.EncodeToString(hasher.Sum(nil))[:12] // Use first 12 chars of hash
+	
+	// Truncate the base name and add hash
+	truncated := baseName[:maxPrefixLen]
+	return truncated + FieldSeparator + hashHex
 }
 
 // validateField validates a single field against a rule
@@ -816,24 +851,17 @@ func (rd *RecordDeduplicator) evictOldestHashes() {
 		return
 	}
 	
-	// Simple eviction: remove random entries when over limit
-	// In production, this should use LRU or similar strategy
+	// Efficient eviction: remove entries directly without intermediate slice
 	toRemove := len(rd.seenHashes) - rd.CacheSize
+	removed := 0
 	
-	// Collect keys to delete first to avoid iteration during modification
-	var keysToDelete []string
-	count := 0
+	// Remove entries directly from map without collecting keys
 	for hash := range rd.seenHashes {
-		if count >= toRemove {
+		if removed >= toRemove {
 			break
 		}
-		keysToDelete = append(keysToDelete, hash)
-		count++
-	}
-	
-	// Delete the collected keys in a separate loop
-	for _, hash := range keysToDelete {
 		delete(rd.seenHashes, hash)
+		removed++
 	}
 }
 
@@ -843,24 +871,17 @@ func (rd *RecordDeduplicator) evictOldestFields() {
 		return
 	}
 	
-	// Simple eviction: remove random entries when over limit
-	// In production, this should use LRU or similar strategy
+	// Efficient eviction: remove entries directly without intermediate slice
 	toRemove := len(rd.seenFields) - rd.CacheSize
+	removed := 0
 	
-	// Collect keys to delete first to avoid iteration during modification
-	var keysToDelete []string
-	count := 0
+	// Remove entries directly from map without collecting keys
 	for fieldKey := range rd.seenFields {
-		if count >= toRemove {
+		if removed >= toRemove {
 			break
 		}
-		keysToDelete = append(keysToDelete, fieldKey)
-		count++
-	}
-	
-	// Delete the collected keys in a separate loop
-	for _, fieldKey := range keysToDelete {
 		delete(rd.seenFields, fieldKey)
+		removed++
 	}
 }
 

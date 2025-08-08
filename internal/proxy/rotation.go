@@ -60,7 +60,7 @@ func init() {
 		
 		// SECURITY: Log critical warning about reduced security
 		rotationLogger.Error(fmt.Sprintf("CRITICAL SECURITY WARNING: Cryptographically secure randomization failed, using enhanced time-based seeding with reduced security: %v", err))
-		rotationLogger.Warn("Proxy rotation patterns may be predictable - consider fixing the crypto/rand issue or set DATASCRAPEXTER_SECURITY_STRICT=true for fail-fast behavior")
+		rotationLogger.Warn("Proxy rotation patterns may be predictable - consider fixing the crypto/rand issue or enabling strict security mode in configuration")
 		
 		// Enhanced time-based seeding with multiple entropy sources to improve unpredictability
 		now := time.Now()
@@ -1293,6 +1293,11 @@ func NewGeographicResolver() *GeographicResolver {
 }
 
 func (gr *GeographicResolver) ResolveLocation(urlStr string) (*GeographicLocation, error) {
+	// Check for initialization errors first
+	if initializationError != nil {
+		return nil, fmt.Errorf("geographic resolution failed due to initialization error: %w", initializationError)
+	}
+	
 	// Parse URL using standard library for proper hostname extraction
 	parsedURL, err := url.Parse(urlStr)
 	if err != nil {
@@ -1467,6 +1472,11 @@ func NewPerformancePredictor(config *MLPredictionConfig) *PerformancePredictor {
 }
 
 func (pp *PerformancePredictor) PredictBestProxy(candidates []*AdvancedProxyInstance, targetURL string) (*AdvancedProxyInstance, error) {
+	// Check for initialization errors first
+	if initializationError != nil {
+		return nil, fmt.Errorf("proxy prediction failed due to initialization error: %w", initializationError)
+	}
+	
 	if !pp.enabled || len(candidates) == 0 {
 		return nil, fmt.Errorf("performance predictor not enabled or no candidates")
 	}
