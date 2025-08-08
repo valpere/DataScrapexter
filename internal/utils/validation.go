@@ -884,11 +884,10 @@ func validateExactLength(fieldName string, fieldValue reflect.Value, param strin
 
 // Common validation functions
 
-// IsValidEmail validates email addresses using regex
+// IsValidEmail validates email addresses using net/mail.ParseAddress (RFC 5322 compliant)
 func IsValidEmail(email string) bool {
-	// RFC 5322 compliant email regex (simplified version)
-	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
-	return emailRegex.MatchString(email)
+	_, err := mail.ParseAddress(email)
+	return err == nil
 }
 
 // IsAlpha checks if string contains only alphabetic characters
