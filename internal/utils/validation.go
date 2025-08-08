@@ -885,7 +885,27 @@ func validateExactLength(fieldName string, fieldValue reflect.Value, param strin
 
 // Common validation functions
 
-// IsValidEmail validates email addresses using net/mail.ParseAddress (RFC 5322 compliant)
+// IsValidEmail validates email addresses using net/mail.ParseAddress.
+//
+// Validation approach:
+//   - This function uses the Go standard library's net/mail.ParseAddress to check if the input
+//     string is a syntactically valid email address according to RFC 5322.
+//
+// RFC 5322 compliance:
+//   - The validation is based on the syntax rules defined in RFC 5322, which is the standard for
+//     Internet email addresses.
+//
+// Limitations and known edge cases:
+//   - net/mail.ParseAddress is permissive and may accept some addresses that are technically valid
+//     per RFC 5322 but are not accepted by most email providers (e.g., addresses with unusual
+//     characters, quoted strings, or comments).
+//   - The function may accept email addresses with display names (e.g., "John Doe <john@example.com>"),
+//     not just plain addresses.
+//   - This function does not check if the domain exists or if the email address is deliverable.
+//   - Some valid email addresses may still be rejected by real-world email providers due to
+//     provider-specific rules.
+//
+// For stricter validation, consider additional checks or using a dedicated email validation library.
 func IsValidEmail(email string) bool {
 	_, err := mail.ParseAddress(email)
 	return err == nil
