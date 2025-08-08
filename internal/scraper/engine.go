@@ -1172,3 +1172,41 @@ func getTopErrorTypes(errorTypes map[string]int, topN int) map[string]int {
 	}
 	return result
 }
+
+// getNextUserAgent returns the next user agent from the pool in round-robin fashion
+func (e *Engine) getNextUserAgent() string {
+	if len(e.userAgentPool) == 0 {
+		return "DataScrapexter/1.0"
+	}
+	
+	userAgent := e.userAgentPool[e.currentUAIndex]
+	e.currentUAIndex = (e.currentUAIndex + 1) % len(e.userAgentPool)
+	return userAgent
+}
+
+// parseDocument parses an HTTP response into a goquery document
+func (e *Engine) parseDocument(resp *http.Response) (interface{}, error) {
+	// Ensure response body is closed after parsing
+	defer func() {
+		if resp.Body != nil {
+			resp.Body.Close()
+		}
+	}()
+	
+	// Check content type to determine parsing strategy
+	contentType := resp.Header.Get("Content-Type")
+	logger := utils.GetLogger("scraper")
+	logger.Debugf("Parsing document with content type: %s", contentType)
+	
+	// Parse the response body into a goquery document
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		logger.Errorf("Failed to parse HTML document: %v", err)
+		return nil, fmt.Errorf("failed to parse HTML document: %w", err)
+	}
+	
+	// Log parsing success
+	logger.Debugf("Successfully parsed document with %d elements", doc.Find("*").Length())
+	
+	return doc, nil
+}

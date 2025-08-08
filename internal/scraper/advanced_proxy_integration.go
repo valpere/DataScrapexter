@@ -731,42 +731,6 @@ func (ape *AdvancedProxyEngine) GetCostReport(period time.Duration) interface{} 
 	return ape.proxyMonitor.GetCostReport(period)
 }
 
-// Helper method to get next user agent from the base engine
-func (e *Engine) getNextUserAgent() string {
-	if len(e.userAgentPool) == 0 {
-		return "DataScrapexter/1.0"
-	}
-	
-	userAgent := e.userAgentPool[e.currentUAIndex]
-	e.currentUAIndex = (e.currentUAIndex + 1) % len(e.userAgentPool)
-	return userAgent
-}
-
-// Helper methods that need to access private engine methods
-func (e *Engine) parseDocument(resp *http.Response) (interface{}, error) {
-	// Ensure response body is closed after parsing
-	defer func() {
-		if resp.Body != nil {
-			resp.Body.Close()
-		}
-	}()
-	
-	// Check content type to determine parsing strategy
-	contentType := resp.Header.Get("Content-Type")
-	advancedProxyLogger.Debugf("Parsing document with content type: %s", contentType)
-	
-	// Parse the response body into a goquery document
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
-	if err != nil {
-		advancedProxyLogger.Errorf("Failed to parse HTML document: %v", err)
-		return nil, fmt.Errorf("failed to parse HTML document: %w", err)
-	}
-	
-	// Log parsing success
-	advancedProxyLogger.Debugf("Successfully parsed document with %d elements", doc.Find("*").Length())
-	
-	return doc, nil
-}
 
 func (e *Engine) extractData(doc interface{}, url string, extractors []FieldConfig) (*Result, error) {
 	// Type assertion to ensure we have a goquery document

@@ -3,6 +3,7 @@ package pipeline
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -863,8 +864,14 @@ func generateProcessedFieldName(originalKey, processorName string) string {
 	// Create hash of the full intended name for collision resistance
 	hasher := sha256.New()
 	hasher.Write([]byte(baseName))
-	// Include timestamp microseconds for additional uniqueness
-	hasher.Write([]byte(fmt.Sprintf("%d", time.Now().UnixNano())))
+	// Include cryptographically secure random bytes for uniqueness
+	randomBytes := make([]byte, 16) // 128-bit UUID-like uniqueness
+	if _, err := rand.Read(randomBytes); err != nil {
+		// Fallback to time-based uniqueness if crypto/rand fails
+		hasher.Write([]byte(fmt.Sprintf("%d", time.Now().UnixNano())))
+	} else {
+		hasher.Write(randomBytes)
+	}
 	hashHex := hex.EncodeToString(hasher.Sum(nil))[:HashLength]
 	
 	// Truncate the base name and add hash
@@ -1346,17 +1353,23 @@ func (rd *RecordDeduplicator) evictOldestHashes() {
 		return
 	}
 	
-	// Efficient eviction: remove entries directly without intermediate slice
+	// Safe eviction: collect keys first to avoid modifying map during iteration
 	toRemove := len(rd.seenHashes) - rd.CacheSize
-	removed := 0
 	
-	// Remove entries directly from map without collecting keys
+	// Collect keys to remove (safe approach)
+	keysToDelete := make([]string, 0, toRemove)
+	count := 0
 	for hash := range rd.seenHashes {
-		if removed >= toRemove {
+		if count >= toRemove {
 			break
 		}
+		keysToDelete = append(keysToDelete, hash)
+		count++
+	}
+	
+	// Now safely delete the collected keys
+	for _, hash := range keysToDelete {
 		delete(rd.seenHashes, hash)
-		removed++
 	}
 }
 
@@ -1366,17 +1379,23 @@ func (rd *RecordDeduplicator) evictOldestFields() {
 		return
 	}
 	
-	// Efficient eviction: remove entries directly without intermediate slice
+	// Safe eviction: collect keys first to avoid modifying map during iteration
 	toRemove := len(rd.seenFields) - rd.CacheSize
-	removed := 0
 	
-	// Remove entries directly from map without collecting keys
+	// Collect keys to remove (safe approach)
+	keysToDelete := make([]string, 0, toRemove)
+	count := 0
 	for fieldKey := range rd.seenFields {
-		if removed >= toRemove {
+		if count >= toRemove {
 			break
 		}
+		keysToDelete = append(keysToDelete, fieldKey)
+		count++
+	}
+	
+	// Now safely delete the collected keys
+	for _, fieldKey := range keysToDelete {
 		delete(rd.seenFields, fieldKey)
-		removed++
 	}
 }
 

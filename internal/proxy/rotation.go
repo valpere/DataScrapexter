@@ -53,7 +53,7 @@ func init() {
 				message: "cryptographically secure randomization failed in strict security mode - proxy rotation requires secure randomization",
 				cause:   err,
 			}
-			rotationLogger.Error(fmt.Sprintf("FATAL: Cryptographically secure randomization failed in strict security mode: %v", err))
+			rotationLogger.Error(fmt.Sprintf("ERROR: Cryptographically secure randomization failed in strict security mode: %v", err))
 			rotationLogger.Error("SECURITY REQUIREMENT VIOLATION: Application will fail proxy rotation operations until this is resolved")
 			return
 		}
@@ -1405,7 +1405,7 @@ func (gr *GeographicResolver) resolveIPLocation(ip net.IP) *GeographicLocation {
 		TimeZone:  "UTC",
 	}
 	
-	// Skip private/local IPs (IsPrivate() requires Go 1.17+, project uses Go 1.24)
+	// Skip private/local IPs
 	if isPrivateIP(ip) || ip.IsLoopback() {
 		location.Country = "Local"
 		location.Continent = "Local"

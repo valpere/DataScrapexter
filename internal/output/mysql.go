@@ -2,6 +2,7 @@
 package output
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -1146,6 +1147,33 @@ func (mw *MySQLWriter) Close() error {
 // GetMetadata returns MySQL operation metadata
 func (mw *MySQLWriter) GetMetadata() *MySQLMetadata {
 	return mw.metadata
+}
+
+// WriteContext writes data to MySQL database with context
+func (mw *MySQLWriter) WriteContext(ctx context.Context, data interface{}) error {
+	switch v := data.(type) {
+	case []map[string]interface{}:
+		return mw.Write(v)
+	case map[string]interface{}:
+		return mw.Write([]map[string]interface{}{v})
+	case []interface{}:
+		records := make([]map[string]interface{}, 0, len(v))
+		for _, item := range v {
+			if record, ok := item.(map[string]interface{}); ok {
+				records = append(records, record)
+			} else {
+				return fmt.Errorf("unsupported data type in slice: %T", item)
+			}
+		}
+		return mw.Write(records)
+	default:
+		return fmt.Errorf("unsupported data type: %T", data)
+	}
+}
+
+// GetType returns the output type
+func (mw *MySQLWriter) GetType() string {
+	return "mysql"
 }
 
 // GetStatistics returns detailed statistics about MySQL operations

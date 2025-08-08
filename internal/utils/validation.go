@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -39,9 +40,6 @@ var (
 
 	// Field name sanitization pattern
 	fieldNameSanitizePattern *regexp.Regexp
-
-	// Numeric validation pattern
-	numericPattern *regexp.Regexp
 
 	// Sync.Once for thread-safe initialization
 	regexInitOnce sync.Once
@@ -91,9 +89,6 @@ func initRegexPatterns() {
 
 		// Field name sanitization pattern
 		fieldNameSanitizePattern = regexp.MustCompile(`[^a-zA-Z0-9_]`)
-
-		// Numeric validation pattern
-		numericPattern = regexp.MustCompile(`^\s*[-+]?(?:\d+(\.\d*)?|\.\d+)([eE][-+]?\d+)?\s*$`)
 	})
 }
 
@@ -814,14 +809,13 @@ func isNumeric(v reflect.Value) bool {
 	case reflect.Float32, reflect.Float64:
 		return true
 	case reflect.String:
-		str := v.String()
+		str := strings.TrimSpace(v.String())
 		if str == "" {
 			return true // Empty string is considered valid for optional numeric fields
 		}
-		// Initialize regex patterns if not already done
-		initRegexPatterns()
-		// Use pre-compiled regex for better performance
-		return numericPattern.MatchString(str)
+		// Use strconv.ParseFloat for better performance and accuracy
+		_, err := strconv.ParseFloat(str, 64)
+		return err == nil
 	default:
 		return false
 	}
