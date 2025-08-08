@@ -19,6 +19,18 @@ const (
 	DefaultLRUCacheSize = 1000
 )
 
+// validateCacheCapacity ensures cache capacity meets minimum requirements
+// Returns the corrected capacity with consistent behavior across all usage
+func validateCacheCapacity(capacity int, useDefault bool) int {
+	if capacity < MinLRUCacheSize {
+		if useDefault {
+			return DefaultLRUCacheSize // Use default for new cache creation
+		}
+		return MinLRUCacheSize // Use minimum for capacity updates
+	}
+	return capacity
+}
+
 // LRUCacheNode represents a node in the doubly-linked list
 type LRUCacheNode struct {
 	key   string
@@ -45,9 +57,7 @@ func (lru *LRUCache) Capacity() int {
 
 // NewLRUCache creates a new LRU cache with the specified capacity
 func NewLRUCache(capacity int) *LRUCache {
-	if capacity < MinLRUCacheSize {
-		capacity = DefaultLRUCacheSize // Use consistent default capacity
-	}
+	capacity = validateCacheCapacity(capacity, true) // Use default for new caches
 	
 	lru := &LRUCache{
 		capacity: capacity,
@@ -142,9 +152,7 @@ func (lru *LRUCache) Size() int {
 
 // SetCapacity updates the cache capacity and evicts items if necessary
 func (lru *LRUCache) SetCapacity(capacity int) {
-	if capacity < MinLRUCacheSize {
-		capacity = MinLRUCacheSize // Minimum cache size for effectiveness
-	}
+	capacity = validateCacheCapacity(capacity, false) // Use minimum for updates
 	
 	lru.mutex.Lock()
 	defer lru.mutex.Unlock()

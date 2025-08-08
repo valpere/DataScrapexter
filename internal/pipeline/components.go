@@ -7,8 +7,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -17,6 +19,8 @@ const (
 	MaxFieldNameLength = 100
 	// FieldSeparator used for structured field naming
 	FieldSeparator = "__"
+	// HashLength for collision-resistant field name hashes
+	HashLength = 20 // Use 20 characters for better collision resistance
 )
 
 // DataExtractor handles data extraction from raw content
@@ -227,78 +231,526 @@ func (de *DataExtractor) applySelectorEngines(ctx context.Context, rawData map[s
 
 // extractJSONLD extracts JSON-LD structured data
 func (de *DataExtractor) extractJSONLD(htmlContent string) []map[string]interface{} {
-	// Basic JSON-LD extraction from script tags
-	// This is a simplified implementation
 	var jsonLD []map[string]interface{}
 	
-	// In a real implementation, this would parse HTML and extract
-	// <script type="application/ld+json"> content
-	// For now, return empty slice as placeholder
+	// Regular expression to find JSON-LD script tags
+	jsonLDPattern := regexp.MustCompile(`<script[^>]*type=["']application/ld\+json["'][^>]*>(.*?)</script>`)
+	matches := jsonLDPattern.FindAllStringSubmatch(htmlContent, -1)
+	
+	for _, match := range matches {
+		if len(match) > 1 {
+			jsonData := strings.TrimSpace(match[1])
+			if jsonData == "" {
+				continue
+			}
+			
+			// Try to parse as single object
+			var singleObject map[string]interface{}
+			if err := json.Unmarshal([]byte(jsonData), &singleObject); err == nil {
+				jsonLD = append(jsonLD, singleObject)
+				continue
+			}
+			
+			// Try to parse as array of objects
+			var arrayObjects []map[string]interface{}
+			if err := json.Unmarshal([]byte(jsonData), &arrayObjects); err == nil {
+				jsonLD = append(jsonLD, arrayObjects...)
+				continue
+			}
+			
+			// If parsing fails, create a raw data entry
+			jsonLD = append(jsonLD, map[string]interface{}{
+				"@type": "RawJSONLD",
+				"content": jsonData,
+				"parseError": "Failed to parse JSON-LD content",
+			})
+		}
+	}
 	
 	return jsonLD
 }
 
 // extractMicrodata extracts microdata from HTML
 func (de *DataExtractor) extractMicrodata(htmlContent string) []map[string]interface{} {
-	// Basic microdata extraction
-	// This is a simplified implementation
 	var microdata []map[string]interface{}
 	
-	// In a real implementation, this would parse HTML and extract
-	// elements with itemscope, itemtype, itemprop attributes
-	// For now, return empty slice as placeholder
+	// Find all elements with itemscope attribute (indicates a microdata item)
+	itemScopePattern := regexp.MustCompile(`<[^>]*\sitemscope[^>]*>`)
+	scopeMatches := itemScopePattern.FindAllString(htmlContent, -1)
+	
+	for _, scopeMatch := range scopeMatches {
+		item := make(map[string]interface{})
+		
+		// Extract itemtype if present
+		itemTypePattern := regexp.MustCompile(`itemtype=["']([^"']+)["']`)
+		if typeMatch := itemTypePattern.FindStringSubmatch(scopeMatch); len(typeMatch) > 1 {
+			item["@type"] = typeMatch[1]
+		}
+		
+		// Extract itemid if present  
+		itemIdPattern := regexp.MustCompile(`itemid=["']([^"']+)["']`)
+		if idMatch := itemIdPattern.FindStringSubmatch(scopeMatch); len(idMatch) > 1 {
+			item["@id"] = idMatch[1]
+		}
+		
+		// Look for itemprop attributes in the surrounding context
+		// This is a basic implementation - in practice, you'd need proper HTML parsing
+		propPattern := regexp.MustCompile(`<[^>]*\sitemprop=["']([^"']+)["'][^>]*>([^<]*)</[^>]+>`)
+		propMatches := propPattern.FindAllStringSubmatch(htmlContent, -1)
+		
+		properties := make(map[string]interface{})
+		for _, propMatch := range propMatches {
+			if len(propMatch) > 2 {
+				propName := propMatch[1]
+				propValue := strings.TrimSpace(propMatch[2])
+				if propValue != "" {
+					// Handle multiple values for the same property
+					if existing, exists := properties[propName]; exists {
+						if existingSlice, ok := existing.([]string); ok {
+							properties[propName] = append(existingSlice, propValue)
+						} else {
+							properties[propName] = []string{existing.(string), propValue}
+						}
+					} else {
+						properties[propName] = propValue
+					}
+				}
+			}
+		}
+		
+		if len(properties) > 0 {
+			item["properties"] = properties
+			microdata = append(microdata, item)
+		}
+	}
 	
 	return microdata
 }
 
 // extractRDFa extracts RDFa data from HTML
 func (de *DataExtractor) extractRDFa(htmlContent string) []map[string]interface{} {
-	// Basic RDFa extraction
-	// This is a simplified implementation
 	var rdfa []map[string]interface{}
 	
-	// In a real implementation, this would parse HTML and extract
-	// RDFa attributes like typeof, property, resource, etc.
-	// For now, return empty slice as placeholder
+	// Find elements with RDFa attributes (typeof, property, resource, etc.)
+	rdfaPattern := regexp.MustCompile(`<[^>]*\s(?:typeof|property|resource|about|vocab|prefix)=[^>]*>`)
+	rdfaMatches := rdfaPattern.FindAllString(htmlContent, -1)
+	
+	for _, match := range rdfaMatches {
+		item := make(map[string]interface{})
+		hasRDFaData := false
+		
+		// Extract typeof (RDF type)
+		typeofPattern := regexp.MustCompile(`typeof=["']([^"']+)["']`)
+		if typeMatch := typeofPattern.FindStringSubmatch(match); len(typeMatch) > 1 {
+			item["@type"] = typeMatch[1]
+			hasRDFaData = true
+		}
+		
+		// Extract about (subject URI)
+		aboutPattern := regexp.MustCompile(`about=["']([^"']+)["']`)
+		if aboutMatch := aboutPattern.FindStringSubmatch(match); len(aboutMatch) > 1 {
+			item["@id"] = aboutMatch[1]
+			hasRDFaData = true
+		}
+		
+		// Extract resource (object URI)
+		resourcePattern := regexp.MustCompile(`resource=["']([^"']+)["']`)
+		if resourceMatch := resourcePattern.FindStringSubmatch(match); len(resourceMatch) > 1 {
+			item["@resource"] = resourceMatch[1]
+			hasRDFaData = true
+		}
+		
+		// Extract vocab (vocabulary URI)
+		vocabPattern := regexp.MustCompile(`vocab=["']([^"']+)["']`)
+		if vocabMatch := vocabPattern.FindStringSubmatch(match); len(vocabMatch) > 1 {
+			item["@vocab"] = vocabMatch[1]
+			hasRDFaData = true
+		}
+		
+		// Extract prefix definitions
+		prefixPattern := regexp.MustCompile(`prefix=["']([^"']+)["']`)
+		if prefixMatch := prefixPattern.FindStringSubmatch(match); len(prefixMatch) > 1 {
+			item["@prefix"] = prefixMatch[1]
+			hasRDFaData = true
+		}
+		
+		if hasRDFaData {
+			// Look for property attributes in the broader context
+			propPattern := regexp.MustCompile(`<[^>]*\sproperty=["']([^"']+)["'][^>]*>([^<]*)</[^>]+>`)
+			propMatches := propPattern.FindAllStringSubmatch(htmlContent, -1)
+			
+			properties := make(map[string]interface{})
+			for _, propMatch := range propMatches {
+				if len(propMatch) > 2 {
+					propName := propMatch[1]
+					propValue := strings.TrimSpace(propMatch[2])
+					if propValue != "" {
+						properties[propName] = propValue
+					}
+				}
+			}
+			
+			if len(properties) > 0 {
+				item["properties"] = properties
+			}
+			
+			rdfa = append(rdfa, item)
+		}
+	}
 	
 	return rdfa
 }
 
 // extractImages extracts image URLs and metadata
 func (de *DataExtractor) extractImages(htmlContent string) []map[string]interface{} {
-	// Basic image extraction
-	// This is a simplified implementation
 	var images []map[string]interface{}
 	
-	// In a real implementation, this would parse HTML and extract
-	// <img> tags, background-image CSS properties, etc.
-	// For now, return empty slice as placeholder
+	// Extract <img> tags with comprehensive attribute extraction
+	imgPattern := regexp.MustCompile(`<img[^>]*>`)
+	imgMatches := imgPattern.FindAllString(htmlContent, -1)
+	
+	for _, imgTag := range imgMatches {
+		image := make(map[string]interface{})
+		image["type"] = "img"
+		
+		// Extract src attribute
+		srcPattern := regexp.MustCompile(`src=["']([^"']+)["']`)
+		if srcMatch := srcPattern.FindStringSubmatch(imgTag); len(srcMatch) > 1 {
+			image["src"] = srcMatch[1]
+		}
+		
+		// Extract alt attribute
+		altPattern := regexp.MustCompile(`alt=["']([^"']*?)["']`)
+		if altMatch := altPattern.FindStringSubmatch(imgTag); len(altMatch) > 1 {
+			image["alt"] = altMatch[1]
+		}
+		
+		// Extract title attribute
+		titlePattern := regexp.MustCompile(`title=["']([^"']*?)["']`)
+		if titleMatch := titlePattern.FindStringSubmatch(imgTag); len(titleMatch) > 1 {
+			image["title"] = titleMatch[1]
+		}
+		
+		// Extract width and height
+		widthPattern := regexp.MustCompile(`width=["']?([0-9]+)["']?`)
+		if widthMatch := widthPattern.FindStringSubmatch(imgTag); len(widthMatch) > 1 {
+			image["width"] = widthMatch[1]
+		}
+		
+		heightPattern := regexp.MustCompile(`height=["']?([0-9]+)["']?`)
+		if heightMatch := heightPattern.FindStringSubmatch(imgTag); len(heightMatch) > 1 {
+			image["height"] = heightMatch[1]
+		}
+		
+		// Extract srcset for responsive images
+		srcsetPattern := regexp.MustCompile(`srcset=["']([^"']+)["']`)
+		if srcsetMatch := srcsetPattern.FindStringSubmatch(imgTag); len(srcsetMatch) > 1 {
+			image["srcset"] = srcsetMatch[1]
+		}
+		
+		// Extract loading attribute
+		loadingPattern := regexp.MustCompile(`loading=["']([^"']+)["']`)
+		if loadingMatch := loadingPattern.FindStringSubmatch(imgTag); len(loadingMatch) > 1 {
+			image["loading"] = loadingMatch[1]
+		}
+		
+		if _, hasSrc := image["src"]; hasSrc {
+			images = append(images, image)
+		}
+	}
+	
+	// Extract CSS background-image properties
+	bgImagePattern := regexp.MustCompile(`background-image:\s*url\(["']?([^"')]+)["']?\)`)
+	bgMatches := bgImagePattern.FindAllStringSubmatch(htmlContent, -1)
+	
+	for _, bgMatch := range bgMatches {
+		if len(bgMatch) > 1 {
+			image := map[string]interface{}{
+				"type":        "background",
+				"src":         bgMatch[1],
+				"extraction":  "css-background",
+			}
+			images = append(images, image)
+		}
+	}
+	
+	// Extract Open Graph and Twitter card images
+	ogImagePattern := regexp.MustCompile(`<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["'][^>]*>`)
+	ogMatches := ogImagePattern.FindAllStringSubmatch(htmlContent, -1)
+	
+	for _, ogMatch := range ogMatches {
+		if len(ogMatch) > 1 {
+			image := map[string]interface{}{
+				"type":       "meta",
+				"src":        ogMatch[1],
+				"extraction": "og:image",
+			}
+			images = append(images, image)
+		}
+	}
 	
 	return images
 }
 
 // extractVideos extracts video URLs and metadata
 func (de *DataExtractor) extractVideos(htmlContent string) []map[string]interface{} {
-	// Basic video extraction
-	// This is a simplified implementation
 	var videos []map[string]interface{}
 	
-	// In a real implementation, this would parse HTML and extract
-	// <video> tags, YouTube embeds, Vimeo embeds, etc.
-	// For now, return empty slice as placeholder
+	// Extract <video> tags
+	videoPattern := regexp.MustCompile(`<video[^>]*>`)
+	videoMatches := videoPattern.FindAllString(htmlContent, -1)
+	
+	for _, videoTag := range videoMatches {
+		video := make(map[string]interface{})
+		video["type"] = "video"
+		
+		// Extract src attribute
+		srcPattern := regexp.MustCompile(`src=["']([^"']+)["']`)
+		if srcMatch := srcPattern.FindStringSubmatch(videoTag); len(srcMatch) > 1 {
+			video["src"] = srcMatch[1]
+		}
+		
+		// Extract poster attribute
+		posterPattern := regexp.MustCompile(`poster=["']([^"']+)["']`)
+		if posterMatch := posterPattern.FindStringSubmatch(videoTag); len(posterMatch) > 1 {
+			video["poster"] = posterMatch[1]
+		}
+		
+		// Extract width and height
+		widthPattern := regexp.MustCompile(`width=["']?([0-9]+)["']?`)
+		if widthMatch := widthPattern.FindStringSubmatch(videoTag); len(widthMatch) > 1 {
+			video["width"] = widthMatch[1]
+		}
+		
+		heightPattern := regexp.MustCompile(`height=["']?([0-9]+)["']?`)
+		if heightMatch := heightPattern.FindStringSubmatch(videoTag); len(heightMatch) > 1 {
+			video["height"] = heightMatch[1]
+		}
+		
+		// Check for controls, autoplay, loop attributes
+		if strings.Contains(videoTag, "controls") {
+			video["controls"] = true
+		}
+		if strings.Contains(videoTag, "autoplay") {
+			video["autoplay"] = true
+		}
+		if strings.Contains(videoTag, "loop") {
+			video["loop"] = true
+		}
+		
+		if _, hasSrc := video["src"]; hasSrc {
+			videos = append(videos, video)
+		}
+	}
+	
+	// Extract YouTube embeds
+	youtubePattern := regexp.MustCompile(`<iframe[^>]*src=["'](?:https?:)?//(?:www\.)?(?:youtube\.com/embed/|youtu\.be/)([^"'&?]+)[^"']*["'][^>]*>`)
+	youtubeMatches := youtubePattern.FindAllStringSubmatch(htmlContent, -1)
+	
+	for _, ytMatch := range youtubeMatches {
+		if len(ytMatch) > 1 {
+			video := map[string]interface{}{
+				"type":        "youtube",
+				"video_id":    ytMatch[1],
+				"src":         ytMatch[0],
+				"platform":    "YouTube",
+				"embed_url":   fmt.Sprintf("https://www.youtube.com/embed/%s", ytMatch[1]),
+				"watch_url":   fmt.Sprintf("https://www.youtube.com/watch?v=%s", ytMatch[1]),
+			}
+			videos = append(videos, video)
+		}
+	}
+	
+	// Extract Vimeo embeds
+	vimeoPattern := regexp.MustCompile(`<iframe[^>]*src=["'](?:https?:)?//(?:www\.)?vimeo\.com/video/([0-9]+)[^"']*["'][^>]*>`)
+	vimeoMatches := vimeoPattern.FindAllStringSubmatch(htmlContent, -1)
+	
+	for _, vimeoMatch := range vimeoMatches {
+		if len(vimeoMatch) > 1 {
+			video := map[string]interface{}{
+				"type":       "vimeo",
+				"video_id":   vimeoMatch[1],
+				"src":        vimeoMatch[0],
+				"platform":   "Vimeo",
+				"embed_url":  fmt.Sprintf("https://vimeo.com/video/%s", vimeoMatch[1]),
+				"watch_url":  fmt.Sprintf("https://vimeo.com/%s", vimeoMatch[1]),
+			}
+			videos = append(videos, video)
+		}
+	}
+	
+	// Extract Dailymotion embeds
+	dailymotionPattern := regexp.MustCompile(`<iframe[^>]*src=["'](?:https?:)?//(?:www\.)?dailymotion\.com/embed/video/([^"'&?]+)[^"']*["'][^>]*>`)
+	dailymotionMatches := dailymotionPattern.FindAllStringSubmatch(htmlContent, -1)
+	
+	for _, dmMatch := range dailymotionMatches {
+		if len(dmMatch) > 1 {
+			video := map[string]interface{}{
+				"type":       "dailymotion",
+				"video_id":   dmMatch[1],
+				"src":        dmMatch[0],
+				"platform":   "Dailymotion",
+				"embed_url":  fmt.Sprintf("https://www.dailymotion.com/embed/video/%s", dmMatch[1]),
+				"watch_url":  fmt.Sprintf("https://www.dailymotion.com/video/%s", dmMatch[1]),
+			}
+			videos = append(videos, video)
+		}
+	}
+	
+	// Extract Open Graph video metadata
+	ogVideoPattern := regexp.MustCompile(`<meta[^>]*property=["']og:video(?::url)?["'][^>]*content=["']([^"']+)["'][^>]*>`)
+	ogVideoMatches := ogVideoPattern.FindAllStringSubmatch(htmlContent, -1)
+	
+	for _, ogMatch := range ogVideoMatches {
+		if len(ogMatch) > 1 {
+			video := map[string]interface{}{
+				"type":       "meta",
+				"src":        ogMatch[1],
+				"extraction": "og:video",
+				"platform":   "OpenGraph",
+			}
+			videos = append(videos, video)
+		}
+	}
 	
 	return videos
 }
 
 // extractAudio extracts audio URLs and metadata
 func (de *DataExtractor) extractAudio(htmlContent string) []map[string]interface{} {
-	// Basic audio extraction
-	// This is a simplified implementation
 	var audio []map[string]interface{}
 	
-	// In a real implementation, this would parse HTML and extract
-	// <audio> tags, podcast embeds, music streaming embeds, etc.
-	// For now, return empty slice as placeholder
+	// Extract <audio> tags
+	audioPattern := regexp.MustCompile(`<audio[^>]*>`)
+	audioMatches := audioPattern.FindAllString(htmlContent, -1)
+	
+	for _, audioTag := range audioMatches {
+		audioItem := make(map[string]interface{})
+		audioItem["type"] = "audio"
+		
+		// Extract src attribute
+		srcPattern := regexp.MustCompile(`src=["']([^"']+)["']`)
+		if srcMatch := srcPattern.FindStringSubmatch(audioTag); len(srcMatch) > 1 {
+			audioItem["src"] = srcMatch[1]
+		}
+		
+		// Check for controls, autoplay, loop attributes
+		if strings.Contains(audioTag, "controls") {
+			audioItem["controls"] = true
+		}
+		if strings.Contains(audioTag, "autoplay") {
+			audioItem["autoplay"] = true
+		}
+		if strings.Contains(audioTag, "loop") {
+			audioItem["loop"] = true
+		}
+		
+		// Extract preload attribute
+		preloadPattern := regexp.MustCompile(`preload=["']([^"']+)["']`)
+		if preloadMatch := preloadPattern.FindStringSubmatch(audioTag); len(preloadMatch) > 1 {
+			audioItem["preload"] = preloadMatch[1]
+		}
+		
+		if _, hasSrc := audioItem["src"]; hasSrc {
+			audio = append(audio, audioItem)
+		}
+	}
+	
+	// Extract Spotify embeds
+	spotifyPattern := regexp.MustCompile(`<iframe[^>]*src=["'](?:https?:)?//(?:open\.)?spotify\.com/embed/([^"'&?]+)[^"']*["'][^>]*>`)
+	spotifyMatches := spotifyPattern.FindAllStringSubmatch(htmlContent, -1)
+	
+	for _, spotifyMatch := range spotifyMatches {
+		if len(spotifyMatch) > 1 {
+			audioItem := map[string]interface{}{
+				"type":       "spotify",
+				"content_id": spotifyMatch[1],
+				"src":        spotifyMatch[0],
+				"platform":   "Spotify",
+				"embed_url":  fmt.Sprintf("https://open.spotify.com/embed/%s", spotifyMatch[1]),
+			}
+			audio = append(audio, audioItem)
+		}
+	}
+	
+	// Extract SoundCloud embeds
+	soundcloudPattern := regexp.MustCompile(`<iframe[^>]*src=["'](?:https?:)?//w\.soundcloud\.com/player/\?url=([^"'&]+)[^"']*["'][^>]*>`)
+	soundcloudMatches := soundcloudPattern.FindAllStringSubmatch(htmlContent, -1)
+	
+	for _, scMatch := range soundcloudMatches {
+		if len(scMatch) > 1 {
+			audioItem := map[string]interface{}{
+				"type":       "soundcloud",
+				"track_url":  scMatch[1],
+				"src":        scMatch[0],
+				"platform":   "SoundCloud",
+			}
+			audio = append(audio, audioItem)
+		}
+	}
+	
+	// Extract Apple Music embeds
+	appleMusicPattern := regexp.MustCompile(`<iframe[^>]*src=["'](?:https?:)?//embed\.music\.apple\.com/([^"']+)["'][^>]*>`)
+	appleMusicMatches := appleMusicPattern.FindAllStringSubmatch(htmlContent, -1)
+	
+	for _, amMatch := range appleMusicMatches {
+		if len(amMatch) > 1 {
+			audioItem := map[string]interface{}{
+				"type":       "apple-music",
+				"content_id": amMatch[1],
+				"src":        amMatch[0],
+				"platform":   "Apple Music",
+			}
+			audio = append(audio, audioItem)
+		}
+	}
+	
+	// Extract podcast links (common patterns)
+	podcastPatterns := []string{
+		`href=["']([^"']*\.mp3[^"']*)["']`,  // Direct MP3 links
+		`href=["']([^"']*podcast[^"']*)["']`, // URLs containing "podcast"
+		`href=["']([^"']*\.rss[^"']*)["']`,   // RSS feeds
+	}
+	
+	for _, pattern := range podcastPatterns {
+		podcastPattern := regexp.MustCompile(pattern)
+		podcastMatches := podcastPattern.FindAllStringSubmatch(htmlContent, -1)
+		
+		for _, podcastMatch := range podcastMatches {
+			if len(podcastMatch) > 1 {
+				audioItem := map[string]interface{}{
+					"type":       "podcast",
+					"src":        podcastMatch[1],
+					"platform":   "Podcast",
+					"extraction": "link-pattern",
+				}
+				audio = append(audio, audioItem)
+			}
+		}
+	}
+	
+	// Extract audio file links (various formats)
+	audioFilePattern := regexp.MustCompile(`href=["']([^"']*\.(?:mp3|wav|ogg|m4a|aac|flac)[^"']*)["']`)
+	audioFileMatches := audioFilePattern.FindAllStringSubmatch(htmlContent, -1)
+	
+	for _, fileMatch := range audioFileMatches {
+		if len(fileMatch) > 1 {
+			// Extract file extension
+			fileExtension := ""
+			if dotIndex := strings.LastIndex(fileMatch[1], "."); dotIndex != -1 {
+				fileExtension = strings.ToLower(fileMatch[1][dotIndex+1:])
+			}
+			
+			audioItem := map[string]interface{}{
+				"type":       "audio-file",
+				"src":        fileMatch[1],
+				"format":     fileExtension,
+				"platform":   "Direct Link",
+				"extraction": "file-link",
+			}
+			audio = append(audio, audioItem)
+		}
+	}
 	
 	return audio
 }
@@ -388,6 +840,10 @@ func (dv *DataValidator) Validate(ctx context.Context, data map[string]interface
 	return validated, nil
 }
 
+// processedFieldNameCache tracks generated field names to detect collisions
+var processedFieldNameCache = make(map[string]string)
+var fieldNameMutex sync.RWMutex
+
 // generateProcessedFieldName creates a safe, unique field name for processed content
 func generateProcessedFieldName(originalKey, processorName string) string {
 	// Create a base name with structured naming
@@ -395,23 +851,62 @@ func generateProcessedFieldName(originalKey, processorName string) string {
 	
 	// If the field name is within limits, use it directly
 	if len(baseName) <= MaxFieldNameLength {
-		return baseName
+		return ensureUniqueFieldName(baseName)
 	}
 	
 	// For long names, create a shorter version with a hash suffix
-	maxPrefixLen := MaxFieldNameLength - 16 // Reserve space for hash and separator
+	maxPrefixLen := MaxFieldNameLength - HashLength - len(FieldSeparator)
 	if maxPrefixLen < 10 {
 		maxPrefixLen = 10 // Ensure minimum readable prefix
 	}
 	
-	// Create hash of the full intended name
+	// Create hash of the full intended name for collision resistance
 	hasher := sha256.New()
 	hasher.Write([]byte(baseName))
-	hashHex := hex.EncodeToString(hasher.Sum(nil))[:12] // Use first 12 chars of hash
+	// Include timestamp microseconds for additional uniqueness
+	hasher.Write([]byte(fmt.Sprintf("%d", time.Now().UnixNano())))
+	hashHex := hex.EncodeToString(hasher.Sum(nil))[:HashLength]
 	
 	// Truncate the base name and add hash
 	truncated := baseName[:maxPrefixLen]
-	return truncated + FieldSeparator + hashHex
+	hashedName := truncated + FieldSeparator + hashHex
+	
+	return ensureUniqueFieldName(hashedName)
+}
+
+// ensureUniqueFieldName checks for collisions and resolves them
+func ensureUniqueFieldName(proposedName string) string {
+	fieldNameMutex.Lock()
+	defer fieldNameMutex.Unlock()
+	
+	// Check if this exact name already exists with a different source
+	if existingSource, exists := processedFieldNameCache[proposedName]; exists {
+		// If it maps to the same source, return as-is
+		currentSource := proposedName // In this simplified version, we use the name as source
+		if existingSource == currentSource {
+			return proposedName
+		}
+		
+		// Collision detected - add a numeric suffix
+		counter := 1
+		for {
+			suffixedName := fmt.Sprintf("%s_%d", proposedName, counter)
+			if _, collisionExists := processedFieldNameCache[suffixedName]; !collisionExists {
+				processedFieldNameCache[suffixedName] = currentSource
+				return suffixedName
+			}
+			counter++
+			
+			// Safety limit to prevent infinite loops
+			if counter > 1000 {
+				break
+			}
+		}
+	}
+	
+	// Store the mapping and return the name
+	processedFieldNameCache[proposedName] = proposedName
+	return proposedName
 }
 
 // validateField validates a single field against a rule

@@ -487,6 +487,13 @@ func (pm *ProxyMonitor) checkBudgetAlert(metrics *CurrentMetrics) {
 		return
 	}
 
+	// Ensure budget is positive to prevent division by zero
+	// This additional check provides extra safety despite the check above
+	if budget == 0 {
+		monitoringLogger.Error("Budget alert calculation failed: budget is zero")
+		return
+	}
+
 	// Calculate budget usage percentage
 	budgetUsagePercent := (metrics.TotalCost / budget) * 100
 
