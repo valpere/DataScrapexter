@@ -31,7 +31,7 @@ func (e *securityError) Error() string {
 // secureRandomInt returns a cryptographically secure random integer in range [0, max)
 func secureRandomInt(max int) (int, error) {
 	if max <= 0 {
-		return 0, fmt.Errorf("max must be positive")
+		return 0, fmt.Errorf("parameter 'max' must be positive, got %d", max)
 	}
 	
 	// Calculate the number of bytes needed
