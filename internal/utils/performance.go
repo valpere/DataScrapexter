@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"reflect"
 	"runtime"
 	"sort"
 	"strings"
@@ -1188,24 +1190,169 @@ func NewConcurrentMap[K comparable, V any](shardCount int) *ConcurrentMap[K, V] 
 	}
 }
 
-// hash computes a hash for the key to determine shard
+// hash computes a hash for the key to determine shard using reflection-based approach
 func (cm *ConcurrentMap[K, V]) hash(key K) uint64 {
-	// Simple hash function - in production, use a more sophisticated hash
-	var h uint64
-	switch k := any(key).(type) {
+	return computeReflectiveHash(key)
+}
+
+// computeReflectiveHash computes a hash using reflection to avoid fmt.Sprintf overhead
+func computeReflectiveHash(key any) uint64 {
+	const (
+		fnvOffsetBasis uint64 = 14695981039346656037
+		fnvPrime       uint64 = 1099511628211
+	)
+	
+	// Start with FNV-1a hash
+	hash := fnvOffsetBasis
+	
+	switch k := key.(type) {
 	case string:
+		// Optimized string hashing
 		for _, c := range k {
-			h = h*31 + uint64(c)
+			hash ^= uint64(c)
+			hash *= fnvPrime
 		}
 	case int:
-		h = uint64(k)
+		hash ^= uint64(k)
+		hash *= fnvPrime
+	case int8:
+		hash ^= uint64(k)
+		hash *= fnvPrime
+	case int16:
+		hash ^= uint64(k)
+		hash *= fnvPrime
+	case int32:
+		hash ^= uint64(k)
+		hash *= fnvPrime
 	case int64:
-		h = uint64(k)
+		hash ^= uint64(k)
+		hash *= fnvPrime
+	case uint:
+		hash ^= uint64(k)
+		hash *= fnvPrime
+	case uint8:
+		hash ^= uint64(k)
+		hash *= fnvPrime
+	case uint16:
+		hash ^= uint64(k)
+		hash *= fnvPrime
+	case uint32:
+		hash ^= uint64(k)
+		hash *= fnvPrime
+	case uint64:
+		hash ^= k
+		hash *= fnvPrime
+	case float32:
+		// Convert float to bits for consistent hashing
+		bits := math.Float32bits(k)
+		hash ^= uint64(bits)
+		hash *= fnvPrime
+	case float64:
+		// Convert float to bits for consistent hashing
+		bits := math.Float64bits(k)
+		hash ^= bits
+		hash *= fnvPrime
+	case bool:
+		if k {
+			hash ^= 1
+		} else {
+			hash ^= 0
+		}
+		hash *= fnvPrime
 	default:
-		// Fallback for other types - convert to string
-		h = uint64(len(fmt.Sprintf("%v", key)))
+		// Use reflection for complex types to avoid fmt.Sprintf
+		hash = reflectiveHash(key, hash, fnvPrime)
 	}
-	return h
+	
+	return hash
+}
+
+// reflectiveHash handles complex types using reflection
+func reflectiveHash(value any, hash uint64, prime uint64) uint64 {
+	if value == nil {
+		return hash ^ 0
+	}
+	
+	v := reflect.ValueOf(value)
+	t := v.Type()
+	
+	// Hash the type name first for better distribution
+	typeName := t.String()
+	for _, c := range typeName {
+		hash ^= uint64(c)
+		hash *= prime
+	}
+	
+	switch v.Kind() {
+	case reflect.Ptr:
+		if !v.IsNil() {
+			return reflectiveHash(v.Elem().Interface(), hash, prime)
+		}
+		return hash ^ 0
+		
+	case reflect.Array, reflect.Slice:
+		length := v.Len()
+		hash ^= uint64(length)
+		hash *= prime
+		
+		// Hash up to first 8 elements to avoid performance issues with large slices
+		maxElements := length
+		if maxElements > 8 {
+			maxElements = 8
+		}
+		
+		for i := 0; i < maxElements; i++ {
+			elem := v.Index(i).Interface()
+			hash = reflectiveHash(elem, hash, prime)
+		}
+		
+	case reflect.Struct:
+		numFields := v.NumField()
+		hash ^= uint64(numFields)
+		hash *= prime
+		
+		// Hash up to first 8 fields to avoid performance issues
+		maxFields := numFields
+		if maxFields > 8 {
+			maxFields = 8
+		}
+		
+		for i := 0; i < maxFields; i++ {
+			if v.Field(i).CanInterface() {
+				field := v.Field(i).Interface()
+				hash = reflectiveHash(field, hash, prime)
+			}
+		}
+		
+	case reflect.Map:
+		keys := v.MapKeys()
+		hash ^= uint64(len(keys))
+		hash *= prime
+		
+		// Hash up to first 8 key-value pairs
+		maxPairs := len(keys)
+		if maxPairs > 8 {
+			maxPairs = 8
+		}
+		
+		for i := 0; i < maxPairs; i++ {
+			key := keys[i].Interface()
+			val := v.MapIndex(keys[i]).Interface()
+			hash = reflectiveHash(key, hash, prime)
+			hash = reflectiveHash(val, hash, prime)
+		}
+		
+	default:
+		// For other types, convert to string as last resort
+		// But use a better hash of the string content, not just length
+		str := fmt.Sprintf("%v", value)
+		for _, c := range str {
+			hash ^= uint64(c)
+			hash *= prime
+		}
+	}
+	
+	return hash
 }
 
 // getShard returns the shard for the given key

@@ -114,18 +114,68 @@ func DefaultSecureStringOptions() *SecureStringOptions {
 	}
 }
 
-// NewSecureStringWithOptions creates a SecureString with custom options
+// NewSecureStringWithOptions creates a SecureString with custom options.
+// This is more efficient than creating with defaults and then reassigning options.
 func NewSecureStringWithOptions(data []byte, passphrase string, options *SecureStringOptions) (*SecureString, error) {
-	ss, err := NewSecureString(data, passphrase)
+	if len(data) == 0 {
+		return nil, fmt.Errorf("data cannot be empty")
+	}
+	
+	// Use provided options or default
+	opts := options
+	if opts == nil {
+		opts = DefaultSecureStringOptions()
+	}
+	
+	// Generate cryptographically secure salt
+	salt := make([]byte, SaltSize)
+	if _, err := rand.Read(salt); err != nil {
+		return nil, fmt.Errorf("failed to generate salt: %w", err)
+	}
+	
+	// Generate cryptographically secure nonce
+	nonce := make([]byte, AESNonceSize)
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, fmt.Errorf("failed to generate nonce: %w", err)
+	}
+	
+	// Derive key using Argon2id (recommended for password hashing)
+	key := argon2.IDKey([]byte(passphrase), salt, Argon2Time, Argon2Memory, Argon2Threads, AESKeySize)
+	
+	// Create AES cipher
+	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create AES cipher: %w", err)
 	}
 	
-	if options != nil {
-		ss.options = options
+	// Create GCM mode for authenticated encryption
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM mode: %w", err)
 	}
 	
-	return ss, nil
+	// Encrypt the data with authentication
+	encryptedData := gcm.Seal(nil, nonce, data, nil)
+	
+	// Create hash for comparison
+	hash := sha256.Sum256(data)
+	
+	// Clear the derived key from memory
+	for i := range key {
+		key[i] = 0
+	}
+	
+	return &SecureString{
+		encryptedData: encryptedData,
+		nonce:         nonce,
+		salt:          salt,
+		encType:       EncryptionAES256GCM,
+		kdfType:       KeyDerivationArgon2,
+		hash:          hex.EncodeToString(hash[:]),
+		keyCleared:    true,
+		dataCleared:   false,
+		options:       opts, // Use provided options directly
+	}, nil
 }
 
 // SecurityValidator provides comprehensive security validation
@@ -902,59 +952,7 @@ func IsSecureContext(scheme string, host string) bool {
 // - Secure random salt generation
 // - Constant-time operations for security-sensitive comparisons
 func NewSecureString(data []byte, passphrase string) (*SecureString, error) {
-	if len(data) == 0 {
-		return nil, fmt.Errorf("data cannot be empty")
-	}
-	
-	// Generate cryptographically secure salt
-	salt := make([]byte, SaltSize)
-	if _, err := rand.Read(salt); err != nil {
-		return nil, fmt.Errorf("failed to generate salt: %w", err)
-	}
-	
-	// Generate cryptographically secure nonce
-	nonce := make([]byte, AESNonceSize)
-	if _, err := rand.Read(nonce); err != nil {
-		return nil, fmt.Errorf("failed to generate nonce: %w", err)
-	}
-	
-	// Derive key using Argon2id (recommended for password hashing)
-	key := argon2.IDKey([]byte(passphrase), salt, Argon2Time, Argon2Memory, Argon2Threads, AESKeySize)
-	
-	// Create AES cipher
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create AES cipher: %w", err)
-	}
-	
-	// Create GCM mode for authenticated encryption
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create GCM mode: %w", err)
-	}
-	
-	// Encrypt the data with authentication
-	encryptedData := gcm.Seal(nil, nonce, data, nil)
-	
-	// Create hash for comparison
-	hash := sha256.Sum256(data)
-	
-	// Clear the derived key from memory
-	for i := range key {
-		key[i] = 0
-	}
-	
-	return &SecureString{
-		encryptedData: encryptedData,
-		nonce:         nonce,
-		salt:          salt,
-		encType:       EncryptionAES256GCM,
-		kdfType:       KeyDerivationArgon2,
-		hash:          hex.EncodeToString(hash[:]),
-		keyCleared:    true,
-		dataCleared:   false,
-		options:       DefaultSecureStringOptions(), // Use default options
-	}, nil
+	return NewSecureStringWithOptions(data, passphrase, nil)
 }
 
 // NewSecureStringPBKDF2 creates a SecureString using PBKDF2 key derivation (alternative implementation)

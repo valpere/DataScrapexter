@@ -259,8 +259,6 @@ func (ape *AdvancedProxyEngine) executeWithRetry(scrapeCtx *ScrapingContext) (*R
 	var lastResult *Result
 
 	for attempt := 1; attempt <= scrapeCtx.TotalAttempts; attempt++ {
-		scrapeCtx.AttemptCount = attempt
-
 		// Select proxy for this attempt
 		proxyInstance, err := ape.advancedProxyManager.GetAdvancedProxy(scrapeCtx.TargetURL)
 		if err != nil {
@@ -272,6 +270,8 @@ func (ape *AdvancedProxyEngine) executeWithRetry(scrapeCtx *ScrapingContext) (*R
 			continue
 		}
 
+		// Only set attempt count when we actually have a proxy and are making a request
+		scrapeCtx.AttemptCount = attempt
 		scrapeCtx.ProxyInstance = proxyInstance
 		advancedProxyLogger.Debug(fmt.Sprintf("Attempt %d using proxy %s for %s", 
 			attempt, proxyInstance.Provider.Name, scrapeCtx.TargetURL))
