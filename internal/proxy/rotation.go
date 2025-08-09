@@ -57,8 +57,9 @@ func secureRandomInt(max int) (int, error) {
 	return result % max, nil
 }
 
-// initializationError tracks initialization errors for graceful handling
-var initializationError error
+// securityInitialized tracks whether secure initialization was successful
+// This avoids storing sensitive error details in global variables
+var securityInitialized bool
 
 // defaultSecurityConfig provides compile-time security defaults
 var defaultSecurityConfig = &SecurityConfig{
@@ -82,18 +83,15 @@ func init() {
 		// Use default security configuration for initialization
 		// This removes dependency on potentially attacker-controlled environment variables
 		if defaultSecurityConfig.FailOnWeakRandom || isProduction {
-			// SECURITY: Store error for graceful handling instead of panicking
-			initializationError = &securityError{
-				message: "cryptographically secure randomization failed in strict security mode - proxy rotation requires secure randomization",
-				cause:   err,
-			}
-			rotationLogger.Error(fmt.Sprintf("ERROR: Cryptographically secure randomization failed in strict security mode: %v", err))
+			// SECURITY: Mark initialization as failed without storing sensitive details
+			securityInitialized = false
+			rotationLogger.Error("ERROR: Cryptographically secure randomization failed in strict security mode")
 			rotationLogger.Error("SECURITY REQUIREMENT VIOLATION: Application will fail proxy rotation operations until this is resolved")
 			return
 		}
 		
-		// SECURITY: Log critical warning about reduced security
-		rotationLogger.Error(fmt.Sprintf("CRITICAL SECURITY WARNING: Cryptographically secure randomization failed, using enhanced time-based seeding with reduced security: %v", err))
+		// SECURITY: Log generic warning without exposing specific error details
+		rotationLogger.Error("CRITICAL SECURITY WARNING: Cryptographically secure randomization failed, using enhanced time-based seeding with reduced security")
 		rotationLogger.Warn("Proxy rotation patterns may be predictable - consider fixing the crypto/rand issue or enabling strict security mode in configuration")
 		
 		// Enhanced time-based seeding with multiple entropy sources to improve unpredictability
@@ -122,6 +120,9 @@ func init() {
 		}
 	}
 	mathrand.Seed(seed)
+	
+	// Mark initialization as successful
+	securityInitialized = true
 }
 
 var rotationLogger = utils.NewComponentLogger("proxy-rotation")
@@ -472,8 +473,8 @@ func NewAdvancedProxyManager(config *AdvancedProxyConfig) *AdvancedProxyManager 
 // GetAdvancedProxy returns a proxy using advanced rotation strategies
 func (apm *AdvancedProxyManager) GetAdvancedProxy(targetURL string) (*AdvancedProxyInstance, error) {
 	// Check for initialization errors first
-	if initializationError != nil {
-		return nil, fmt.Errorf("proxy rotation failed due to initialization error: %w", initializationError)
+	if !securityInitialized {
+		return nil, fmt.Errorf("proxy rotation failed due to security initialization failure")
 	}
 	
 	if !apm.advancedConfig.Enabled || len(apm.advancedProviders) == 0 {
@@ -742,8 +743,8 @@ func (apm *AdvancedProxyManager) getMLPredictiveProxy(targetURL string) (*Advanc
 // Helper methods
 
 func (apm *AdvancedProxyManager) isProxyAvailable(proxy *AdvancedProxyInstance) bool {
-	proxy.mu.RLock()
-	defer proxy.mu.RUnlock()
+	proxy.ProxyInstance.mu.RLock()
+	defer proxy.ProxyInstance.mu.RUnlock()
 	
 	available := proxy.Status.Available && 
 		proxy.Status.FailureCount < apm.advancedConfig.FailureThreshold
@@ -1017,7 +1018,7 @@ func (apm *AdvancedProxyManager) ReportAdvancedSuccess(proxy *AdvancedProxyInsta
 	apm.ProxyManager.ReportSuccess(proxy.ProxyInstance)
 	
 	// Update advanced metrics
-	proxy.mu.Lock()
+	proxy.ProxyInstance.mu.Lock()
 	if proxy.Performance != nil {
 		proxy.Performance.SuccessRate = apm.updateSuccessRate(proxy.Performance.SuccessRate, true)
 		proxy.Performance.AverageLatency = apm.updateAverageLatency(proxy.Performance.AverageLatency, latency)
@@ -1027,7 +1028,7 @@ func (apm *AdvancedProxyManager) ReportAdvancedSuccess(proxy *AdvancedProxyInsta
 	}
 	proxy.CurrentConnections--
 	proxy.LastUsed = time.Now()
-	proxy.mu.Unlock()
+	proxy.ProxyInstance.mu.Unlock()
 
 	// Update performance tracker
 	apm.performanceTracker.UpdateMetrics(proxy.Provider.Name, latency, true, dataQuality)
@@ -1053,7 +1054,7 @@ func (apm *AdvancedProxyManager) ReportAdvancedFailure(proxy *AdvancedProxyInsta
 	apm.ProxyManager.ReportFailure(proxy.ProxyInstance, err)
 	
 	// Update advanced metrics
-	proxy.mu.Lock()
+	proxy.ProxyInstance.mu.Lock()
 	if proxy.Performance != nil {
 		proxy.Performance.SuccessRate = apm.updateSuccessRate(proxy.Performance.SuccessRate, false)
 		
@@ -1068,7 +1069,7 @@ func (apm *AdvancedProxyManager) ReportAdvancedFailure(proxy *AdvancedProxyInsta
 		proxy.Performance.SampleSize++
 	}
 	proxy.CurrentConnections--
-	proxy.mu.Unlock()
+	proxy.ProxyInstance.mu.Unlock()
 
 	// Update performance tracker
 	apm.performanceTracker.UpdateMetrics(proxy.Provider.Name, 0, false, 0)
@@ -1328,8 +1329,8 @@ func NewGeographicResolver() *GeographicResolver {
 
 func (gr *GeographicResolver) ResolveLocation(urlStr string) (*GeographicLocation, error) {
 	// Check for initialization errors first
-	if initializationError != nil {
-		return nil, fmt.Errorf("geographic resolution failed due to initialization error: %w", initializationError)
+	if !securityInitialized {
+		return nil, fmt.Errorf("geographic resolution failed due to security initialization failure")
 	}
 	
 	// Parse URL using standard library for proper hostname extraction
@@ -1507,8 +1508,8 @@ func NewPerformancePredictor(config *MLPredictionConfig) *PerformancePredictor {
 
 func (pp *PerformancePredictor) PredictBestProxy(candidates []*AdvancedProxyInstance, targetURL string) (*AdvancedProxyInstance, error) {
 	// Check for initialization errors first
-	if initializationError != nil {
-		return nil, fmt.Errorf("proxy prediction failed due to initialization error: %w", initializationError)
+	if !securityInitialized {
+		return nil, fmt.Errorf("proxy prediction failed due to security initialization failure")
 	}
 	
 	if !pp.enabled || len(candidates) == 0 {
@@ -1808,8 +1809,8 @@ func NewLoadBalancer(config *LoadBalancingConfig) *LoadBalancer {
 
 func (lb *LoadBalancer) SelectProxy(candidates []*AdvancedProxyInstance) (*AdvancedProxyInstance, error) {
 	// Check for initialization errors first
-	if initializationError != nil {
-		return nil, fmt.Errorf("proxy selection failed due to initialization error: %w", initializationError)
+	if !securityInitialized {
+		return nil, fmt.Errorf("proxy selection failed due to security initialization failure")
 	}
 	
 	if len(candidates) == 0 {
@@ -1824,9 +1825,9 @@ func (lb *LoadBalancer) SelectProxy(candidates []*AdvancedProxyInstance) (*Advan
 	default: // round_robin with secure randomization
 		index, err := secureRandomInt(len(candidates))
 		if err != nil {
-			// Fallback to math/rand with warning for proxy rotation
-			rotationLogger.Warn("Secure randomization failed for proxy selection, falling back to math/rand - proxy rotation may be predictable")
-			return candidates[mathrand.Intn(len(candidates))], nil
+			// SECURITY: Fail fast instead of degrading to predictable patterns
+			// This prevents attackers from monitoring proxy selection patterns
+			return nil, fmt.Errorf("secure proxy selection failed: cryptographically secure randomization unavailable")
 		}
 		return candidates[index], nil
 	}

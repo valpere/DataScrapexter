@@ -73,6 +73,9 @@ type ProxyMonitor struct {
 	server          *http.Server
 	stopChan        chan struct{}
 	mu              sync.RWMutex
+	// Rate limiting for configuration error alerts to prevent spam
+	configAlertLimiter map[string]time.Time
+	alertLimiterMu     sync.Mutex
 }
 
 // MetricsCollector collects and aggregates proxy metrics
@@ -220,9 +223,10 @@ func NewProxyMonitor(config *MonitoringConfig, manager *AdvancedProxyManager) *P
 	}
 
 	monitor := &ProxyMonitor{
-		config:   config,
-		manager:  manager,
-		stopChan: make(chan struct{}),
+		config:             config,
+		manager:            manager,
+		stopChan:           make(chan struct{}),
+		configAlertLimiter: make(map[string]time.Time),
 	}
 
 	if config.Enabled {
@@ -236,6 +240,22 @@ func NewProxyMonitor(config *MonitoringConfig, manager *AdvancedProxyManager) *P
 	}
 
 	return monitor
+}
+
+// shouldTriggerConfigAlert checks rate limiting for configuration alerts to prevent spam
+func (pm *ProxyMonitor) shouldTriggerConfigAlert(alertType string) bool {
+	pm.alertLimiterMu.Lock()
+	defer pm.alertLimiterMu.Unlock()
+	
+	const minInterval = 5 * time.Minute // Minimum interval between same type of config alerts
+	
+	lastTrigger, exists := pm.configAlertLimiter[alertType]
+	if exists && time.Since(lastTrigger) < minInterval {
+		return false // Rate limited
+	}
+	
+	pm.configAlertLimiter[alertType] = time.Now()
+	return true
 }
 
 // Start starts the proxy monitor
@@ -488,13 +508,16 @@ func (pm *ProxyMonitor) checkBudgetAlert(metrics *CurrentMetrics) {
 		monitoringLogger.Error("To fix: either disable budget alerting (set BudgetThreshold to 0) or configure a valid budget amount")
 		
 		// Consider this a critical configuration error - don't silently skip
-		pm.alerts.TriggerAlert(Alert{
-			ID:        fmt.Sprintf("budget_config_%d", time.Now().Unix()),
-			Type:      "budget_configuration_error", 
-			Message:   "Budget alerting enabled but no valid budget configured - potential uncontrolled spending risk",
-			Severity:  "critical",
-			Timestamp: time.Now(),
-		})
+		// Use rate limiting to prevent alert spam
+		if pm.shouldTriggerConfigAlert("budget_configuration_error") {
+			pm.alerts.TriggerAlert(Alert{
+				ID:        fmt.Sprintf("budget_config_%d", time.Now().Unix()),
+				Type:      "budget_configuration_error", 
+				Message:   "Budget alerting enabled but no valid budget configured - potential uncontrolled spending risk",
+				Severity:  "critical",
+				Timestamp: time.Now(),
+			})
+		}
 		return
 	}
 

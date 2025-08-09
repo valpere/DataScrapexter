@@ -879,35 +879,14 @@ func validateExactLength(fieldName string, fieldValue reflect.Value, param strin
 
 // Common validation functions
 
-// IsValidEmail validates email addresses using net/mail.ParseAddress.
+// IsValidEmail validates email addresses using Go's standard net/mail package.
+// 
+// This is a basic email validation wrapper around net/mail.ParseAddress that checks
+// for RFC 5322 compliance as interpreted by the Go standard library. It provides 
+// structural validation but does not verify deliverability or domain existence.
 //
-// Validation approach:
-//   - This function uses the Go standard library's net/mail.ParseAddress to check if the input
-//     string is a syntactically valid email address according to RFC 5322.
-//
-// RFC 5322 compliance:
-//   - The validation is based on the syntax rules defined in RFC 5322, which is the standard for
-//     Internet email addresses.
-//
-// Limitations and known edge cases:
-//   - net/mail.ParseAddress is permissive and may accept some addresses that are technically valid
-//     per RFC 5322 but are not accepted by most email providers (e.g., addresses with unusual
-//     characters, quoted strings, or comments).
-//   - The function may accept email addresses with display names (e.g., "John Doe <john@example.com>"),
-//     not just plain addresses.
-//   - This function does not check if the domain exists or if the email address is deliverable.
-//   - Some valid email addresses may still be rejected by real-world email providers due to
-//     provider-specific rules.
-//
-// Edge cases that ParseAddress accepts but providers might reject:
-//   - Quoted strings: "user@domain"@example.com
-//   - Comments: user(comment)@example.com  
-//   - Plus addressing beyond limits: user+very+long+tag@example.com
-//   - Consecutive dots: user..name@example.com (technically valid but often rejected)
-//   - Special characters in local part: user#$%@example.com
-//   - Very long local parts (>64 chars) or domains (>253 chars)
-//
-// For stricter validation, consider additional checks or using a dedicated email validation library.
+// Note: net/mail.ParseAddress is permissive and may accept some edge cases that
+// real email providers reject. For stricter validation, consider additional checks.
 func IsValidEmail(email string) bool {
 	_, err := mail.ParseAddress(email)
 	return err == nil
