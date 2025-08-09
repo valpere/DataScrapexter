@@ -13,6 +13,7 @@ require (
 	github.com/prometheus/client_golang v1.23.0
 	github.com/xuri/excelize/v2 v2.9.1
 	go.mongodb.org/mongo-driver v1.17.4
+	golang.org/x/crypto v0.38.0
 	golang.org/x/text v0.27.0
 	golang.org/x/time v0.12.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -46,7 +47,6 @@ require (
 	github.com/xuri/efp v0.0.1 // indirect
 	github.com/xuri/nfp v0.0.1 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
-	golang.org/x/crypto v0.38.0 // indirect
 	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect

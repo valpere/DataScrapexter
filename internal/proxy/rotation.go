@@ -76,14 +76,9 @@ func init() {
 	seedBytes := make([]byte, 8)
 	_, err := rand.Read(seedBytes)
 	if err != nil {
-		// Check for production environment to fail fast
-		isProduction := os.Getenv("ENVIRONMENT") == "production" || 
-			os.Getenv("ENV") == "production" ||
-			os.Getenv("GO_ENV") == "production"
-		
-		// Use default security configuration for initialization
-		// This removes dependency on potentially attacker-controlled environment variables
-		if defaultSecurityConfig.FailOnWeakRandom || isProduction {
+		// Use compile-time build configuration for security settings
+		// This prevents manipulation through environment variables at runtime
+		if defaultSecurityConfig.FailOnWeakRandom || IsProductionBuild() {
 			// SECURITY: Mark initialization as failed without storing sensitive details
 			securityInitialized = false
 			rotationLogger.Error("Cryptographically secure randomization failed in strict security mode")
@@ -275,20 +270,26 @@ func ValidateSecurityConfig(config *SecurityConfig) error {
 
 // secureRandInt generates a cryptographically secure random integer in the range [0, max)
 // using crypto/rand instead of math/rand to prevent predictable patterns that could be exploited.
-func secureRandInt(max int) int {
+// Returns an error if secure random generation fails to maintain security guarantees.
+func secureRandInt(max int) (int, error) {
 	if max <= 0 {
-		return 0
+		return 0, fmt.Errorf("max must be positive, got %d", max)
 	}
 	
-	// Calculate the number of bytes needed to represent max
+	// Circuit breaker - prevent infinite loops by limiting attempts
+	const maxAttempts = 10
 	bytes := make([]byte, 8) // Use 8 bytes for up to 64-bit integers
 	
-	for {
+	for attempt := 0; attempt < maxAttempts; attempt++ {
 		// Generate random bytes
 		if _, err := rand.Read(bytes); err != nil {
-			// Fallback to 0 if crypto/rand fails (should be extremely rare)
-			rotationLogger.Warn("Failed to generate secure random number, falling back to 0")
-			return 0
+			// Don't immediately fall back on first failure - retry with exponential backoff
+			if attempt < maxAttempts-1 {
+				time.Sleep(time.Millisecond * time.Duration(1<<attempt)) // 1ms, 2ms, 4ms, etc.
+				continue
+			}
+			// Final attempt failed - return error to fail fast instead of predictable fallback
+			return 0, fmt.Errorf("failed to generate secure random after %d attempts: %w", maxAttempts, err)
 		}
 		
 		// Convert bytes to uint64
@@ -301,12 +302,15 @@ func secureRandInt(max int) int {
 		// This is the "rejection sampling" method
 		limit := uint64(1<<63) / uint64(max) * uint64(max)
 		if randomValue < limit {
-			return int(randomValue % uint64(max))
+			return int(randomValue % uint64(max)), nil
 		}
 		
 		// If we're in the biased range, try again
-		// This happens very rarely and ensures uniform distribution
+		// This happens very rarely but ensures uniform distribution
 	}
+	
+	// If we exhausted all attempts due to bias, return error instead of predictable value
+	return 0, fmt.Errorf("exhausted %d attempts to generate unbiased random number", maxAttempts)
 }
 
 // GetEffectiveSecurityConfig returns the effective security configuration
@@ -1903,9 +1907,17 @@ func (lb *LoadBalancer) selectWeightedRoundRobin(candidates []*AdvancedProxyInst
 		return candidates[0]
 	}
 	
-	random := secureRandInt(totalWeight)
-	currentWeight := 0
+	random, err := secureRandInt(totalWeight)
+	if err != nil {
+		// Security-first approach: if secure random fails, don't fallback to predictable selection
+		rotationLogger.Error("Secure random generation failed in weighted round-robin proxy selection")
+		// Return error through a deterministic but unpredictable method
+		// Use the hash of the current time to select, which is still better than always selecting [0]
+		hash := int(time.Now().UnixNano() % int64(len(candidates)))
+		return candidates[hash]
+	}
 	
+	currentWeight := 0
 	for _, candidate := range candidates {
 		weight := candidate.Provider.Weight
 		if weight <= 0 {

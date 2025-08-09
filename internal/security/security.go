@@ -3,6 +3,8 @@
 package security
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -11,10 +13,13 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
+	"golang.org/x/crypto/argon2"
+	"golang.org/x/crypto/pbkdf2"
 	"github.com/valpere/DataScrapexter/internal/utils"
 )
 
@@ -28,6 +33,30 @@ const (
 		"This warning is shown only once per application run."
 )
 
+// Enhanced cryptographic constants for secure encryption
+const (
+	// AESKeySize is the key size for AES-256 encryption
+	AESKeySize = 32 // 256 bits
+	
+	// AESNonceSize is the nonce size for AES-GCM
+	AESNonceSize = 12 // 96 bits for GCM
+	
+	// SaltSize is the size of salt for key derivation
+	SaltSize = 32 // 256 bits
+	
+	// Argon2Time is the number of iterations for Argon2
+	Argon2Time = 3
+	
+	// Argon2Memory is the memory usage for Argon2 (in KiB)
+	Argon2Memory = 64 * 1024 // 64 MB
+	
+	// Argon2Threads is the number of threads for Argon2
+	Argon2Threads = 4
+	
+	// PBKDF2Iterations is the number of iterations for PBKDF2
+	PBKDF2Iterations = 100000 // NIST recommended minimum
+)
+
 // SecurityLevel represents different security validation levels
 type SecurityLevel int
 
@@ -37,6 +66,40 @@ const (
 	SecurityLevelStrict
 	SecurityLevelPCI // Payment Card Industry level
 )
+
+// EncryptionType represents different encryption methods
+type EncryptionType int
+
+const (
+	// EncryptionXOR provides basic XOR obfuscation (legacy, not secure)
+	EncryptionXOR EncryptionType = iota
+	
+	// EncryptionAES256GCM provides AES-256-GCM authenticated encryption
+	EncryptionAES256GCM
+)
+
+// KeyDerivationType represents different key derivation methods
+type KeyDerivationType int
+
+const (
+	// KeyDerivationPBKDF2 uses PBKDF2 key derivation
+	KeyDerivationPBKDF2 KeyDerivationType = iota
+	
+	// KeyDerivationArgon2 uses Argon2id key derivation (recommended)
+	KeyDerivationArgon2
+)
+
+// SecureString provides enhanced cryptographic protection for sensitive data
+type SecureString struct {
+	encryptedData []byte
+	nonce         []byte
+	salt          []byte
+	encType       EncryptionType
+	kdfType       KeyDerivationType
+	hash          string
+	keyCleared    bool
+	dataCleared   bool
+}
 
 // SecurityValidator provides comprehensive security validation
 type SecurityValidator struct {
@@ -803,4 +866,271 @@ func IsSecureContext(scheme string, host string) bool {
 	}
 	
 	return false
+}
+
+// NewSecureString creates a new SecureString with AES-256-GCM encryption and Argon2 key derivation
+// This addresses the TODOs for enhanced security by implementing:
+// - AES-256-GCM authenticated encryption instead of XOR obfuscation
+// - Argon2id key derivation function for secure key generation
+// - Secure random salt generation
+// - Constant-time operations for security-sensitive comparisons
+func NewSecureString(data []byte, passphrase string) (*SecureString, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("data cannot be empty")
+	}
+	
+	// Generate cryptographically secure salt
+	salt := make([]byte, SaltSize)
+	if _, err := rand.Read(salt); err != nil {
+		return nil, fmt.Errorf("failed to generate salt: %w", err)
+	}
+	
+	// Generate cryptographically secure nonce
+	nonce := make([]byte, AESNonceSize)
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, fmt.Errorf("failed to generate nonce: %w", err)
+	}
+	
+	// Derive key using Argon2id (recommended for password hashing)
+	key := argon2.IDKey([]byte(passphrase), salt, Argon2Time, Argon2Memory, Argon2Threads, AESKeySize)
+	
+	// Create AES cipher
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AES cipher: %w", err)
+	}
+	
+	// Create GCM mode for authenticated encryption
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM mode: %w", err)
+	}
+	
+	// Encrypt the data with authentication
+	encryptedData := gcm.Seal(nil, nonce, data, nil)
+	
+	// Create hash for comparison
+	hash := sha256.Sum256(data)
+	
+	// Clear the derived key from memory
+	for i := range key {
+		key[i] = 0
+	}
+	
+	return &SecureString{
+		encryptedData: encryptedData,
+		nonce:         nonce,
+		salt:          salt,
+		encType:       EncryptionAES256GCM,
+		kdfType:       KeyDerivationArgon2,
+		hash:          hex.EncodeToString(hash[:]),
+		keyCleared:    true,
+		dataCleared:   false,
+	}, nil
+}
+
+// NewSecureStringPBKDF2 creates a SecureString using PBKDF2 key derivation (alternative implementation)
+func NewSecureStringPBKDF2(data []byte, passphrase string) (*SecureString, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("data cannot be empty")
+	}
+	
+	// Generate cryptographically secure salt
+	salt := make([]byte, SaltSize)
+	if _, err := rand.Read(salt); err != nil {
+		return nil, fmt.Errorf("failed to generate salt: %w", err)
+	}
+	
+	// Generate cryptographically secure nonce
+	nonce := make([]byte, AESNonceSize)
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, fmt.Errorf("failed to generate nonce: %w", err)
+	}
+	
+	// Derive key using PBKDF2
+	key := pbkdf2.Key([]byte(passphrase), salt, PBKDF2Iterations, AESKeySize, sha256.New)
+	
+	// Create AES cipher
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AES cipher: %w", err)
+	}
+	
+	// Create GCM mode for authenticated encryption
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM mode: %w", err)
+	}
+	
+	// Encrypt the data with authentication
+	encryptedData := gcm.Seal(nil, nonce, data, nil)
+	
+	// Create hash for comparison
+	hash := sha256.Sum256(data)
+	
+	// Clear the derived key from memory
+	for i := range key {
+		key[i] = 0
+	}
+	
+	return &SecureString{
+		encryptedData: encryptedData,
+		nonce:         nonce,
+		salt:          salt,
+		encType:       EncryptionAES256GCM,
+		kdfType:       KeyDerivationPBKDF2,
+		hash:          hex.EncodeToString(hash[:]),
+		keyCleared:    true,
+		dataCleared:   false,
+	}, nil
+}
+
+// Decrypt decrypts and returns the original data
+func (ss *SecureString) Decrypt(passphrase string) ([]byte, error) {
+	if ss.dataCleared {
+		return nil, fmt.Errorf("secure string has been cleared")
+	}
+	
+	var key []byte
+	
+	// Derive key using the same method used for encryption
+	switch ss.kdfType {
+	case KeyDerivationArgon2:
+		key = argon2.IDKey([]byte(passphrase), ss.salt, Argon2Time, Argon2Memory, Argon2Threads, AESKeySize)
+	case KeyDerivationPBKDF2:
+		key = pbkdf2.Key([]byte(passphrase), ss.salt, PBKDF2Iterations, AESKeySize, sha256.New)
+	default:
+		return nil, fmt.Errorf("unsupported key derivation type")
+	}
+	
+	// Ensure key is cleared after use
+	defer func() {
+		for i := range key {
+			key[i] = 0
+		}
+	}()
+	
+	// Create AES cipher
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AES cipher: %w", err)
+	}
+	
+	// Create GCM mode
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM mode: %w", err)
+	}
+	
+	// Decrypt the data
+	decryptedData, err := gcm.Open(nil, ss.nonce, ss.encryptedData, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt data (wrong passphrase or corrupted data): %w", err)
+	}
+	
+	return decryptedData, nil
+}
+
+// DecryptToString decrypts and returns the data as a string
+func (ss *SecureString) DecryptToString(passphrase string) (string, error) {
+	data, err := ss.Decrypt(passphrase)
+	if err != nil {
+		return "", err
+	}
+	
+	// Clear the decrypted data from memory after conversion
+	defer func() {
+		for i := range data {
+			data[i] = 0
+		}
+	}()
+	
+	return string(data), nil
+}
+
+// Equals performs constant-time comparison using cryptographic hash
+func (ss *SecureString) Equals(other *SecureString) bool {
+	return subtle.ConstantTimeCompare([]byte(ss.hash), []byte(other.hash)) == 1
+}
+
+// Hash returns the SHA256 hash of the original data
+func (ss *SecureString) Hash() string {
+	return ss.hash
+}
+
+// Clear securely clears all sensitive data from memory
+func (ss *SecureString) Clear() {
+	// Clear encrypted data
+	for i := range ss.encryptedData {
+		ss.encryptedData[i] = 0
+	}
+	
+	// Clear nonce
+	for i := range ss.nonce {
+		ss.nonce[i] = 0
+	}
+	
+	// Clear salt
+	for i := range ss.salt {
+		ss.salt[i] = 0
+	}
+	
+	ss.dataCleared = true
+	
+	// Force garbage collection to help clear memory
+	runtime.GC()
+}
+
+// MemoryProtection provides memory protection utilities
+type MemoryProtection struct {
+	protectedPages []uintptr
+	mutex          sync.RWMutex
+}
+
+// NewMemoryProtection creates a new memory protection manager
+func NewMemoryProtection() *MemoryProtection {
+	return &MemoryProtection{
+		protectedPages: make([]uintptr, 0),
+	}
+}
+
+// SecureZero securely zeros memory using multiple passes for enhanced security
+func SecureZero(data []byte) {
+	if len(data) == 0 {
+		return
+	}
+	
+	// Multiple pass secure erase
+	patterns := []byte{0x00, 0xFF, 0xAA, 0x55, 0x00}
+	
+	for _, pattern := range patterns {
+		for i := range data {
+			data[i] = pattern
+		}
+		runtime.KeepAlive(data) // Prevent compiler optimizations
+	}
+	
+	// Final zero pass
+	for i := range data {
+		data[i] = 0
+	}
+}
+
+// TimingResistantCompare performs timing-resistant string comparison
+func TimingResistantCompare(a, b string) bool {
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
+}
+
+// SecureRandom generates cryptographically secure random bytes
+func SecureRandom(size int) ([]byte, error) {
+	if size <= 0 {
+		return nil, fmt.Errorf("size must be positive")
+	}
+	
+	bytes := make([]byte, size)
+	if _, err := rand.Read(bytes); err != nil {
+		return nil, fmt.Errorf("failed to generate secure random bytes: %w", err)
+	}
+	
+	return bytes, nil
 }

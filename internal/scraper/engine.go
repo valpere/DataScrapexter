@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -28,6 +29,7 @@ type Engine struct {
 	httpClient     *http.Client
 	userAgentPool  []string
 	currentUAIndex int
+	uaMutex        sync.Mutex // Protects currentUAIndex for thread-safe user agent rotation
 	config         *Config
 	rateLimiter    *AdaptiveRateLimiter
 
@@ -1174,13 +1176,17 @@ func getTopErrorTypes(errorTypes map[string]int, topN int) map[string]int {
 }
 
 // getNextUserAgent returns the next user agent from the pool in round-robin fashion
+// Thread-safe implementation using mutex to prevent race conditions in concurrent scenarios
 func (e *Engine) getNextUserAgent() string {
 	if len(e.userAgentPool) == 0 {
 		return "DataScrapexter/1.0"
 	}
 	
+	e.uaMutex.Lock()
 	userAgent := e.userAgentPool[e.currentUAIndex]
 	e.currentUAIndex = (e.currentUAIndex + 1) % len(e.userAgentPool)
+	e.uaMutex.Unlock()
+	
 	return userAgent
 }
 

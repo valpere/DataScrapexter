@@ -251,18 +251,7 @@ func (uv *URLValidator) Validate(value interface{}) *ValidationError {
 		return nil
 	}
 
-	// Use the existing IsValidURL function for basic validation when no specific constraints are set
-	if len(uv.AllowedSchemes) == 0 && len(uv.AllowedHosts) == 0 {
-		if !IsValidURL(str) {
-			return &ValidationError{
-				Message: "invalid URL format",
-				Code:    "INVALID_FORMAT",
-			}
-		}
-		return nil
-	}
-
-	// Parse URL for advanced validation
+	// Always use advanced validation path to avoid duplication
 	parsedURL, err := url.Parse(str)
 	if err != nil {
 		return &ValidationError{
@@ -271,7 +260,22 @@ func (uv *URLValidator) Validate(value interface{}) *ValidationError {
 		}
 	}
 
-	// Check scheme
+	// Basic URL validation - ensure scheme and host are present
+	if parsedURL.Scheme == "" {
+		return &ValidationError{
+			Message: "URL must have a scheme (http, https, etc.)",
+			Code:    "MISSING_SCHEME",
+		}
+	}
+
+	if parsedURL.Host == "" {
+		return &ValidationError{
+			Message: "URL must have a host",
+			Code:    "MISSING_HOST",
+		}
+	}
+
+	// Check scheme constraints
 	if len(uv.AllowedSchemes) > 0 {
 		schemeAllowed := false
 		for _, allowed := range uv.AllowedSchemes {
@@ -284,6 +288,22 @@ func (uv *URLValidator) Validate(value interface{}) *ValidationError {
 			return &ValidationError{
 				Message: fmt.Sprintf("scheme must be one of: %s", strings.Join(uv.AllowedSchemes, ", ")),
 				Code:    "INVALID_SCHEME",
+			}
+		}
+	} else {
+		// Default allowed schemes when none specified
+		defaultSchemes := []string{"http", "https"}
+		schemeAllowed := false
+		for _, allowed := range defaultSchemes {
+			if parsedURL.Scheme == allowed {
+				schemeAllowed = true
+				break
+			}
+		}
+		if !schemeAllowed {
+			return &ValidationError{
+				Message: fmt.Sprintf("unsupported URL scheme: %s (supported: %s)", parsedURL.Scheme, strings.Join(defaultSchemes, ", ")),
+				Code:    "UNSUPPORTED_SCHEME",
 			}
 		}
 	}
