@@ -447,6 +447,80 @@ GOOS=windows GOARCH=amd64 go build -o bin/datascrapexter-windows-amd64.exe
 - `/ready` - Readiness check
 - `/metrics` - Prometheus metrics endpoint
 
+### Proxy Monitoring Configuration
+
+DataScrapexter provides comprehensive proxy monitoring with configurable retention policies:
+
+```yaml
+# Proxy monitoring configuration
+proxy:
+  monitoring:
+    enabled: true
+    metrics_port: 9090
+    detailed_metrics: true
+    
+    # Data retention configuration
+    history_retention: 24h      # How long to keep historical data
+    max_query_period: 168h      # Maximum allowed query period (7 days default)
+    
+    # Alerting configuration
+    alerting_enabled: true
+    alert_thresholds:
+      failure_rate: 0.05        # 5% failure rate threshold
+      latency_p95: 5000         # 5 second P95 latency threshold
+      budget_threshold: 0.80    # 80% of budget threshold
+    
+    # Budget monitoring
+    budget_config:
+      daily_budget: 100.0       # $100/day
+      hourly_budget: 5.0        # $5/hour
+    
+    realtime_updates: true
+    export_prometheus: true
+    export_interval: 1m
+```
+
+#### Configuration Options
+
+- **`history_retention`**: How long to keep historical data in memory/storage
+- **`max_query_period`**: Maximum allowed period for historical queries (prevents excessive memory usage)
+  - Default: 168h (7 days) if not specified
+  - Configurable for different deployment scenarios
+  - Queries exceeding this limit are automatically clamped with warnings
+
+#### Deployment-Specific Configurations
+
+**Development Environment:**
+```yaml
+history_retention: 2h
+max_query_period: 6h          # Short retention for testing
+```
+
+**Production Environment:**
+```yaml
+history_retention: 168h       # 1 week
+max_query_period: 720h        # 1 month for comprehensive analysis
+```
+
+**High-Volume Production:**
+```yaml
+history_retention: 72h        # 3 days
+max_query_period: 168h        # 1 week (balanced performance)
+```
+
+#### Historical Metrics API
+
+Access historical proxy metrics with configurable query periods:
+
+```bash
+# Valid queries (within max_query_period)
+GET /metrics/historical/proxy_name?period=24h
+GET /metrics/historical/proxy_name?period=72h
+
+# Queries exceeding limit are clamped with warnings
+GET /metrics/historical/proxy_name?period=200h  # Clamped to max_query_period
+```
+
 ## Integration Points
 
 ### Supported Proxies

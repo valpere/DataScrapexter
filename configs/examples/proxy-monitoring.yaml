@@ -1,0 +1,72 @@
+# Proxy Monitoring Configuration Example
+# This example demonstrates the configurable maximum query period feature
+# for historical proxy metrics queries
+
+# Proxy monitoring configuration
+proxy:
+  monitoring:
+    enabled: true
+    metrics_port: 9090
+    detailed_metrics: true
+    
+    # How long to keep historical data in memory/storage
+    # This controls data retention for the monitoring system
+    history_retention: 24h  # Keep 24 hours of historical data
+    
+    # Maximum allowed period for historical queries (NEW FEATURE)
+    # This prevents excessive memory usage from large historical queries
+    # Default: 168h (7 days) if not specified
+    max_query_period: 72h   # Allow queries up to 3 days back
+    
+    # Alternative configurations for different deployment scenarios:
+    
+    # For development/testing (shorter retention, smaller query window)
+    # history_retention: 2h
+    # max_query_period: 6h
+    
+    # For production (longer retention, larger query window)
+    # history_retention: 168h  # 1 week
+    # max_query_period: 720h   # 1 month
+    
+    # For high-volume production (balanced retention)
+    # history_retention: 72h   # 3 days
+    # max_query_period: 168h   # 1 week
+    
+    alerting_enabled: true
+    alert_thresholds:
+      failure_rate: 0.05      # 5% failure rate threshold
+      latency_p95: 5000       # 5 second P95 latency threshold
+      budget_threshold: 0.80   # 80% of budget threshold
+    
+    # Budget monitoring (optional)
+    budget_config:
+      daily_budget: 100.0     # $100/day
+      hourly_budget: 5.0      # $5/hour
+      
+    realtime_updates: true
+    export_prometheus: true
+    export_influxdb: false
+    export_interval: 1m
+
+# Example API queries with the new max_query_period:
+
+# Valid queries (within max_query_period of 72h):
+# GET /metrics/historical/proxy_name?period=24h   ✓ (24h ≤ 72h)
+# GET /metrics/historical/proxy_name?period=48h   ✓ (48h ≤ 72h) 
+# GET /metrics/historical/proxy_name?period=72h   ✓ (72h = 72h)
+
+# Invalid queries (exceeding max_query_period):
+# GET /metrics/historical/proxy_name?period=96h   ✗ (96h > 72h, will be clamped to 72h)
+# GET /metrics/historical/proxy_name?period=168h  ✗ (168h > 72h, will be clamped to 72h)
+
+# Configuration validation notes:
+# 1. If max_query_period is not set or ≤ 0, defaults to 168h (7 days)
+# 2. If max_query_period > history_retention * 2, a warning is logged
+#    (queries beyond retention period return empty results)
+# 3. Requests exceeding max_query_period are automatically clamped with a warning log
+
+# Benefits of configurable max_query_period:
+# - Prevents memory exhaustion from large historical queries
+# - Allows different limits for different deployment scenarios
+# - Maintains backward compatibility (default is previous 7-day limit)
+# - Provides clear feedback when limits are exceeded

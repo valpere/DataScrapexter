@@ -20,7 +20,8 @@ type MonitoringConfig struct {
 	Enabled              bool             `yaml:"enabled" json:"enabled"`
 	MetricsPort          int              `yaml:"metrics_port" json:"metrics_port"`
 	DetailedMetrics      bool             `yaml:"detailed_metrics" json:"detailed_metrics"`
-	HistoryRetention     time.Duration    `yaml:"history_retention" json:"history_retention"`
+	HistoryRetention     time.Duration    `yaml:"history_retention" json:"history_retention"`     // How long to keep historical data in memory/storage
+	MaxQueryPeriod       time.Duration    `yaml:"max_query_period" json:"max_query_period"`       // Maximum allowed period for historical queries (prevents excessive memory usage)
 	AlertingEnabled      bool             `yaml:"alerting_enabled" json:"alerting_enabled"`
 	AlertThresholds      *AlertThresholds `yaml:"alert_thresholds,omitempty" json:"alert_thresholds,omitempty"`
 	BudgetConfig         *BudgetConfig    `yaml:"budget_config,omitempty" json:"budget_config,omitempty"`
@@ -212,10 +213,11 @@ type HistoryManager struct {
 func NewProxyMonitor(config *MonitoringConfig, manager *AdvancedProxyManager) *ProxyMonitor {
 	if config == nil {
 		config = &MonitoringConfig{
-			Enabled:         false,
-			MetricsPort:     9090,
-			DetailedMetrics: true,
+			Enabled:          false,
+			MetricsPort:      9090,
+			DetailedMetrics:  true,
 			HistoryRetention: 24 * time.Hour,
+			MaxQueryPeriod:   7 * 24 * time.Hour, // Default to 7 days maximum query period
 			AlertingEnabled: false,
 			RealTimeUpdates: true,
 			ExportInterval:  time.Minute,
@@ -237,6 +239,20 @@ func NewProxyMonitor(config *MonitoringConfig, manager *AdvancedProxyManager) *P
 		if config.MetricsPort > 0 {
 			monitor.setupHTTPServer()
 		}
+	}
+	
+	// Validate and set default MaxQueryPeriod if not configured
+	if config.MaxQueryPeriod <= 0 {
+		config.MaxQueryPeriod = 7 * 24 * time.Hour // Default to 7 days if not set or invalid
+		monitoringLogger.Info("MaxQueryPeriod not configured or invalid, defaulting to 7 days")
+	}
+	
+	// Provide helpful warning if MaxQueryPeriod exceeds HistoryRetention significantly
+	if config.MaxQueryPeriod > config.HistoryRetention*2 {
+		monitoringLogger.Warnf("MaxQueryPeriod (%v) is much larger than HistoryRetention (%v). "+
+			"Queries beyond the retention period will return empty results. "+
+			"Consider aligning these values for optimal configuration.",
+			config.MaxQueryPeriod, config.HistoryRetention)
 	}
 
 	return monitor
@@ -659,10 +675,12 @@ func (pm *ProxyMonitor) handleHistoricalMetrics(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	// Limit maximum period to prevent excessive memory usage
-	maxPeriod := 7 * 24 * time.Hour // 7 days
+	// Limit maximum period to prevent excessive memory usage (configurable)
+	maxPeriod := pm.config.MaxQueryPeriod
 	if period > maxPeriod {
 		period = maxPeriod
+		monitoringLogger.Warnf("Requested query period %v exceeds maximum allowed %v, clamping to maximum", 
+			period, maxPeriod)
 	}
 
 	metrics := pm.GetHistoricalMetrics(proxyName, period)

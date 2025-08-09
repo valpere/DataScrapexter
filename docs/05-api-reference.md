@@ -566,6 +566,85 @@ health := healthManager.GetHealth()
 fmt.Printf("System Status: %s\n", health.Status)
 ```
 
+### Proxy Monitoring Configuration
+
+DataScrapexter provides configurable proxy monitoring with flexible retention policies:
+
+```go
+import "github.com/valpere/DataScrapexter/internal/proxy"
+
+// Configure proxy monitoring
+monitoringConfig := &proxy.MonitoringConfig{
+    Enabled:          true,
+    MetricsPort:      9090,
+    DetailedMetrics:  true,
+    HistoryRetention: 24 * time.Hour,      // How long to keep data
+    MaxQueryPeriod:   168 * time.Hour,     // Max historical query period (NEW)
+    AlertingEnabled:  true,
+    AlertThresholds: &proxy.AlertThresholds{
+        FailureRate:     0.05,              // 5% failure threshold
+        LatencyP95:      5 * time.Second,   // 5s P95 latency
+        BudgetThreshold: 0.80,              // 80% budget threshold
+    },
+    BudgetConfig: &proxy.BudgetConfig{
+        DailyBudget:  100.0,                // $100/day
+        HourlyBudget: 5.0,                  // $5/hour
+    },
+    RealTimeUpdates:  true,
+    ExportPrometheus: true,
+    ExportInterval:   time.Minute,
+}
+
+// Create proxy manager with monitoring
+proxyManager := proxy.NewAdvancedProxyManager(proxyConfig)
+monitor := proxy.NewProxyMonitor(monitoringConfig, proxyManager)
+
+// Start monitoring
+ctx := context.Background()
+if err := monitor.Start(ctx); err != nil {
+    log.Fatalf("Failed to start proxy monitor: %v", err)
+}
+
+// Query historical metrics (respects MaxQueryPeriod)
+metrics := monitor.GetHistoricalMetrics("proxy_name", 72*time.Hour)
+if metrics != nil {
+    fmt.Printf("Historical metrics: %+v\n", metrics)
+}
+```
+
+#### Deployment-Specific Configurations
+
+**Development Environment:**
+```go
+config := &proxy.MonitoringConfig{
+    HistoryRetention: 2 * time.Hour,
+    MaxQueryPeriod:   6 * time.Hour,       // Short retention for testing
+}
+```
+
+**Production Environment:**
+```go
+config := &proxy.MonitoringConfig{
+    HistoryRetention: 168 * time.Hour,     // 1 week
+    MaxQueryPeriod:   720 * time.Hour,     // 1 month for analysis
+}
+```
+
+**High-Volume Production:**
+```go
+config := &proxy.MonitoringConfig{
+    HistoryRetention: 72 * time.Hour,      // 3 days
+    MaxQueryPeriod:   168 * time.Hour,     // 1 week (balanced)
+}
+```
+
+#### Key Features
+
+- **Configurable Retention**: `MaxQueryPeriod` prevents excessive memory usage from large queries
+- **Automatic Clamping**: Queries exceeding the limit are automatically reduced with warnings
+- **Validation**: Built-in validation warns when configuration values are misaligned
+- **Backward Compatibility**: Defaults to 7 days if not specified
+
 ## Anti-Detection Features
 
 ### Browser Fingerprinting Evasion

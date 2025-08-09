@@ -436,6 +436,75 @@ monitoring:
     liveness_endpoint: "/live"
 ```
 
+### Proxy Monitoring
+
+DataScrapexter provides configurable proxy monitoring with flexible retention policies:
+
+```yaml
+proxy:
+  monitoring:
+    enabled: true
+    metrics_port: 9090
+    detailed_metrics: true
+    
+    # Data retention period
+    history_retention: "24h"
+    
+    # Maximum query period (configurable retention policy)
+    # Prevents excessive memory usage from large historical queries
+    # Default: 168h (7 days) if not specified
+    max_query_period: "72h"
+    
+    # Alerting configuration
+    alerting_enabled: true
+    alert_thresholds:
+      failure_rate: 0.05        # 5% failure rate
+      latency_p95: "5s"         # 5 second P95 latency
+      budget_threshold: 0.80    # 80% budget threshold
+    
+    # Budget monitoring
+    budget_config:
+      daily_budget: 100.0       # $100/day
+      hourly_budget: 5.0        # $5/hour
+    
+    # Export settings
+    realtime_updates: true
+    export_prometheus: true
+    export_interval: "1m"
+```
+
+#### Deployment-Specific Configurations
+
+**Development Environment:**
+```yaml
+proxy:
+  monitoring:
+    history_retention: "2h"
+    max_query_period: "6h"     # Short retention for testing
+```
+
+**Production Environment:**
+```yaml
+proxy:
+  monitoring:
+    history_retention: "168h"  # 1 week
+    max_query_period: "720h"   # 1 month for analysis
+```
+
+**High-Volume Production:**
+```yaml
+proxy:
+  monitoring:
+    history_retention: "72h"   # 3 days
+    max_query_period: "168h"   # 1 week (balanced)
+```
+
+#### Configuration Validation
+
+- If `max_query_period` is not set or ≤ 0, defaults to 168h (7 days)
+- If `max_query_period` > `history_retention` * 2, a warning is logged
+- Queries exceeding `max_query_period` are automatically clamped with warning logs
+
 ### Dashboard
 
 ```yaml
