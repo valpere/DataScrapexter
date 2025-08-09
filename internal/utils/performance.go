@@ -14,10 +14,19 @@ import (
 	"time"
 )
 
-// Latency histogram constants
+// Performance optimization constants
 const (
 	// MaxLatencyBucket defines the maximum latency bucket for histogram tracking
 	MaxLatencyBucket = 10 * time.Second
+	
+	// DefaultShardCount defines the default number of shards for ConcurrentMap
+	DefaultShardCount = 32
+	
+	// MinShardCount defines the minimum number of shards (must be power of 2)
+	MinShardCount = 4
+	
+	// MaxShardCount defines the maximum number of shards to prevent excessive memory usage
+	MaxShardCount = 1024
 )
 
 // PerformanceMetrics tracks performance statistics
@@ -1121,19 +1130,49 @@ type mapShard[K comparable, V any] struct {
 	mutex sync.RWMutex
 }
 
+// roundUpToPowerOf2 rounds a number up to the next power of 2
+func roundUpToPowerOf2(n int) int {
+	if n <= 0 {
+		return 1
+	}
+	
+	// Handle edge cases
+	if n > MaxShardCount {
+		return MaxShardCount
+	}
+	
+	// Find next power of 2
+	power := 1
+	for power < n {
+		power <<= 1
+	}
+	
+	// Ensure it doesn't exceed maximum
+	if power > MaxShardCount {
+		return MaxShardCount
+	}
+	
+	return power
+}
+
 // NewConcurrentMap creates a new concurrent map with the specified number of shards
 func NewConcurrentMap[K comparable, V any](shardCount int) *ConcurrentMap[K, V] {
 	if shardCount <= 0 {
-		shardCount = 32 // Default shard count
+		shardCount = DefaultShardCount
+	}
+	
+	// Enforce minimum and maximum limits for practical usage
+	if shardCount < MinShardCount {
+		shardCount = MinShardCount
+	}
+	if shardCount > MaxShardCount {
+		shardCount = MaxShardCount
 	}
 	
 	// Ensure shard count is a power of 2 for efficient hashing
 	if shardCount&(shardCount-1) != 0 {
 		// Round up to next power of 2
-		shardCount = 1
-		for shardCount < 32 {
-			shardCount <<= 1
-		}
+		shardCount = roundUpToPowerOf2(shardCount)
 	}
 	
 	shards := make([]*mapShard[K, V], shardCount)

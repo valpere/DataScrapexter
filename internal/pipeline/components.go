@@ -1307,9 +1307,9 @@ func (rd *RecordDeduplicator) generateDataHash(data map[string]interface{}) (str
 		return "", fmt.Errorf("failed to marshal data for hashing: %w", err)
 	}
 	
-	// Generate SHA256 hash
+	// Generate SHA256 hash with efficient hex encoding
 	hash := sha256.Sum256(jsonBytes)
-	return fmt.Sprintf("%x", hash), nil
+	return hex.EncodeToString(hash[:]), nil
 }
 
 // generateFieldKey generates a composite key from specified fields
@@ -1333,9 +1333,9 @@ func (rd *RecordDeduplicator) generateFieldKey(data map[string]interface{}) (str
 	// Join field values with separator
 	compositeKey := strings.Join(keyParts, "|")
 	
-	// Generate hash of composite key for consistent length
+	// Generate hash of composite key for consistent length with efficient encoding
 	hash := sha256.Sum256([]byte(compositeKey))
-	return fmt.Sprintf("%x", hash), nil
+	return hex.EncodeToString(hash[:]), nil
 }
 
 // normalizeData normalizes data for consistent hashing

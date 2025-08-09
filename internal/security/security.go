@@ -99,6 +99,33 @@ type SecureString struct {
 	hash          string
 	keyCleared    bool
 	dataCleared   bool
+	options       *SecureStringOptions // Configuration options for behavior control
+}
+
+// SecureStringOptions provides configuration options for SecureString behavior
+type SecureStringOptions struct {
+	ForceGCOnClear bool // Whether to force garbage collection when clearing (may impact performance)
+}
+
+// DefaultSecureStringOptions returns default options with conservative settings
+func DefaultSecureStringOptions() *SecureStringOptions {
+	return &SecureStringOptions{
+		ForceGCOnClear: false, // Disabled by default for better performance
+	}
+}
+
+// NewSecureStringWithOptions creates a SecureString with custom options
+func NewSecureStringWithOptions(data []byte, passphrase string, options *SecureStringOptions) (*SecureString, error) {
+	ss, err := NewSecureString(data, passphrase)
+	if err != nil {
+		return nil, err
+	}
+	
+	if options != nil {
+		ss.options = options
+	}
+	
+	return ss, nil
 }
 
 // SecurityValidator provides comprehensive security validation
@@ -926,6 +953,7 @@ func NewSecureString(data []byte, passphrase string) (*SecureString, error) {
 		hash:          hex.EncodeToString(hash[:]),
 		keyCleared:    true,
 		dataCleared:   false,
+		options:       DefaultSecureStringOptions(), // Use default options
 	}, nil
 }
 
@@ -982,6 +1010,7 @@ func NewSecureStringPBKDF2(data []byte, passphrase string) (*SecureString, error
 		hash:          hex.EncodeToString(hash[:]),
 		keyCleared:    true,
 		dataCleared:   false,
+		options:       DefaultSecureStringOptions(), // Use default options
 	}, nil
 }
 
@@ -1077,8 +1106,11 @@ func (ss *SecureString) Clear() {
 	
 	ss.dataCleared = true
 	
-	// Force garbage collection to help clear memory
-	runtime.GC()
+	// Force garbage collection only if configured to do so
+	// Note: This may impact performance in high-throughput scenarios
+	if ss.options != nil && ss.options.ForceGCOnClear {
+		runtime.GC()
+	}
 }
 
 // MemoryProtection provides memory protection utilities

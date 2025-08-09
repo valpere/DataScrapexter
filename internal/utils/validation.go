@@ -912,13 +912,157 @@ func validateExactLength(fieldName string, fieldValue reflect.Value, param strin
 
 // IsValidEmail validates email addresses using Go's standard net/mail package.
 // 
+// IsValidEmail checks if a string is a valid email address with enhanced validation.
+// This provides more rigorous validation than the basic net/mail.ParseAddress method.
+func IsValidEmail(email string) bool {
+	return IsValidEmailWithLevel(email, EmailValidationStandard)
+}
+
+// EmailValidationLevel defines the strictness of email validation
+type EmailValidationLevel int
+
+const (
+	EmailValidationBasic EmailValidationLevel = iota
+	EmailValidationStandard
+	EmailValidationStrict
+)
+
+// IsValidEmailWithLevel performs email validation with configurable strictness levels
+func IsValidEmailWithLevel(email string, level EmailValidationLevel) bool {
+	// Basic validation using net/mail (catches obviously malformed emails)
+	_, err := mail.ParseAddress(email)
+	if err != nil {
+		return false
+	}
+
+	// Additional validation for Standard and Strict levels
+	if level >= EmailValidationStandard {
+		if !isValidEmailFormat(email) {
+			return false
+		}
+	}
+
+	// Strict validation adds domain and length checks
+	if level >= EmailValidationStrict {
+		if !isValidEmailStrict(email) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// isValidEmailFormat performs enhanced format validation
+func isValidEmailFormat(email string) bool {
+	// Check basic structure and length limits
+	if len(email) > 254 { // RFC 5321 limit
+		return false
+	}
+
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return false
+	}
+
+	local, domain := parts[0], parts[1]
+
+	// Validate local part (before @)
+	if len(local) == 0 || len(local) > 64 { // RFC 5321 limit
+		return false
+	}
+
+	// Check for invalid characters in local part
+	if strings.HasPrefix(local, ".") || strings.HasSuffix(local, ".") {
+		return false
+	}
+
+	if strings.Contains(local, "..") {
+		return false
+	}
+
+	// Validate domain part (after @)
+	if len(domain) == 0 || len(domain) > 253 {
+		return false
+	}
+
+	// Domain must contain at least one dot, unless it's a well-known local hostname
+	if !strings.Contains(domain, ".") && !isLocalHostname(domain) {
+		return false
+	}
+
+	// Domain cannot start or end with dot or dash
+	if strings.HasPrefix(domain, ".") || strings.HasSuffix(domain, ".") ||
+		strings.HasPrefix(domain, "-") || strings.HasSuffix(domain, "-") {
+		return false
+	}
+
+	return true
+}
+
+// isLocalHostname checks if a hostname is a valid local hostname
+func isLocalHostname(hostname string) bool {
+	localHostnames := []string{
+		"localhost", "127.0.0.1", "::1", 
+		// Common local development names
+		"local", "dev", "test",
+	}
+	
+	for _, local := range localHostnames {
+		if hostname == local {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// isValidEmailStrict performs additional strict validation
+func isValidEmailStrict(email string) bool {
+	parts := strings.Split(email, "@")
+	local, domain := parts[0], parts[1]
+
+	// More restrictive local part validation
+	localRegex := regexp.MustCompile(`^[a-zA-Z0-9._+-]+$`)
+	if !localRegex.MatchString(local) {
+		return false
+	}
+
+	// Domain validation - must be valid hostname format or local hostname
+	if isLocalHostname(domain) {
+		return true // Local hostnames are valid in strict mode
+	}
+	
+	domainParts := strings.Split(domain, ".")
+	if len(domainParts) < 2 {
+		return false
+	}
+
+	// Each domain part validation
+	for _, part := range domainParts {
+		if len(part) == 0 || len(part) > 63 {
+			return false
+		}
+		
+		// Domain parts must start and end with alphanumeric
+		if !regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$`).MatchString(part) {
+			return false
+		}
+	}
+
+	// TLD must be at least 2 characters and only letters
+	tld := domainParts[len(domainParts)-1]
+	if len(tld) < 2 || !regexp.MustCompile(`^[a-zA-Z]+$`).MatchString(tld) {
+		return false
+	}
+
+	return true
+}
+
+// IsValidEmailBasic provides the original permissive validation for backward compatibility
 // This is a basic email validation wrapper around net/mail.ParseAddress that checks
 // for RFC 5322 compliance as interpreted by the Go standard library. It provides 
 // structural validation but does not verify deliverability or domain existence.
-//
-// Note: net/mail.ParseAddress is permissive and may accept some edge cases that
-// real email providers reject. For stricter validation, consider additional checks.
-func IsValidEmail(email string) bool {
+func IsValidEmailBasic(email string) bool {
 	_, err := mail.ParseAddress(email)
 	return err == nil
 }
@@ -962,13 +1106,23 @@ func IsValidOutputFormat(format string) bool {
 }
 
 // SanitizeFieldName ensures field names are safe for use in outputs
+// SanitizeFieldName sanitizes field names to ensure they are valid identifiers.
+// 
+// The function performs the following transformations:
+// 1. Replaces invalid characters (non-alphanumeric, non-underscore) with underscores
+// 2. Prepends "field_" to names that start with digits (e.g., "123field" → "field_123field")
+// 3. Replaces empty names with "unnamed_field"
+//
+// This ensures compatibility with systems that require identifiers to start with 
+// letters (such as JSON object keys, database column names, etc.).
 func SanitizeFieldName(name string) string {
 	// Ensure regex patterns are initialized
 	initRegexPatterns()
 	// Remove or replace problematic characters using pre-compiled pattern
 	clean := fieldNameSanitizePattern.ReplaceAllString(name, "_")
 
-	// Ensure it doesn't start with a number
+	// Ensure it doesn't start with a number (common requirement for identifiers)
+	// This prevents issues with systems that don't allow numeric-starting identifiers
 	if len(clean) > 0 && clean[0] >= '0' && clean[0] <= '9' {
 		clean = "field_" + clean
 	}
