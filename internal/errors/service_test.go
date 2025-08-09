@@ -176,7 +176,7 @@ func TestCircuitBreaker_Recovery(t *testing.T) {
 	service := NewService()
 	ctx := context.Background()
 
-	// Configure circuit breaker with short reset timeout
+	// Configure circuit breaker with short reset timeout and simple config
 	service.ConfigureCircuitBreaker("recovery_test", CircuitBreakerConfig{
 		MaxFailures:  1,
 		ResetTimeout: TestCircuitBreakerResetTimeout,

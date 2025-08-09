@@ -468,6 +468,35 @@ curl http://localhost:9090/metrics
 - `datascrapexter_requests_duration_seconds` - Request latency
 - `datascrapexter_extraction_success_rate` - Success rate
 - `datascrapexter_proxy_health` - Proxy status
+- `datascrapexter_captcha_solve_rate` - CAPTCHA solving success rate
+
+**Proxy Monitoring Configuration:**
+
+DataScrapexter provides configurable retention policies for different deployment scenarios:
+
+```yaml
+proxy:
+  monitoring:
+    enabled: true
+    history_retention: 24h      # Data retention period
+    max_query_period: 168h      # Max query period (NEW: configurable)
+    alerting_enabled: true
+    budget_config:
+      daily_budget: 100.0
+```
+
+**Historical Metrics API:**
+
+```bash
+# Query historical proxy metrics
+curl "http://localhost:9090/metrics/historical/proxy_name?period=24h"
+curl "http://localhost:9090/metrics/historical/proxy_name?period=72h"
+
+# Deployment-specific configs:
+# Development: max_query_period: 6h
+# Production: max_query_period: 720h (1 month)
+# High-volume: max_query_period: 168h (1 week)
+```
 
 ## 🔌 Integrations
 

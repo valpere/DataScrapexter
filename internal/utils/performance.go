@@ -5,10 +5,30 @@ package utils
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
+	"reflect"
 	"runtime"
+	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+)
+
+// Performance optimization constants
+const (
+	// MaxLatencyBucket defines the maximum latency bucket for histogram tracking
+	MaxLatencyBucket = 10 * time.Second
+	
+	// DefaultShardCount defines the default number of shards for ConcurrentMap
+	DefaultShardCount = 32
+	
+	// MinShardCount defines the minimum number of shards (must be power of 2)
+	MinShardCount = 4
+	
+	// MaxShardCount defines the maximum number of shards to prevent excessive memory usage
+	MaxShardCount = 1024
 )
 
 // PerformanceMetrics tracks performance statistics
@@ -88,6 +108,148 @@ func (pm *PerformanceMetrics) GetSnapshot() PerformanceMetrics {
 		StartTime:         pm.StartTime,
 		LastOperationTime: pm.LastOperationTime,
 	}
+}
+
+// LatencyHistogram provides histogram-based latency tracking for percentile analysis
+type LatencyHistogram struct {
+	buckets      []time.Duration // Sorted bucket boundaries
+	counts       []int64         // Count for each bucket
+	samples      []time.Duration // Circular buffer of recent samples for exact percentiles
+	sampleIndex  int            // Current position in samples buffer
+	totalSamples int64          // Total number of samples recorded
+	mutex        sync.RWMutex
+}
+
+// NewLatencyHistogram creates a new latency histogram with predefined buckets
+func NewLatencyHistogram(sampleBufferSize int) *LatencyHistogram {
+	// Define common latency buckets (in nanoseconds converted to Duration)
+	buckets := []time.Duration{
+		1 * time.Millisecond,
+		5 * time.Millisecond,
+		10 * time.Millisecond,
+		25 * time.Millisecond,
+		50 * time.Millisecond,
+		100 * time.Millisecond,
+		250 * time.Millisecond,
+		500 * time.Millisecond,
+		1 * time.Second,
+		2 * time.Second,
+		5 * time.Second,
+		MaxLatencyBucket,
+	}
+	
+	return &LatencyHistogram{
+		buckets: buckets,
+		counts:  make([]int64, len(buckets)+1), // +1 for overflow bucket
+		samples: make([]time.Duration, sampleBufferSize),
+	}
+}
+
+// Record records a latency measurement
+func (lh *LatencyHistogram) Record(latency time.Duration) {
+	lh.mutex.Lock()
+	defer lh.mutex.Unlock()
+	
+	// Find appropriate bucket
+	bucketIndex := len(lh.buckets) // Default to overflow bucket
+	for i, boundary := range lh.buckets {
+		if latency <= boundary {
+			bucketIndex = i
+			break
+		}
+	}
+	
+	// Increment bucket count
+	lh.counts[bucketIndex]++
+	
+	// Store sample for exact percentile calculation
+	if len(lh.samples) > 0 {
+		lh.samples[lh.sampleIndex] = latency
+		lh.sampleIndex = (lh.sampleIndex + 1) % len(lh.samples)
+	}
+	
+	lh.totalSamples++
+}
+
+// GetPercentile calculates the exact percentile from recent samples
+func (lh *LatencyHistogram) GetPercentile(percentile float64) time.Duration {
+	lh.mutex.RLock()
+	defer lh.mutex.RUnlock()
+	
+	if lh.totalSamples == 0 {
+		return 0
+	}
+	
+	// Get valid samples (handle case where buffer isn't full yet)
+	validSamples := int(lh.totalSamples)
+	if validSamples > len(lh.samples) {
+		validSamples = len(lh.samples)
+	}
+	
+	if validSamples == 0 {
+		return 0
+	}
+	
+	// Copy samples to avoid holding lock during sort
+	samples := make([]time.Duration, validSamples)
+	if lh.totalSamples >= int64(len(lh.samples)) {
+		// Buffer is full, copy all samples
+		copy(samples, lh.samples)
+	} else {
+		// Buffer not full, copy only recorded samples
+		copy(samples, lh.samples[:validSamples])
+	}
+	
+	// Sort samples to calculate percentile
+	sort.Slice(samples, func(i, j int) bool {
+		return samples[i] < samples[j]
+	})
+	
+	// Calculate percentile index
+	index := int(float64(len(samples)-1) * percentile / 100.0)
+	if index < 0 {
+		index = 0
+	}
+	if index >= len(samples) {
+		index = len(samples) - 1
+	}
+	
+	return samples[index]
+}
+
+// GetHistogramSnapshot returns a snapshot of bucket counts
+func (lh *LatencyHistogram) GetHistogramSnapshot() ([]time.Duration, []int64) {
+	lh.mutex.RLock()
+	defer lh.mutex.RUnlock()
+	
+	buckets := make([]time.Duration, len(lh.buckets))
+	counts := make([]int64, len(lh.counts))
+	copy(buckets, lh.buckets)
+	copy(counts, lh.counts)
+	
+	return buckets, counts
+}
+
+// GetTotalSamples returns the total number of samples recorded
+func (lh *LatencyHistogram) GetTotalSamples() int64 {
+	lh.mutex.RLock()
+	defer lh.mutex.RUnlock()
+	return lh.totalSamples
+}
+
+// Reset resets all histogram data
+func (lh *LatencyHistogram) Reset() {
+	lh.mutex.Lock()
+	defer lh.mutex.Unlock()
+	
+	for i := range lh.counts {
+		lh.counts[i] = 0
+	}
+	for i := range lh.samples {
+		lh.samples[i] = 0
+	}
+	lh.sampleIndex = 0
+	lh.totalSamples = 0
 }
 
 // Reset resets all metrics
@@ -308,13 +470,32 @@ func NewTokenBucketRateLimiter(maxTokens int64, refillRate time.Duration) *Token
 	return NewTokenBucketRateLimiterWithLogger(maxTokens, refillRate, nil)
 }
 
-// NewTokenBucketRateLimiterWithPerformanceLogging is DEPRECATED due to circular import issues.
-// Use NewTokenBucketRateLimiterWithLogger with a custom LogFunc instead.
+// NewTokenBucketRateLimiterWithPerformanceLogging is DEPRECATED and will be removed in v2.0.0
 // 
-// CIRCULAR IMPORT WARNING: This function calls utils.GetLogger which can cause
-// import cycles since performance utilities are used by the logging system.
-// 
+// DEPRECATION NOTICE: This function has been deprecated due to circular import issues.
+// It previously attempted to use utils.GetLogger which creates import cycles since
+// performance utilities are used by the logging system itself.
+//
+// MIGRATION PATH:
+// Replace this:
+//   limiter := NewTokenBucketRateLimiterWithPerformanceLogging(1000, time.Second)
+// With this:
+//   logger := utils.GetLogger("rate-limiter") // Get logger from calling code
+//   logFunc := func(level, format string, args ...interface{}) {
+//     switch level {
+//     case "error":
+//       logger.Errorf(format, args...)
+//     case "warn":  
+//       logger.Warnf(format, args...)
+//     default:
+//       logger.Infof(format, args...)
+//     }
+//   }
+//   limiter := NewTokenBucketRateLimiterWithLogger(1000, time.Second, logFunc)
+//
 // TODO: REMOVE this function in v2.0.0 after migration period
+//
+// Deprecated: Use NewTokenBucketRateLimiterWithLogger with a custom LogFunc instead.
 func NewTokenBucketRateLimiterWithPerformanceLogging(maxTokens int64, refillRate time.Duration) *TokenBucketRateLimiter {
 	// Return no-op logger to avoid circular import - users should use NewTokenBucketRateLimiterWithLogger
 	return NewTokenBucketRateLimiterWithLogger(maxTokens, refillRate, nil)
@@ -570,24 +751,68 @@ func MeasureOperation(name string, operation func() error) (time.Duration, error
 	return duration, err
 }
 
-// BatchProcessor processes items in batches for better performance
+// BatchProcessor processes items in batches for better performance with adaptive sizing
 type BatchProcessor[T any] struct {
-	batchSize    int
-	flushTimeout time.Duration
-	processFunc  func([]T) error
-	batch        []T
-	mutex        sync.Mutex
-	lastFlush    time.Time
+	batchSize       int
+	originalSize    int               // Original batch size for reset
+	maxBatchSize    int               // Maximum allowed batch size
+	minBatchSize    int               // Minimum allowed batch size
+	flushTimeout    time.Duration
+	processFunc     func([]T) error
+	batch           []T
+	mutex           sync.Mutex
+	lastFlush       time.Time
+	// Adaptive sizing fields
+	processingTimes []time.Duration   // Recent processing times
+	timeIndex       int               // Current index in processing times
+	avgProcessTime  time.Duration     // Average processing time
+	targetLatency   time.Duration     // Target processing latency
+	adaptiveEnabled bool              // Whether adaptive sizing is enabled
 }
 
-// NewBatchProcessor creates a new batch processor
+// NewBatchProcessor creates a new batch processor with fixed batch size
 func NewBatchProcessor[T any](batchSize int, flushTimeout time.Duration, processFunc func([]T) error) *BatchProcessor[T] {
 	return &BatchProcessor[T]{
-		batchSize:    batchSize,
-		flushTimeout: flushTimeout,
-		processFunc:  processFunc,
-		batch:        make([]T, 0, batchSize),
-		lastFlush:    time.Now(),
+		batchSize:       batchSize,
+		originalSize:    batchSize,
+		maxBatchSize:    batchSize,
+		minBatchSize:    batchSize,
+		flushTimeout:    flushTimeout,
+		processFunc:     processFunc,
+		batch:           make([]T, 0, batchSize),
+		lastFlush:       time.Now(),
+		adaptiveEnabled: false,
+	}
+}
+
+// NewAdaptiveBatchProcessor creates a new batch processor with adaptive sizing
+func NewAdaptiveBatchProcessor[T any](initialSize int, minSize int, maxSize int, flushTimeout time.Duration, targetLatency time.Duration, processFunc func([]T) error) *BatchProcessor[T] {
+	// Validate parameters
+	if minSize <= 0 {
+		minSize = 1
+	}
+	if maxSize < minSize {
+		maxSize = minSize
+	}
+	if initialSize < minSize {
+		initialSize = minSize
+	}
+	if initialSize > maxSize {
+		initialSize = maxSize
+	}
+	
+	return &BatchProcessor[T]{
+		batchSize:       initialSize,
+		originalSize:    initialSize,
+		maxBatchSize:    maxSize,
+		minBatchSize:    minSize,
+		flushTimeout:    flushTimeout,
+		processFunc:     processFunc,
+		batch:           make([]T, 0, maxSize), // Use max size for capacity
+		lastFlush:       time.Now(),
+		processingTimes: make([]time.Duration, 10), // Keep track of last 10 processing times
+		targetLatency:   targetLatency,
+		adaptiveEnabled: true,
 	}
 }
 
@@ -619,8 +844,682 @@ func (bp *BatchProcessor[T]) flush() error {
 		return nil
 	}
 	
+	// Measure processing time for adaptive sizing
+	startTime := time.Now()
 	err := bp.processFunc(bp.batch)
+	processingTime := time.Since(startTime)
+	
+	// Update batch size if adaptive sizing is enabled
+	if bp.adaptiveEnabled {
+		bp.updateBatchSize(processingTime, len(bp.batch))
+	}
+	
 	bp.batch = bp.batch[:0] // Reset batch
 	bp.lastFlush = time.Now()
 	return err
+}
+
+// updateBatchSize adjusts the batch size based on processing performance
+func (bp *BatchProcessor[T]) updateBatchSize(processingTime time.Duration, batchSize int) {
+	// Record processing time
+	bp.processingTimes[bp.timeIndex] = processingTime
+	bp.timeIndex = (bp.timeIndex + 1) % len(bp.processingTimes)
+	
+	// Calculate average processing time
+	var totalTime time.Duration
+	validSamples := 0
+	for _, t := range bp.processingTimes {
+		if t > 0 {
+			totalTime += t
+			validSamples++
+		}
+	}
+	
+	if validSamples == 0 {
+		return
+	}
+	
+	bp.avgProcessTime = totalTime / time.Duration(validSamples)
+	
+	// Adaptive sizing logic
+	if bp.avgProcessTime > bp.targetLatency {
+		// Processing is too slow, reduce batch size
+		newSize := int(float64(bp.batchSize) * 0.8)
+		if newSize < bp.minBatchSize {
+			newSize = bp.minBatchSize
+		}
+		bp.batchSize = newSize
+	} else if bp.avgProcessTime < bp.targetLatency/2 {
+		// Processing is fast, increase batch size
+		newSize := int(float64(bp.batchSize) * 1.2)
+		if newSize > bp.maxBatchSize {
+			newSize = bp.maxBatchSize
+		}
+		bp.batchSize = newSize
+	}
+}
+
+// GetCurrentBatchSize returns the current adaptive batch size
+func (bp *BatchProcessor[T]) GetCurrentBatchSize() int {
+	bp.mutex.Lock()
+	defer bp.mutex.Unlock()
+	return bp.batchSize
+}
+
+// GetAverageProcessingTime returns the current average processing time
+func (bp *BatchProcessor[T]) GetAverageProcessingTime() time.Duration {
+	bp.mutex.Lock()
+	defer bp.mutex.Unlock()
+	return bp.avgProcessTime
+}
+
+// ResetBatchSize resets the batch size to the original value
+func (bp *BatchProcessor[T]) ResetBatchSize() {
+	bp.mutex.Lock()
+	defer bp.mutex.Unlock()
+	bp.batchSize = bp.originalSize
+	// Clear processing time history
+	for i := range bp.processingTimes {
+		bp.processingTimes[i] = 0
+	}
+	bp.timeIndex = 0
+	bp.avgProcessTime = 0
+}
+
+// HighThroughputMemoryPool provides optimized memory pooling for high-throughput scenarios
+type HighThroughputMemoryPool[T any] struct {
+	pools       []*Pool[T]        // Multiple pools to reduce contention
+	poolIndex   *int64            // Atomic pool selection index
+	newFunc     func() T
+	resetFunc   func(T)
+	poolCount   int
+}
+
+// NewHighThroughputMemoryPool creates a memory pool optimized for high-throughput scenarios
+// It uses multiple underlying pools to reduce lock contention
+func NewHighThroughputMemoryPool[T any](poolCount int, newFunc func() T, resetFunc func(T)) *HighThroughputMemoryPool[T] {
+	if poolCount <= 0 {
+		poolCount = runtime.GOMAXPROCS(0) // Use number of CPUs as default
+	}
+	
+	pools := make([]*Pool[T], poolCount)
+	for i := 0; i < poolCount; i++ {
+		pools[i] = NewPool(newFunc, resetFunc)
+	}
+	
+	index := int64(0)
+	return &HighThroughputMemoryPool[T]{
+		pools:     pools,
+		poolIndex: &index,
+		newFunc:   newFunc,
+		resetFunc: resetFunc,
+		poolCount: poolCount,
+	}
+}
+
+// Get retrieves an object from one of the pools with minimal contention
+func (htp *HighThroughputMemoryPool[T]) Get() T {
+	// Use atomic increment to distribute load across pools
+	index := atomic.AddInt64(htp.poolIndex, 1)
+	poolIdx := int(index % int64(htp.poolCount))
+	return htp.pools[poolIdx].Get()
+}
+
+// Put returns an object to one of the pools
+func (htp *HighThroughputMemoryPool[T]) Put(obj T) {
+	// Use same distribution strategy as Get
+	index := atomic.LoadInt64(htp.poolIndex)
+	poolIdx := int(index % int64(htp.poolCount))
+	htp.pools[poolIdx].Put(obj)
+}
+
+// GetStats returns statistics about pool utilization
+func (htp *HighThroughputMemoryPool[T]) GetStats() PoolStats {
+	// This would require instrumenting the pools, which is a simplification
+	// In a production system, you'd want to track gets/puts per pool
+	return PoolStats{
+		PoolCount: htp.poolCount,
+		// Additional stats would be implemented based on requirements
+	}
+}
+
+// PoolStats provides statistics about pool performance
+type PoolStats struct {
+	PoolCount int `json:"pool_count"`
+	// Additional fields would be added based on monitoring requirements
+}
+
+// BufferPool provides a specialized pool for byte slices with size categories
+type BufferPool struct {
+	pools map[int]*Pool[[]byte] // Keyed by buffer size category
+	mutex sync.RWMutex
+}
+
+// NewBufferPool creates a new buffer pool with predefined size categories
+func NewBufferPool() *BufferPool {
+	bp := &BufferPool{
+		pools: make(map[int]*Pool[[]byte]),
+	}
+	
+	// Common buffer sizes: 1KB, 4KB, 16KB, 64KB, 256KB, 1MB
+	sizes := []int{1024, 4096, 16384, 65536, 262144, 1048576}
+	
+	for _, size := range sizes {
+		bp.pools[size] = NewPool(
+			func() []byte {
+				return make([]byte, size)
+			},
+			func(buf []byte) {
+				// Clear the buffer (security best practice)
+				for i := range buf {
+					buf[i] = 0
+				}
+			},
+		)
+	}
+	
+	return bp
+}
+
+// GetBuffer gets a buffer of at least the specified size
+func (bp *BufferPool) GetBuffer(minSize int) []byte {
+	bp.mutex.RLock()
+	defer bp.mutex.RUnlock()
+	
+	// Find the smallest buffer size that meets the requirement
+	for size := 1024; size <= 1048576; size *= 4 {
+		if size >= minSize {
+			if pool, exists := bp.pools[size]; exists {
+				buf := pool.Get()
+				return buf[:minSize] // Return slice of requested size
+			}
+		}
+	}
+	
+	// If no suitable pool exists, create a new buffer
+	return make([]byte, minSize)
+}
+
+// PutBuffer returns a buffer to the appropriate pool
+func (bp *BufferPool) PutBuffer(buf []byte) {
+	// Determine the original capacity
+	capacity := cap(buf)
+	
+	bp.mutex.RLock()
+	defer bp.mutex.RUnlock()
+	
+	if pool, exists := bp.pools[capacity]; exists {
+		// Restore to full capacity before returning to pool
+		fullBuf := buf[:capacity]
+		pool.Put(fullBuf)
+	}
+	// If no matching pool, let GC handle it
+}
+
+// StringPool provides efficient pooling for strings and string builders
+type StringPool struct {
+	builderPool *Pool[*strings.Builder]
+}
+
+// NewStringPool creates a new string pool
+func NewStringPool() *StringPool {
+	return &StringPool{
+		builderPool: NewPool(
+			func() *strings.Builder {
+				return &strings.Builder{}
+			},
+			func(sb *strings.Builder) {
+				sb.Reset()
+			},
+		),
+	}
+}
+
+// GetBuilder gets a string builder from the pool
+func (sp *StringPool) GetBuilder() *strings.Builder {
+	return sp.builderPool.Get()
+}
+
+// PutBuilder returns a string builder to the pool
+func (sp *StringPool) PutBuilder(sb *strings.Builder) {
+	sp.builderPool.Put(sb)
+}
+
+// BuildString is a convenience method that gets a builder, executes the function, and returns the result
+func (sp *StringPool) BuildString(fn func(*strings.Builder)) string {
+	builder := sp.GetBuilder()
+	defer sp.PutBuilder(builder)
+	fn(builder)
+	return builder.String()
+}
+
+// Additional utility functions for common performance optimizations
+
+// FastStringConcat performs efficient string concatenation using a pre-allocated buffer
+func FastStringConcat(parts ...string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	if len(parts) == 1 {
+		return parts[0]
+	}
+	
+	// Calculate total length
+	totalLen := 0
+	for _, part := range parts {
+		totalLen += len(part)
+	}
+	
+	// Pre-allocate buffer with exact size
+	var builder strings.Builder
+	builder.Grow(totalLen)
+	
+	for _, part := range parts {
+		builder.WriteString(part)
+	}
+	
+	return builder.String()
+}
+
+// ConcurrentMap provides a concurrent-safe map with read-write separation for better performance
+type ConcurrentMap[K comparable, V any] struct {
+	shards   []*mapShard[K, V]
+	shardMask uint64
+}
+
+type mapShard[K comparable, V any] struct {
+	items map[K]V
+	mutex sync.RWMutex
+}
+
+// roundUpToPowerOf2 rounds a number up to the next power of 2
+func roundUpToPowerOf2(n int) int {
+	if n <= 0 {
+		return 1
+	}
+	
+	// Handle edge cases
+	if n > MaxShardCount {
+		return MaxShardCount
+	}
+	
+	// Find next power of 2
+	power := 1
+	for power < n {
+		power <<= 1
+	}
+	
+	// Ensure it doesn't exceed maximum
+	if power > MaxShardCount {
+		return MaxShardCount
+	}
+	
+	return power
+}
+
+// NewConcurrentMap creates a new concurrent map with the specified number of shards
+func NewConcurrentMap[K comparable, V any](shardCount int) *ConcurrentMap[K, V] {
+	if shardCount <= 0 {
+		shardCount = DefaultShardCount
+	}
+	
+	// Enforce minimum and maximum limits for practical usage
+	if shardCount < MinShardCount {
+		shardCount = MinShardCount
+	}
+	if shardCount > MaxShardCount {
+		shardCount = MaxShardCount
+	}
+	
+	// Ensure shard count is a power of 2 for efficient hashing
+	if shardCount&(shardCount-1) != 0 {
+		// Round up to next power of 2
+		shardCount = roundUpToPowerOf2(shardCount)
+	}
+	
+	shards := make([]*mapShard[K, V], shardCount)
+	for i := range shards {
+		shards[i] = &mapShard[K, V]{
+			items: make(map[K]V),
+		}
+	}
+	
+	return &ConcurrentMap[K, V]{
+		shards:    shards,
+		shardMask: uint64(shardCount - 1),
+	}
+}
+
+// hash computes a hash for the key to determine shard using reflection-based approach
+func (cm *ConcurrentMap[K, V]) hash(key K) uint64 {
+	return computeReflectiveHash(key)
+}
+
+// computeReflectiveHash computes a hash using reflection to avoid fmt.Sprintf overhead
+func computeReflectiveHash(key any) uint64 {
+	const (
+		fnvOffsetBasis uint64 = 14695981039346656037
+		fnvPrime       uint64 = 1099511628211
+	)
+	
+	// Start with FNV-1a hash
+	hash := fnvOffsetBasis
+	
+	switch k := key.(type) {
+	case string:
+		// Optimized string hashing
+		for _, c := range k {
+			hash ^= uint64(c)
+			hash *= fnvPrime
+		}
+	case int:
+		hash ^= uint64(k)
+		hash *= fnvPrime
+	case int8:
+		hash ^= uint64(k)
+		hash *= fnvPrime
+	case int16:
+		hash ^= uint64(k)
+		hash *= fnvPrime
+	case int32:
+		hash ^= uint64(k)
+		hash *= fnvPrime
+	case int64:
+		hash ^= uint64(k)
+		hash *= fnvPrime
+	case uint:
+		hash ^= uint64(k)
+		hash *= fnvPrime
+	case uint8:
+		hash ^= uint64(k)
+		hash *= fnvPrime
+	case uint16:
+		hash ^= uint64(k)
+		hash *= fnvPrime
+	case uint32:
+		hash ^= uint64(k)
+		hash *= fnvPrime
+	case uint64:
+		hash ^= k
+		hash *= fnvPrime
+	case float32:
+		// Convert float to bits for consistent hashing
+		bits := math.Float32bits(k)
+		hash ^= uint64(bits)
+		hash *= fnvPrime
+	case float64:
+		// Convert float to bits for consistent hashing
+		bits := math.Float64bits(k)
+		hash ^= bits
+		hash *= fnvPrime
+	case bool:
+		if k {
+			hash ^= 1
+		} else {
+			hash ^= 0
+		}
+		hash *= fnvPrime
+	default:
+		// Use reflection for complex types to avoid fmt.Sprintf
+		hash = reflectiveHash(key, hash, fnvPrime)
+	}
+	
+	return hash
+}
+
+// reflectiveHash handles complex types using reflection
+func reflectiveHash(value any, hash uint64, prime uint64) uint64 {
+	if value == nil {
+		return hash ^ 0
+	}
+	
+	v := reflect.ValueOf(value)
+	t := v.Type()
+	
+	// Hash the type name first for better distribution
+	typeName := t.String()
+	for _, c := range typeName {
+		hash ^= uint64(c)
+		hash *= prime
+	}
+	
+	switch v.Kind() {
+	case reflect.Ptr:
+		if !v.IsNil() {
+			return reflectiveHash(v.Elem().Interface(), hash, prime)
+		}
+		return hash ^ 0
+		
+	case reflect.Array, reflect.Slice:
+		length := v.Len()
+		hash ^= uint64(length)
+		hash *= prime
+		
+		// Hash up to first 8 elements to avoid performance issues with large slices
+		maxElements := length
+		if maxElements > 8 {
+			maxElements = 8
+		}
+		
+		for i := 0; i < maxElements; i++ {
+			elem := v.Index(i).Interface()
+			hash = reflectiveHash(elem, hash, prime)
+		}
+		
+	case reflect.Struct:
+		numFields := v.NumField()
+		hash ^= uint64(numFields)
+		hash *= prime
+		
+		// Hash up to first 8 fields to avoid performance issues
+		maxFields := numFields
+		if maxFields > 8 {
+			maxFields = 8
+		}
+		
+		for i := 0; i < maxFields; i++ {
+			if v.Field(i).CanInterface() {
+				field := v.Field(i).Interface()
+				hash = reflectiveHash(field, hash, prime)
+			}
+		}
+		
+	case reflect.Map:
+		keys := v.MapKeys()
+		hash ^= uint64(len(keys))
+		hash *= prime
+		
+		// Hash up to first 8 key-value pairs
+		maxPairs := len(keys)
+		if maxPairs > 8 {
+			maxPairs = 8
+		}
+		
+		for i := 0; i < maxPairs; i++ {
+			key := keys[i].Interface()
+			val := v.MapIndex(keys[i]).Interface()
+			hash = reflectiveHash(key, hash, prime)
+			hash = reflectiveHash(val, hash, prime)
+		}
+		
+	default:
+		// For other types, convert to string as last resort
+		// But use a better hash of the string content, not just length
+		str := fmt.Sprintf("%v", value)
+		for _, c := range str {
+			hash ^= uint64(c)
+			hash *= prime
+		}
+	}
+	
+	return hash
+}
+
+// getShard returns the shard for the given key
+func (cm *ConcurrentMap[K, V]) getShard(key K) *mapShard[K, V] {
+	hash := cm.hash(key)
+	return cm.shards[hash&cm.shardMask]
+}
+
+// Set stores a key-value pair
+func (cm *ConcurrentMap[K, V]) Set(key K, value V) {
+	shard := cm.getShard(key)
+	shard.mutex.Lock()
+	defer shard.mutex.Unlock()
+	shard.items[key] = value
+}
+
+// Get retrieves a value by key
+func (cm *ConcurrentMap[K, V]) Get(key K) (V, bool) {
+	shard := cm.getShard(key)
+	shard.mutex.RLock()
+	defer shard.mutex.RUnlock()
+	value, exists := shard.items[key]
+	return value, exists
+}
+
+// Delete removes a key-value pair
+func (cm *ConcurrentMap[K, V]) Delete(key K) {
+	shard := cm.getShard(key)
+	shard.mutex.Lock()
+	defer shard.mutex.Unlock()
+	delete(shard.items, key)
+}
+
+// Size returns the approximate number of items in the map
+func (cm *ConcurrentMap[K, V]) Size() int {
+	total := 0
+	for _, shard := range cm.shards {
+		shard.mutex.RLock()
+		total += len(shard.items)
+		shard.mutex.RUnlock()
+	}
+	return total
+}
+
+// Clear removes all items from the map
+func (cm *ConcurrentMap[K, V]) Clear() {
+	for _, shard := range cm.shards {
+		shard.mutex.Lock()
+		shard.items = make(map[K]V)
+		shard.mutex.Unlock()
+	}
+}
+
+// Keys returns a slice of all keys in the map
+func (cm *ConcurrentMap[K, V]) Keys() []K {
+	var keys []K
+	for _, shard := range cm.shards {
+		shard.mutex.RLock()
+		for key := range shard.items {
+			keys = append(keys, key)
+		}
+		shard.mutex.RUnlock()
+	}
+	return keys
+}
+
+// ExponentialBackoff implements exponential backoff for retry logic
+type ExponentialBackoff struct {
+	initialDelay time.Duration
+	maxDelay     time.Duration
+	multiplier   float64
+	jitter       bool
+	attempt      int
+}
+
+// NewExponentialBackoff creates a new exponential backoff configuration
+func NewExponentialBackoff(initialDelay, maxDelay time.Duration, multiplier float64, jitter bool) *ExponentialBackoff {
+	return &ExponentialBackoff{
+		initialDelay: initialDelay,
+		maxDelay:     maxDelay,
+		multiplier:   multiplier,
+		jitter:       jitter,
+		attempt:      0,
+	}
+}
+
+// NextDelay calculates the next delay duration
+func (eb *ExponentialBackoff) NextDelay() time.Duration {
+	delay := time.Duration(float64(eb.initialDelay) * eb.multiplier * float64(eb.attempt))
+	if delay > eb.maxDelay {
+		delay = eb.maxDelay
+	}
+	
+	if eb.jitter {
+		// Add up to 10% jitter to prevent thundering herd
+		jitterAmount := time.Duration(float64(delay) * 0.1 * float64(time.Now().UnixNano()%100) / 100.0)
+		delay += jitterAmount
+	}
+	
+	eb.attempt++
+	return delay
+}
+
+// Reset resets the backoff to initial state
+func (eb *ExponentialBackoff) Reset() {
+	eb.attempt = 0
+}
+
+// GetAttempt returns the current attempt number
+func (eb *ExponentialBackoff) GetAttempt() int {
+	return eb.attempt
+}
+
+// ResourceLimiter provides resource-based limiting (memory, connections, etc.)
+type ResourceLimiter struct {
+	maxResources int64
+	current      int64
+	waiters      chan struct{}
+	mutex        sync.Mutex
+}
+
+// NewResourceLimiter creates a new resource limiter
+func NewResourceLimiter(maxResources int64) *ResourceLimiter {
+	return &ResourceLimiter{
+		maxResources: maxResources,
+		waiters:      make(chan struct{}, maxResources),
+	}
+}
+
+// Acquire acquires a resource, blocking if necessary
+func (rl *ResourceLimiter) Acquire(ctx context.Context) error {
+	select {
+	case rl.waiters <- struct{}{}:
+		atomic.AddInt64(&rl.current, 1)
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// TryAcquire attempts to acquire a resource without blocking
+func (rl *ResourceLimiter) TryAcquire() bool {
+	select {
+	case rl.waiters <- struct{}{}:
+		atomic.AddInt64(&rl.current, 1)
+		return true
+	default:
+		return false
+	}
+}
+
+// Release releases a resource
+func (rl *ResourceLimiter) Release() {
+	select {
+	case <-rl.waiters:
+		atomic.AddInt64(&rl.current, -1)
+	default:
+		// Should not happen in correct usage
+	}
+}
+
+// GetCurrentCount returns the current number of acquired resources
+func (rl *ResourceLimiter) GetCurrentCount() int64 {
+	return atomic.LoadInt64(&rl.current)
+}
+
+// GetMaxResources returns the maximum number of resources
+func (rl *ResourceLimiter) GetMaxResources() int64 {
+	return rl.maxResources
 }

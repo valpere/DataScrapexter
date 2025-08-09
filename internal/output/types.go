@@ -19,6 +19,9 @@ const (
 	FormatTSV        OutputFormat = "tsv"
 	FormatExcel      OutputFormat = "excel"
 	FormatParquet    OutputFormat = "parquet"
+	FormatPDF        OutputFormat = "pdf"
+	FormatMongoDB    OutputFormat = "mongodb"
+	FormatMySQL      OutputFormat = "mysql"
 	FormatPostgreSQL OutputFormat = "postgresql"
 	FormatSQLite     OutputFormat = "sqlite"
 )
@@ -46,7 +49,7 @@ const (
 
 // ValidOutputFormats returns all valid output format values
 func ValidOutputFormats() []OutputFormat {
-	return []OutputFormat{FormatJSON, FormatCSV, FormatXML, FormatYAML, FormatTSV, FormatExcel, FormatParquet, FormatPostgreSQL, FormatSQLite}
+	return []OutputFormat{FormatJSON, FormatCSV, FormatXML, FormatYAML, FormatTSV, FormatExcel, FormatParquet, FormatPDF, FormatMongoDB, FormatMySQL, FormatPostgreSQL, FormatSQLite}
 }
 
 // ValidConflictStrategies returns all valid conflict strategy values
@@ -159,6 +162,9 @@ const (
 	// Database-specific limits
 	MaxPostgreSQLIdentifierLength = 63  // PostgreSQL maximum identifier length
 	MaxSQLiteIdentifierLength     = 999 // SQLite maximum identifier length (much higher than PostgreSQL)
+	
+	// Database column type inference constants - shared across database implementations
+	VarcharLengthMultiplier = 2 // Multiplier for VARCHAR length to provide extra space
 )
 
 // Time format patterns for quick validation before parsing
@@ -375,6 +381,8 @@ func (of OutputFormat) GetFileExtension() string {
 		return ".xlsx"
 	case FormatParquet:
 		return ".parquet"
+	case FormatPDF:
+		return ".pdf"
 	default:
 		return ".txt"
 	}
@@ -397,6 +405,8 @@ func (of OutputFormat) GetMimeType() string {
 		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 	case FormatParquet:
 		return "application/octet-stream"
+	case FormatPDF:
+		return "application/pdf"
 	default:
 		return "text/plain"
 	}
@@ -450,6 +460,9 @@ type ValidationError struct {
 type FormatOptions struct {
 	JSON       JSONOptions       `yaml:"json,omitempty" json:"json,omitempty"`
 	CSV        CSVOptions        `yaml:"csv,omitempty" json:"csv,omitempty"`
+	PDF        PDFOptions        `yaml:"pdf,omitempty" json:"pdf,omitempty"`
+	MongoDB    MongoDBOptions    `yaml:"mongodb,omitempty" json:"mongodb,omitempty"`
+	MySQL      MySQLOptions      `yaml:"mysql,omitempty" json:"mysql,omitempty"`
 	PostgreSQL PostgreSQLOptions `yaml:"postgresql,omitempty" json:"postgresql,omitempty"`
 	SQLite     SQLiteOptions     `yaml:"sqlite,omitempty" json:"sqlite,omitempty"`
 }
@@ -471,15 +484,123 @@ type CSVOptions struct {
 	SkipEmpty bool     `yaml:"skip_empty,omitempty" json:"skip_empty,omitempty"`
 }
 
+// PDFOptions defines PDF-specific options
+type PDFOptions struct {
+	Title          string            `yaml:"title,omitempty" json:"title,omitempty"`
+	Author         string            `yaml:"author,omitempty" json:"author,omitempty"`
+	Subject        string            `yaml:"subject,omitempty" json:"subject,omitempty"`
+	Keywords       []string          `yaml:"keywords,omitempty" json:"keywords,omitempty"`
+	PageSize       string            `yaml:"page_size,omitempty" json:"page_size,omitempty"`       // A4, Letter, Legal, etc.
+	Orientation    string            `yaml:"orientation,omitempty" json:"orientation,omitempty"`   // Portrait, Landscape
+	Margins        *PDFMargins       `yaml:"margins,omitempty" json:"margins,omitempty"`
+	Font           *PDFFont          `yaml:"font,omitempty" json:"font,omitempty"`
+	HeaderFooter   *PDFHeaderFooter  `yaml:"header_footer,omitempty" json:"header_footer,omitempty"`
+	Watermark      *PDFWatermark     `yaml:"watermark,omitempty" json:"watermark,omitempty"`
+	Template       string            `yaml:"template,omitempty" json:"template,omitempty"`         // report, table, detailed, compact
+	IncludeCharts  bool              `yaml:"include_charts,omitempty" json:"include_charts,omitempty"`
+	IncludeImages  bool              `yaml:"include_images,omitempty" json:"include_images,omitempty"`
+	CompressImages bool              `yaml:"compress_images,omitempty" json:"compress_images,omitempty"`
+	TableOptions   *PDFTableOptions  `yaml:"table_options,omitempty" json:"table_options,omitempty"`
+	Colors         *PDFColorScheme   `yaml:"colors,omitempty" json:"colors,omitempty"`
+	Security       *PDFSecurity      `yaml:"security,omitempty" json:"security,omitempty"`
+	CustomFields   map[string]string `yaml:"custom_fields,omitempty" json:"custom_fields,omitempty"`
+}
+
+// PDFMargins defines PDF page margins
+type PDFMargins struct {
+	Top    float64 `yaml:"top" json:"top"`       // Points (1 point = 1/72 inch)
+	Bottom float64 `yaml:"bottom" json:"bottom"`
+	Left   float64 `yaml:"left" json:"left"`
+	Right  float64 `yaml:"right" json:"right"`
+}
+
+// PDFFont defines PDF font settings
+type PDFFont struct {
+	Family   string  `yaml:"family,omitempty" json:"family,omitempty"`     // Helvetica, Times, Courier
+	Size     float64 `yaml:"size,omitempty" json:"size,omitempty"`         // Font size in points
+	Style    string  `yaml:"style,omitempty" json:"style,omitempty"`       // Regular, Bold, Italic, BoldItalic
+	Color    string  `yaml:"color,omitempty" json:"color,omitempty"`       // Hex color #000000
+	LineHeight float64 `yaml:"line_height,omitempty" json:"line_height,omitempty"` // Line height multiplier
+}
+
+// PDFHeaderFooter defines PDF header and footer settings
+type PDFHeaderFooter struct {
+	Header *PDFHeaderFooterContent `yaml:"header,omitempty" json:"header,omitempty"`
+	Footer *PDFHeaderFooterContent `yaml:"footer,omitempty" json:"footer,omitempty"`
+}
+
+// PDFHeaderFooterContent defines header/footer content
+type PDFHeaderFooterContent struct {
+	Text         string            `yaml:"text,omitempty" json:"text,omitempty"`
+	Font         *PDFFont          `yaml:"font,omitempty" json:"font,omitempty"`
+	Alignment    string            `yaml:"alignment,omitempty" json:"alignment,omitempty"`     // left, center, right
+	ShowPageNum  bool              `yaml:"show_page_num,omitempty" json:"show_page_num,omitempty"`
+	ShowDate     bool              `yaml:"show_date,omitempty" json:"show_date,omitempty"`
+	DateFormat   string            `yaml:"date_format,omitempty" json:"date_format,omitempty"` // 2006-01-02 15:04:05
+	Variables    map[string]string `yaml:"variables,omitempty" json:"variables,omitempty"`     // Custom variables like {{title}}, {{url}}
+}
+
+// PDFWatermark defines PDF watermark settings
+type PDFWatermark struct {
+	Text      string  `yaml:"text,omitempty" json:"text,omitempty"`
+	Opacity   float64 `yaml:"opacity,omitempty" json:"opacity,omitempty"`       // 0.0 to 1.0
+	Rotation  float64 `yaml:"rotation,omitempty" json:"rotation,omitempty"`     // Degrees
+	Font      *PDFFont `yaml:"font,omitempty" json:"font,omitempty"`
+	Position  string  `yaml:"position,omitempty" json:"position,omitempty"`     // center, diagonal, corners
+}
+
+// PDFTableOptions defines PDF table formatting options
+type PDFTableOptions struct {
+	HeaderStyle    *PDFTableStyle `yaml:"header_style,omitempty" json:"header_style,omitempty"`
+	RowStyle       *PDFTableStyle `yaml:"row_style,omitempty" json:"row_style,omitempty"`
+	AlternateStyle *PDFTableStyle `yaml:"alternate_style,omitempty" json:"alternate_style,omitempty"`
+	BorderWidth    float64        `yaml:"border_width,omitempty" json:"border_width,omitempty"`
+	BorderColor    string         `yaml:"border_color,omitempty" json:"border_color,omitempty"`
+	CellPadding    float64        `yaml:"cell_padding,omitempty" json:"cell_padding,omitempty"`
+	AutoResize     bool           `yaml:"auto_resize,omitempty" json:"auto_resize,omitempty"`
+	BreakPages     bool           `yaml:"break_pages,omitempty" json:"break_pages,omitempty"`
+	MaxCellHeight  float64        `yaml:"max_cell_height,omitempty" json:"max_cell_height,omitempty"`
+}
+
+// PDFTableStyle defines styling for table elements
+type PDFTableStyle struct {
+	BackgroundColor string   `yaml:"background_color,omitempty" json:"background_color,omitempty"`
+	TextColor       string   `yaml:"text_color,omitempty" json:"text_color,omitempty"`
+	Font            *PDFFont `yaml:"font,omitempty" json:"font,omitempty"`
+	Alignment       string   `yaml:"alignment,omitempty" json:"alignment,omitempty"` // left, center, right
+}
+
+// PDFColorScheme defines color scheme for PDF documents
+type PDFColorScheme struct {
+	Primary     string `yaml:"primary,omitempty" json:"primary,omitempty"`         // Main theme color
+	Secondary   string `yaml:"secondary,omitempty" json:"secondary,omitempty"`     // Secondary theme color
+	Accent      string `yaml:"accent,omitempty" json:"accent,omitempty"`           // Accent color
+	Text        string `yaml:"text,omitempty" json:"text,omitempty"`               // Main text color
+	Background  string `yaml:"background,omitempty" json:"background,omitempty"`   // Background color
+	Border      string `yaml:"border,omitempty" json:"border,omitempty"`           // Border color
+	Success     string `yaml:"success,omitempty" json:"success,omitempty"`         // Success indicator color
+	Warning     string `yaml:"warning,omitempty" json:"warning,omitempty"`         // Warning indicator color
+	Error       string `yaml:"error,omitempty" json:"error,omitempty"`             // Error indicator color
+}
+
+// PDFSecurity defines PDF security and protection settings
+type PDFSecurity struct {
+	UserPassword  string   `yaml:"user_password,omitempty" json:"user_password,omitempty"`     // Password to open PDF
+	OwnerPassword string   `yaml:"owner_password,omitempty" json:"owner_password,omitempty"`   // Password for editing
+	Permissions   []string `yaml:"permissions,omitempty" json:"permissions,omitempty"`         // print, copy, modify, annotate
+	Encryption    string   `yaml:"encryption,omitempty" json:"encryption,omitempty"`           // 40bit, 128bit, 256bit
+}
+
 // PostgreSQLOptions defines PostgreSQL-specific options
 type PostgreSQLOptions struct {
-	ConnectionString string            `yaml:"connection_string" json:"connection_string"`
-	Table            string            `yaml:"table" json:"table"`
-	Schema           string            `yaml:"schema,omitempty" json:"schema,omitempty"`
-	BatchSize        int               `yaml:"batch_size,omitempty" json:"batch_size,omitempty"`
-	CreateTable      bool              `yaml:"create_table,omitempty" json:"create_table,omitempty"`
-	OnConflict       ConflictStrategy  `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // PostgreSQL: ConflictIgnore, ConflictError
-	ColumnTypes      map[string]string `yaml:"column_types,omitempty" json:"column_types,omitempty"`
+	ConnectionString     string            `yaml:"connection_string" json:"connection_string"`
+	Table                string            `yaml:"table" json:"table"`
+	Schema               string            `yaml:"schema,omitempty" json:"schema,omitempty"`
+	BatchSize            int               `yaml:"batch_size,omitempty" json:"batch_size,omitempty"`
+	TransactionThreshold int               `yaml:"transaction_threshold,omitempty" json:"transaction_threshold,omitempty"`
+	CreateTable          bool              `yaml:"create_table,omitempty" json:"create_table,omitempty"`
+	OnConflict           ConflictStrategy  `yaml:"on_conflict,omitempty" json:"on_conflict,omitempty"` // PostgreSQL: ConflictIgnore, ConflictError
+	ColumnTypes          map[string]string `yaml:"column_types,omitempty" json:"column_types,omitempty"`
 }
 
 // SQLiteOptions defines SQLite-specific options
@@ -502,7 +623,10 @@ var SupportedFormats = []string{
 	"yaml",
 	"txt",
 	"html",
+	"pdf",        // PDF documents
 	"jsonl",      // JSON Lines
+	"mongodb",    // MongoDB database
+	"mysql",      // MySQL database
 	"postgresql", // PostgreSQL database
 	"sqlite",     // SQLite database
 }
@@ -535,6 +659,37 @@ var DefaultConfigs = map[string]Config{
 		Format: FormatYAML,
 		Options: map[string]string{
 			"indent": "2",
+		},
+	},
+	"pdf": {
+		Format: FormatPDF,
+		Options: map[string]string{
+			"template":     "report",
+			"page_size":    "A4",
+			"orientation":  "Portrait",
+			"title":        "DataScrapexter Report",
+			"author":       "DataScrapexter",
+		},
+	},
+	"mongodb": {
+		Format: FormatMongoDB,
+		Options: map[string]string{
+			"database":     "scraped_data",
+			"collection":   "records",
+			"batch_size":   "1000",
+			"on_conflict":  string(ConflictIgnore),
+		},
+	},
+	"mysql": {
+		Format: FormatMySQL,
+		Options: map[string]string{
+			"database":     "scraped_data",
+			"table":        "records",
+			"batch_size":   "1000",
+			"engine":       "InnoDB",
+			"charset":      "utf8mb4",
+			"create_table": "true",
+			"on_conflict":  string(ConflictIgnore),
 		},
 	},
 	"postgresql": {

@@ -12,10 +12,162 @@ import (
 	"time"
 )
 
-// Cache for sanitized XML names to improve performance in high-throughput scenarios
+const (
+	// MinLRUCacheSize defines the minimum effective cache size
+	MinLRUCacheSize = 10
+	// DefaultLRUCacheSize defines the default cache size for optimal performance
+	DefaultLRUCacheSize = 1000
+)
+
+// validateCacheCapacity ensures cache capacity meets minimum requirements
+// Returns the corrected capacity with consistent behavior across all usage
+func validateCacheCapacity(capacity int, useDefault bool) int {
+	if capacity < MinLRUCacheSize {
+		if useDefault {
+			return DefaultLRUCacheSize // Use default for new cache creation
+		}
+		return MinLRUCacheSize // Use minimum for capacity updates
+	}
+	return capacity
+}
+
+// LRUCacheNode represents a node in the doubly-linked list
+type LRUCacheNode struct {
+	key   string
+	value string
+	prev  *LRUCacheNode
+	next  *LRUCacheNode
+}
+
+// LRUCache implements a thread-safe LRU cache with O(1) operations
+type LRUCache struct {
+	capacity int
+	cache    map[string]*LRUCacheNode
+	head     *LRUCacheNode
+	tail     *LRUCacheNode
+	mutex    sync.RWMutex
+}
+
+// Capacity returns the current capacity of the cache
+func (lru *LRUCache) Capacity() int {
+	lru.mutex.RLock()
+	defer lru.mutex.RUnlock()
+	return lru.capacity
+}
+
+// NewLRUCache creates a new LRU cache with the specified capacity
+func NewLRUCache(capacity int) *LRUCache {
+	capacity = validateCacheCapacity(capacity, true) // Use default for new caches
+	
+	lru := &LRUCache{
+		capacity: capacity,
+		cache:    make(map[string]*LRUCacheNode),
+	}
+	
+	// Initialize dummy head and tail nodes
+	lru.head = &LRUCacheNode{}
+	lru.tail = &LRUCacheNode{}
+	lru.head.next = lru.tail
+	lru.tail.prev = lru.head
+	
+	return lru
+}
+
+// Get retrieves a value from the cache and marks it as recently used
+func (lru *LRUCache) Get(key string) (string, bool) {
+	lru.mutex.Lock()
+	defer lru.mutex.Unlock()
+	
+	if node, exists := lru.cache[key]; exists {
+		// Move to front (most recently used)
+		lru.moveToFront(node)
+		return node.value, true
+	}
+	
+	return "", false
+}
+
+// Put adds or updates a value in the cache
+func (lru *LRUCache) Put(key, value string) {
+	lru.mutex.Lock()
+	defer lru.mutex.Unlock()
+	
+	if node, exists := lru.cache[key]; exists {
+		// Update existing node
+		node.value = value
+		lru.moveToFront(node)
+		return
+	}
+	
+	// Create new node
+	node := &LRUCacheNode{
+		key:   key,
+		value: value,
+	}
+	
+	// Check capacity
+	if len(lru.cache) >= lru.capacity {
+		lru.removeLRU()
+	}
+	
+	lru.cache[key] = node
+	lru.addToFront(node)
+}
+
+// moveToFront moves a node to the front of the list (most recently used)
+func (lru *LRUCache) moveToFront(node *LRUCacheNode) {
+	lru.removeFromList(node)
+	lru.addToFront(node)
+}
+
+// addToFront adds a node to the front of the list
+func (lru *LRUCache) addToFront(node *LRUCacheNode) {
+	node.prev = lru.head
+	node.next = lru.head.next
+	lru.head.next.prev = node
+	lru.head.next = node
+}
+
+// removeFromList removes a node from the doubly-linked list
+func (lru *LRUCache) removeFromList(node *LRUCacheNode) {
+	node.prev.next = node.next
+	node.next.prev = node.prev
+}
+
+// removeLRU removes the least recently used item
+func (lru *LRUCache) removeLRU() {
+	if lru.tail.prev != lru.head {
+		node := lru.tail.prev
+		lru.removeFromList(node)
+		delete(lru.cache, node.key)
+	}
+}
+
+// Size returns the current size of the cache
+func (lru *LRUCache) Size() int {
+	lru.mutex.RLock()
+	defer lru.mutex.RUnlock()
+	return len(lru.cache)
+}
+
+// SetCapacity updates the cache capacity and evicts items if necessary
+func (lru *LRUCache) SetCapacity(capacity int) {
+	capacity = validateCacheCapacity(capacity, false) // Use minimum for updates
+	
+	lru.mutex.Lock()
+	defer lru.mutex.Unlock()
+	
+	lru.capacity = capacity
+	
+	// Evict excess items if current cache is larger than new capacity
+	for len(lru.cache) > lru.capacity {
+		lru.removeLRU()
+	}
+}
+
+// Global LRU cache instance for XML name sanitization
 var (
-	xmlNameCache = make(map[string]string)
-	xmlNameMutex sync.RWMutex
+	xmlNameCache = NewLRUCache(1000)
 )
 
 // XMLWriter implements the Writer interface for XML output
@@ -382,28 +534,36 @@ func sanitizeXMLName(name string) string {
 		return "element"
 	}
 
-	// Check cache first for performance optimization
-	xmlNameMutex.RLock()
-	if cached, exists := xmlNameCache[name]; exists {
-		xmlNameMutex.RUnlock()
+	// Check cache first for performance optimization (O(1) operation)
+	if cached, exists := xmlNameCache.Get(name); exists {
 		return cached
 	}
-	xmlNameMutex.RUnlock()
 
 	// Perform sanitization
 	result := sanitizeXMLNameUncached(name)
 
-	// Cache the result (with size limit to prevent memory bloat)
-	xmlNameMutex.Lock()
-	if len(xmlNameCache) < 1000 { // Limit cache size to prevent memory issues
-		xmlNameCache[name] = result
-	}
-	// TODO: Consider implementing an LRU eviction policy instead of a simple size check
-	// to maintain better cache efficiency under varying workloads. This would ensure
-	// frequently used names remain cached while evicting least recently used entries.
-	xmlNameMutex.Unlock()
+	// Cache the result with LRU eviction policy (O(1) operation)
+	xmlNameCache.Put(name, result)
 
 	return result
+}
+
+// SetXMLNameCacheSize configures the maximum size of the XML name cache
+// This allows tuning cache performance for different workloads
+func SetXMLNameCacheSize(size int) {
+	xmlNameCache.SetCapacity(size)
+}
+
+// GetXMLNameCacheStats returns statistics about the XML name cache
+func GetXMLNameCacheStats() map[string]interface{} {
+	size := xmlNameCache.Size()
+	capacity := xmlNameCache.Capacity()
+	
+	return map[string]interface{}{
+		"size":     size,
+		"max_size": capacity,
+		"usage":    float64(size) / float64(capacity) * 100,
+	}
 }
 
 // sanitizeXMLNameUncached performs the actual sanitization without caching

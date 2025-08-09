@@ -40,12 +40,13 @@ type YAMLConfig struct {
 	// Metadata configuration
 	GeneratorName    string `json:"generator_name"`
 	GeneratorVersion string `json:"generator_version"`
-	IncludeMetadata  bool   `json:"include_metadata"`
-	// MetadataExplicit is an internal-only flag used to track whether metadata inclusion
-	// was explicitly configured by the user or should use default behavior.
-	// This prevents automatic metadata inclusion when not explicitly requested.
-	// Not exposed in JSON serialization to maintain clean configuration files.
-	MetadataExplicit bool `json:"-"`
+	// IncludeMetadata uses a pointer to distinguish between explicitly set false vs unset (nil)
+	// This makes the configuration interface clearer and prevents automatic metadata 
+	// inclusion when not explicitly requested.
+	// - nil: use default behavior (include metadata for traceability)
+	// - *false: explicitly disable metadata
+	// - *true: explicitly enable metadata
+	IncludeMetadata *bool `json:"include_metadata,omitempty"`
 }
 
 // NewYAMLWriter creates a new YAML writer
@@ -74,12 +75,13 @@ func NewYAMLWriter(config YAMLConfig) (*YAMLWriter, error) {
 	if config.GeneratorVersion == "" {
 		config.GeneratorVersion = "1.0"
 	}
-	// TODO: The metadata inclusion logic using MetadataExplicit flag could be confusing.
-	// Consider using a pointer *bool for IncludeMetadata to distinguish between
-	// explicitly set false vs unset (nil), making the configuration interface clearer.
-	// For now, default to including metadata for traceability unless explicitly disabled
-	if !config.MetadataExplicit {
-		config.IncludeMetadata = true
+	// Handle metadata inclusion with cleaner pointer-based approach
+	// If IncludeMetadata is nil, use default behavior (include metadata for traceability)
+	// If explicitly set to false or true, respect the user's choice
+	if config.IncludeMetadata == nil {
+		// Default to including metadata for traceability when not explicitly configured
+		defaultValue := true
+		config.IncludeMetadata = &defaultValue
 	}
 
 	file, err := os.Create(config.FilePath)
@@ -219,7 +221,7 @@ func (w *YAMLWriter) writeArrayDocument(records []map[string]interface{}) error 
 	}
 
 	// Add configurable metadata if this is the first write
-	if w.isFirstDoc && w.config.IncludeMetadata {
+	if w.isFirstDoc && w.config.IncludeMetadata != nil && *w.config.IncludeMetadata {
 		document := map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"generated_at": time.Now().Format(time.RFC3339),

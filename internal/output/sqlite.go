@@ -2,6 +2,7 @@
 package output
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -146,6 +147,28 @@ func (w *SQLiteWriter) Write(data []map[string]interface{}) error {
 
 	// Insert data in batches
 	return w.insertBatches(data)
+}
+
+// WriteContext writes data to SQLite database with context
+func (w *SQLiteWriter) WriteContext(ctx context.Context, data interface{}) error {
+	switch v := data.(type) {
+	case []map[string]interface{}:
+		return w.Write(v)
+	case map[string]interface{}:
+		return w.Write([]map[string]interface{}{v})
+	case []interface{}:
+		records := make([]map[string]interface{}, 0, len(v))
+		for _, item := range v {
+			if record, ok := item.(map[string]interface{}); ok {
+				records = append(records, record)
+			} else {
+				return fmt.Errorf("unsupported data type in slice: %T", item)
+			}
+		}
+		return w.Write(records)
+	default:
+		return fmt.Errorf("unsupported data type: %T", data)
+	}
 }
 
 // analyzeAndCreateTable analyzes data structure and creates table if needed
@@ -473,6 +496,11 @@ func (w *SQLiteWriter) Close() error {
 		return err
 	}
 	return nil
+}
+
+// GetType returns the output type
+func (w *SQLiteWriter) GetType() string {
+	return "sqlite"
 }
 
 // GetStats returns SQLite writer statistics

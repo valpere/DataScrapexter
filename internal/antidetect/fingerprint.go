@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	mathrand "math/rand"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -304,6 +306,245 @@ type FingerprintingEvader struct {
 	Font   *FontSpoofing
 }
 
+// EntropyMetrics tracks entropy generation failures for system health monitoring
+type EntropyMetrics struct {
+	// Total failures by context (e.g., "canvas_variations", "canvas_data_generation")
+	failures         map[string]*int64
+	failuresMutex    sync.RWMutex
+	
+	// Time-windowed failure tracking for rate limiting and alerting
+	recentFailures   []EntropyFailureEvent
+	recentMutex      sync.RWMutex
+	
+	// Aggregate counters for system-wide monitoring
+	totalFailures    int64
+	firstFailureAt   time.Time
+	lastFailureAt    time.Time
+	consecutiveFails int64
+	
+	// Configuration
+	retentionPeriod  time.Duration // How long to keep recent failure events
+	alertThreshold   int           // Number of failures in retention period to trigger alert
+}
+
+// EntropyFailureEvent represents a single entropy failure event
+type EntropyFailureEvent struct {
+	Context     string
+	ErrorType   string
+	Timestamp   time.Time
+	Severity    string
+}
+
+// Global metrics instance - initialized once and used throughout the package
+var (
+	entropyMetrics     *EntropyMetrics
+	metricsInitOnce    sync.Once
+)
+
+// initMetrics initializes the global entropy metrics tracker
+func initMetrics() {
+	metricsInitOnce.Do(func() {
+		entropyMetrics = &EntropyMetrics{
+			failures:        make(map[string]*int64),
+			recentFailures:  make([]EntropyFailureEvent, 0, 1000), // Pre-allocate for efficiency
+			retentionPeriod: 24 * time.Hour, // Keep failure events for 24 hours
+			alertThreshold:  10,             // Alert if 10+ failures in 24 hours
+		}
+		
+		// Start background cleanup goroutine to prevent memory leaks
+		go entropyMetrics.cleanup()
+	})
+}
+
+// RecordFailure records an entropy failure event with full context
+func (em *EntropyMetrics) RecordFailure(context string, err error) {
+	if em == nil {
+		return
+	}
+	
+	now := time.Now().UTC()
+	errorType := sanitizeErrorForLogging(err)
+	
+	// Update aggregate counters atomically
+	totalCount := atomic.AddInt64(&em.totalFailures, 1)
+	atomic.StoreInt64(&em.consecutiveFails, atomic.LoadInt64(&em.consecutiveFails)+1)
+	
+	// Set timestamps
+	if totalCount == 1 {
+		em.firstFailureAt = now
+	}
+	em.lastFailureAt = now
+	
+	// Update per-context failure counter
+	em.failuresMutex.Lock()
+	if em.failures[context] == nil {
+		counter := int64(0)
+		em.failures[context] = &counter
+	}
+	atomic.AddInt64(em.failures[context], 1)
+	em.failuresMutex.Unlock()
+	
+	// Add to recent failures for windowed analysis
+	event := EntropyFailureEvent{
+		Context:   context,
+		ErrorType: errorType,
+		Timestamp: now,
+		Severity:  em.determineSeverity(context, errorType),
+	}
+	
+	em.recentMutex.Lock()
+	em.recentFailures = append(em.recentFailures, event)
+	em.recentMutex.Unlock()
+	
+	// Check if we should trigger an alert
+	em.checkAlertConditions()
+}
+
+// GetMetrics returns a snapshot of current entropy metrics
+func (em *EntropyMetrics) GetMetrics() map[string]interface{} {
+	if em == nil {
+		return map[string]interface{}{"status": "not_initialized"}
+	}
+	
+	em.failuresMutex.RLock()
+	em.recentMutex.RLock()
+	defer em.failuresMutex.RUnlock()
+	defer em.recentMutex.RUnlock()
+	
+	// Count recent failures (within retention period)
+	cutoff := time.Now().UTC().Add(-em.retentionPeriod)
+	recentCount := 0
+	for _, event := range em.recentFailures {
+		if event.Timestamp.After(cutoff) {
+			recentCount++
+		}
+	}
+	
+	// Build per-context failure counts
+	contextFailures := make(map[string]int64)
+	for context, counter := range em.failures {
+		if counter != nil {
+			contextFailures[context] = atomic.LoadInt64(counter)
+		}
+	}
+	
+	return map[string]interface{}{
+		"total_failures":        atomic.LoadInt64(&em.totalFailures),
+		"consecutive_failures":  atomic.LoadInt64(&em.consecutiveFails),
+		"recent_failures":       recentCount,
+		"context_breakdown":     contextFailures,
+		"first_failure_at":      em.firstFailureAt,
+		"last_failure_at":       em.lastFailureAt,
+		"retention_period_hours": em.retentionPeriod.Hours(),
+		"alert_threshold":       em.alertThreshold,
+		"health_status":         em.getHealthStatus(),
+	}
+}
+
+// ResetConsecutiveFailures resets the consecutive failure counter (called on success)
+func (em *EntropyMetrics) ResetConsecutiveFailures() {
+	if em != nil {
+		atomic.StoreInt64(&em.consecutiveFails, 0)
+	}
+}
+
+// determineSeverity determines the severity level based on context and error type
+func (em *EntropyMetrics) determineSeverity(context, errorType string) string {
+	// Canvas and WebGL fingerprinting failures are less critical than core crypto
+	switch context {
+	case "canvas_variations", "canvas_data_generation":
+		return "medium"
+	case "hash_generation", "crypto_operations":
+		return "critical"
+	default:
+		if strings.Contains(errorType, "entropy_source") {
+			return "critical"
+		}
+		return "high"
+	}
+}
+
+// getHealthStatus returns overall entropy subsystem health
+func (em *EntropyMetrics) getHealthStatus() string {
+	total := atomic.LoadInt64(&em.totalFailures)
+	consecutive := atomic.LoadInt64(&em.consecutiveFails)
+	
+	if total == 0 {
+		return "healthy"
+	}
+	
+	if consecutive > 5 {
+		return "critical"
+	} else if consecutive > 2 {
+		return "degraded"
+	} else if total > 100 {
+		return "warning"
+	}
+	
+	return "healthy"
+}
+
+// checkAlertConditions checks if alert conditions are met and logs accordingly
+func (em *EntropyMetrics) checkAlertConditions() {
+	em.recentMutex.RLock()
+	defer em.recentMutex.RUnlock()
+	
+	cutoff := time.Now().UTC().Add(-em.retentionPeriod)
+	recentCount := 0
+	
+	for _, event := range em.recentFailures {
+		if event.Timestamp.After(cutoff) {
+			recentCount++
+		}
+	}
+	
+	consecutive := atomic.LoadInt64(&em.consecutiveFails)
+	
+	// Trigger alerts based on different conditions
+	if recentCount >= em.alertThreshold {
+		slog.Warn("ENTROPY ALERT: High failure rate detected",
+			slog.Int("recent_failures", recentCount),
+			slog.Int("threshold", em.alertThreshold),
+			slog.Float64("period_hours", em.retentionPeriod.Hours()),
+		)
+	}
+	
+	if consecutive >= 10 {
+		slog.Error("ENTROPY ALERT: Consecutive failures indicate systemic issue",
+			slog.Int64("consecutive_failures", consecutive),
+			slog.String("recommendation", "investigate_entropy_source"),
+		)
+	}
+}
+
+// cleanup removes old failure events to prevent memory leaks
+func (em *EntropyMetrics) cleanup() {
+	ticker := time.NewTicker(1 * time.Hour) // Clean up every hour
+	defer ticker.Stop()
+	
+	for range ticker.C {
+		em.recentMutex.Lock()
+		cutoff := time.Now().UTC().Add(-em.retentionPeriod)
+		
+		// Remove events older than retention period
+		validEvents := em.recentFailures[:0] // Reuse slice capacity
+		for _, event := range em.recentFailures {
+			if event.Timestamp.After(cutoff) {
+				validEvents = append(validEvents, event)
+			}
+		}
+		
+		em.recentFailures = validEvents
+		em.recentMutex.Unlock()
+	}
+}
+
+// GetEntropyMetrics returns the global entropy metrics instance
+func GetEntropyMetrics() map[string]interface{} {
+	initMetrics() // Ensure metrics are initialized
+	return entropyMetrics.GetMetrics()
+}
+
 // NewFingerprintingEvader creates a comprehensive fingerprinting evader
 func NewFingerprintingEvader(enabled bool) *FingerprintingEvader {
 	return &FingerprintingEvader{
@@ -336,12 +577,14 @@ func generateCanvasVariations() ([]string, error) {
 		bytes := make([]byte, 2)
 		if _, err := rand.Read(bytes); err != nil {
 			// SECURITY: Fail fast when cryptographic randomness is unavailable
-			// TODO: Consider adding metrics to track entropy failure frequency for monitoring system health.
-			// This would help detect patterns of entropy exhaustion or system-level cryptographic issues.
+			// Record failure in metrics system for monitoring entropy health patterns
 			logEntropyFailure("canvas_variations", err)
 			return nil, fmt.Errorf("crypto/rand failed: %w", err)
 		} else {
 			variations[i] = hex.EncodeToString(bytes)
+			// Reset consecutive failure counter on successful entropy generation
+			initMetrics()
+			entropyMetrics.ResetConsecutiveFailures()
 		}
 	}
 	return variations, nil
@@ -357,6 +600,9 @@ func generateRandomCanvasData() string {
 		// Return generic fallback that doesn't expose system state
 		return "00000000000000000000000000000000"
 	}
+	// Reset consecutive failure counter on successful entropy generation
+	initMetrics()
+	entropyMetrics.ResetConsecutiveFailures()
 	return hex.EncodeToString(data)
 }
 
@@ -366,8 +612,13 @@ func generateHash(data string) string {
 	if _, err := rand.Read(hash); err != nil {
 		// Fallback to deterministic hash of input data if crypto/rand fails
 		// This maintains consistency while avoiding weak randomness
+		logEntropyFailure("hash_generation", err)
 		h := sha256.Sum256([]byte(data + time.Now().String()))
 		copy(hash, h[:16])
+	} else {
+		// Reset consecutive failure counter on successful entropy generation
+		initMetrics()
+		entropyMetrics.ResetConsecutiveFailures()
 	}
 	return hex.EncodeToString(hash)
 }
@@ -381,10 +632,15 @@ func generateOscillatorHash(spoofed bool) string {
 	if _, err := rand.Read(hash); err != nil {
 		// Fallback to deterministic time-based hash if crypto/rand fails
 		// This maintains consistency while avoiding security degradation
+		logEntropyFailure("oscillator_hash_generation", err)
 		nano := time.Now().UnixNano()
 		for i := range hash {
 			hash[i] = byte(nano >> (i * 8))
 		}
+	} else {
+		// Reset consecutive failure counter on successful entropy generation
+		initMetrics()
+		entropyMetrics.ResetConsecutiveFailures()
 	}
 	return hex.EncodeToString(hash)
 }
@@ -459,28 +715,21 @@ func getExtraFonts() []string {
 // logEntropyFailure logs entropy generation failures for security monitoring
 // This is critical for detecting entropy issues that could compromise anti-detection
 func logEntropyFailure(context string, err error) {
+	// Initialize metrics system if not already done
+	initMetrics()
+	
+	// Record the failure in our metrics system for health monitoring
+	entropyMetrics.RecordFailure(context, err)
+	
 	// Sanitize error message to prevent information disclosure
 	sanitizedError := sanitizeErrorForLogging(err)
 	
-	// Structure the security event for monitoring systems
-	_ = map[string]interface{}{
-		"event_type":     "entropy_failure",
-		"component":      "fingerprint",
-		"context":        context,
-		"error_category": sanitizedError,
-		"severity":       "critical",
-		"timestamp":      time.Now().UTC(),
-		"impact":         "fallback_to_static_values",
-		"action_taken":   "continued_operation_with_static_fallback",
-	}
-
-	// In production, this should trigger immediate alerts
-	// Entropy failures are critical security events that need investigation
-	// Implement proper logging infrastructure in production:
-	// 1. Send to SIEM/security monitoring system
-	// 2. Trigger alerts for security teams
-	// 3. Consider automatic remediation if patterns are detected
-
+	// Get current failure statistics for enhanced logging
+	metrics := entropyMetrics.GetMetrics()
+	consecutiveFailures := metrics["consecutive_failures"].(int64)
+	totalFailures := metrics["total_failures"].(int64)
+	healthStatus := metrics["health_status"].(string)
+	
 	// Use structured logging for critical security events
 	// In production, configure slog to send to security monitoring systems
 	slog.Error("CRITICAL SECURITY EVENT: Entropy failure",
@@ -492,7 +741,20 @@ func logEntropyFailure(context string, err error) {
 		slog.Time("timestamp", time.Now().UTC()),
 		slog.String("impact", "fallback_to_static_values"),
 		slog.String("action_taken", "continued_operation_with_static_fallback"),
+		// Enhanced metrics for better monitoring
+		slog.Int64("consecutive_failures", consecutiveFailures),
+		slog.Int64("total_failures", totalFailures),
+		slog.String("health_status", healthStatus),
 	)
+	
+	// In production, this should trigger immediate alerts
+	// Entropy failures are critical security events that need investigation
+	// Implement proper alerting infrastructure:
+	// 1. Send to SIEM/security monitoring system
+	// 2. Trigger alerts for security teams (PagerDuty, Slack, etc.)
+	// 3. Consider automatic remediation if patterns are detected
+	// 4. Monitor for entropy exhaustion patterns
+	// 5. Implement circuit breaker patterns for degraded states
 }
 
 // sanitizeErrorForLogging sanitizes error messages to prevent information disclosure
