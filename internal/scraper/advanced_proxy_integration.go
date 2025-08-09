@@ -375,12 +375,8 @@ func (ape *AdvancedProxyEngine) executeSingleRequest(scrapeCtx *ScrapingContext)
 	if scrapeCtx.UserAgent != "" {
 		req.Header.Set("User-Agent", scrapeCtx.UserAgent)
 	} else {
-		// Use a rotating user agent from the pool, or fallback to default
-		if uaProvider, ok := ape.Engine.(userAgentProvider); ok {
-			req.Header.Set("User-Agent", uaProvider.getNextUserAgent())
-		} else {
-			req.Header.Set("User-Agent", defaultUserAgent)
-		}
+		// Use a rotating user agent from the engine's pool
+		req.Header.Set("User-Agent", ape.Engine.getNextUserAgent())
 	}
 
 	for key, value := range scrapeCtx.RequestHeaders {

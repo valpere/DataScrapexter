@@ -14,6 +14,12 @@ import (
 	"time"
 )
 
+// Latency histogram constants
+const (
+	// MaxLatencyBucket defines the maximum latency bucket for histogram tracking
+	MaxLatencyBucket = 10 * time.Second
+)
+
 // PerformanceMetrics tracks performance statistics
 type PerformanceMetrics struct {
 	TotalOperations   int64         `json:"total_operations"`
@@ -118,7 +124,7 @@ func NewLatencyHistogram(sampleBufferSize int) *LatencyHistogram {
 		1 * time.Second,
 		2 * time.Second,
 		5 * time.Second,
-		10 * time.Second,
+		MaxLatencyBucket,
 	}
 	
 	return &LatencyHistogram{

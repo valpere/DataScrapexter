@@ -86,7 +86,7 @@ func init() {
 		if defaultSecurityConfig.FailOnWeakRandom || isProduction {
 			// SECURITY: Mark initialization as failed without storing sensitive details
 			securityInitialized = false
-			rotationLogger.Error("ERROR: Cryptographically secure randomization failed in strict security mode")
+			rotationLogger.Error("Cryptographically secure randomization failed in strict security mode")
 			rotationLogger.Error("SECURITY REQUIREMENT VIOLATION: Application will fail proxy rotation operations until this is resolved")
 			return
 		}
@@ -271,6 +271,42 @@ func ValidateSecurityConfig(config *SecurityConfig) error {
 	}
 	
 	return nil
+}
+
+// secureRandInt generates a cryptographically secure random integer in the range [0, max)
+// using crypto/rand instead of math/rand to prevent predictable patterns that could be exploited.
+func secureRandInt(max int) int {
+	if max <= 0 {
+		return 0
+	}
+	
+	// Calculate the number of bytes needed to represent max
+	bytes := make([]byte, 8) // Use 8 bytes for up to 64-bit integers
+	
+	for {
+		// Generate random bytes
+		if _, err := rand.Read(bytes); err != nil {
+			// Fallback to 0 if crypto/rand fails (should be extremely rare)
+			rotationLogger.Warn("Failed to generate secure random number, falling back to 0")
+			return 0
+		}
+		
+		// Convert bytes to uint64
+		var randomValue uint64
+		for i := 0; i < 8; i++ {
+			randomValue = (randomValue << 8) | uint64(bytes[i])
+		}
+		
+		// Avoid bias by ensuring uniform distribution
+		// This is the "rejection sampling" method
+		limit := uint64(1<<63) / uint64(max) * uint64(max)
+		if randomValue < limit {
+			return int(randomValue % uint64(max))
+		}
+		
+		// If we're in the biased range, try again
+		// This happens very rarely and ensures uniform distribution
+	}
 }
 
 // GetEffectiveSecurityConfig returns the effective security configuration
@@ -1867,7 +1903,7 @@ func (lb *LoadBalancer) selectWeightedRoundRobin(candidates []*AdvancedProxyInst
 		return candidates[0]
 	}
 	
-	random := mathrand.Intn(totalWeight)
+	random := secureRandInt(totalWeight)
 	currentWeight := 0
 	
 	for _, candidate := range candidates {
