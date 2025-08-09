@@ -70,7 +70,8 @@ var defaultSecurityConfig = &SecurityConfig{
 
 // Initialize secure random seed on package load
 func init() {
-	// Seed math/rand with cryptographically secure random data for better randomness
+	// NOTE: Seeding math/rand with cryptographically secure random data does NOT make it cryptographically secure.
+	// math/rand is deterministic and should NOT be used for security-sensitive operations. Use crypto/rand for all cryptographic needs.
 	var seed int64
 	seedBytes := make([]byte, 8)
 	_, err := rand.Read(seedBytes)
