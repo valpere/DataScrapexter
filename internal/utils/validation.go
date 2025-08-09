@@ -1095,12 +1095,19 @@ func IsValidFieldType(fieldType string) bool {
 // IsValidOutputFormat checks if an output format is valid
 func IsValidOutputFormat(format string) bool {
 	validFormats := map[string]bool{
-		"json":     true,
-		"csv":      true,
-		"excel":    true,
-		"xml":      true,
-		"yaml":     true,
-		"database": true,
+		"json":       true,
+		"csv":        true,
+		"excel":      true,
+		"xml":        true,
+		"yaml":       true,
+		"pdf":        true,
+		"tsv":        true,
+		"parquet":    true,
+		"mongodb":    true,
+		"mysql":      true,
+		"postgresql": true,
+		"sqlite":     true,
+		"database":   true, // Keep for backward compatibility
 	}
 	return validFormats[format]
 }

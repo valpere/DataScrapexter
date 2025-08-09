@@ -138,13 +138,19 @@ func TestIsValidOutputFormat(t *testing.T) {
 		{"excel", true},
 		{"xml", true},
 		{"yaml", true},
+		{"pdf", true},
+		{"tsv", true},
+		{"parquet", true},
+		{"mongodb", true},
+		{"mysql", true},
+		{"postgresql", true},
+		{"sqlite", true},
 		{"database", true},
 		
 		// Invalid formats
 		{"", false},
 		{"txt", false},
 		{"JSON", false}, // Case sensitive
-		{"pdf", false},
 	}
 
 	for _, tc := range testCases {
